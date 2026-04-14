@@ -18,7 +18,7 @@ export default async function NewBriefPage({
 
   const db = getDb();
   const folders = await db
-    .select({ id: client.id, name: client.name, scope: client.scope })
+    .select({ id: client.id, name: client.name, website: client.website, scope: client.scope })
     .from(client)
     .where(
       or(

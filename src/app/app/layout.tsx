@@ -21,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       mustChangePassword: userTable.mustChangePassword,
       firstName: userTable.firstName,
       lastName: userTable.lastName,
+      image: userTable.image,
     })
     .from(userTable)
     .where(eq(userTable.id, session.user.id))
@@ -60,6 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           id: session.user.id,
           email: session.user.email,
           name: displayName,
+          image: me?.image ?? null,
         }}
         personalFolders={personalFolders}
         agencyFolders={agencyFolders}

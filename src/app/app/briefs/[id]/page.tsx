@@ -5,7 +5,7 @@ import { getDb } from "@/db";
 import { brief, client } from "@/db/schema";
 import { and, eq, or } from "drizzle-orm";
 import type { NlpResult, SerpResult, Paa } from "@/lib/analysis";
-import { BriefView } from "./brief-view";
+import { BriefEditor } from "./brief-editor";
 
 export default async function BriefDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -34,10 +34,21 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
   const haloscan = b.haloscanJson ? JSON.parse(b.haloscanJson) : null;
 
   return (
-    <BriefView
+    <BriefEditor
+      id={b.id}
       keyword={b.keyword}
       country={b.country}
-      folder={row.folder ? { id: row.folder.id, name: row.folder.name, scope: row.folder.scope } : null}
+      folder={
+        row.folder
+          ? {
+              id: row.folder.id,
+              name: row.folder.name,
+              website: row.folder.website,
+              scope: row.folder.scope,
+            }
+          : null
+      }
+      initialHtml={b.editorHtml ?? ""}
       nlp={nlp}
       serp={serp}
       paa={paa}

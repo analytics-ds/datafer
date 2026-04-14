@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
-type Folder = { id: string; name: string; scope: "personal" | "agency" };
+import { FolderSelect, type FolderOption } from "./folder-select";
 
 const COUNTRIES = [
   { value: "fr", label: "France" },
@@ -26,7 +25,7 @@ export function NewBriefForm({
   folders,
   defaultFolderId,
 }: {
-  folders: Folder[];
+  folders: FolderOption[];
   defaultFolderId?: string;
 }) {
   const router = useRouter();
@@ -37,16 +36,12 @@ export function NewBriefForm({
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const personal = folders.filter((f) => f.scope === "personal");
-  const agency = folders.filter((f) => f.scope === "agency");
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     setStep(0);
 
-    // Progression visuelle (purement cosmétique, l'analyse est monobloc côté serveur)
     const tick = setInterval(() => {
       setStep((s) => (s < LOADING_STEPS.length - 1 ? s + 1 : s));
     }, 3000);
@@ -119,31 +114,9 @@ export function NewBriefForm({
         <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
           Dossier (optionnel)
         </label>
-        <select
-          value={folderId}
-          onChange={(e) => setFolderId(e.target.value)}
-          className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-8 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)]"
-        >
-          <option value="">— Aucun dossier —</option>
-          {personal.length > 0 && (
-            <optgroup label="Mes dossiers">
-              {personal.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {agency.length > 0 && (
-            <optgroup label="Dossiers datashake">
-              {agency.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </select>
+        <div className="mb-8">
+          <FolderSelect name="folderId" folders={folders} value={folderId} onChange={setFolderId} />
+        </div>
 
         {error && (
           <div className="text-[13px] text-[var(--red)] bg-[var(--red-bg)] border border-[var(--red)]/20 rounded-[var(--radius-xs)] px-3 py-2 mb-4">

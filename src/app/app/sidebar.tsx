@@ -8,7 +8,7 @@ import { faviconUrl } from "@/lib/favicon";
 type Folder = { id: string; name: string; website: string | null };
 
 type SidebarProps = {
-  user: { id: string; email: string; name: string };
+  user: { id: string; email: string; name: string; image: string | null };
   personalFolders: Folder[];
   agencyFolders: Folder[];
 };
@@ -117,9 +117,18 @@ export function Sidebar({ user, personalFolders, agencyFolders }: SidebarProps) 
               : "hover:bg-[var(--bg)]"
           }`}
         >
-          <div className="w-9 h-9 rounded-full bg-[var(--bg-olive-light)] text-[var(--accent-dark)] flex items-center justify-center text-[12px] font-semibold shrink-0">
-            {initials}
-          </div>
+          {user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={user.image}
+              alt=""
+              className="w-9 h-9 rounded-full object-cover border border-[var(--border)] shrink-0"
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-[var(--bg-olive-light)] text-[var(--accent-dark)] flex items-center justify-center text-[12px] font-semibold shrink-0">
+              {initials}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-semibold truncate leading-tight">
               {user.name}
