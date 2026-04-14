@@ -641,21 +641,50 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
       </div>
       <div className="flex flex-wrap gap-[5px]">
         {terms.map((k) => {
-          const isUsed = lower.includes(k.term);
+          // Compte des occurrences actuelles dans l'éditeur
+          const rx = new RegExp(
+            `\\b${k.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+            "gi",
+          );
+          const currentCount = (lower.match(rx) ?? []).length;
+          const hasRange = typeof k.minCount === "number" && k.maxCount > 0;
+          const rangeLabel = hasRange
+            ? k.minCount === k.maxCount
+              ? String(k.maxCount)
+              : `${k.minCount}-${k.maxCount}`
+            : `${k.presence}%`;
+
+          // Couleur : vert si dans la fourchette, orange si au-dessus, défaut du tier sinon
+          let styleMode: "in-range" | "over" | "default" = "default";
+          if (hasRange && currentCount >= k.minCount && currentCount <= k.maxCount) {
+            styleMode = "in-range";
+          } else if (hasRange && currentCount > k.maxCount) {
+            styleMode = "over";
+          }
+
+          const style =
+            styleMode === "in-range"
+              ? { background: "var(--green-bg)", borderColor: "var(--green)", color: "var(--green)" }
+              : styleMode === "over"
+                ? { background: "var(--orange-bg)", borderColor: "var(--orange)", color: "var(--orange)" }
+                : { background: bg, borderColor: border, color };
+
           return (
             <button
               key={k.term}
               onClick={() => onInsert(k.term)}
-              title="Cliquer pour insérer"
-              className="inline-flex items-center gap-1 px-[10px] py-[4px] rounded-full text-[11px] font-medium border hover:scale-[1.03] transition-transform"
-              style={
-                isUsed
-                  ? { background: "var(--green-bg)", borderColor: "var(--green)", color: "var(--green)" }
-                  : { background: bg, borderColor: border, color }
+              title={
+                hasRange
+                  ? `Visez ${rangeLabel} occurrences (moyenne ${k.avgCount}). Actuel : ${currentCount}.`
+                  : "Cliquer pour insérer"
               }
+              className="inline-flex items-center gap-[5px] px-[10px] py-[4px] rounded-full text-[11px] font-medium border hover:scale-[1.03] transition-transform"
+              style={style}
             >
               {k.term}
-              <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">{k.presence}%</span>
+              <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+                {currentCount > 0 ? `${currentCount}/${rangeLabel}` : rangeLabel}
+              </span>
             </button>
           );
         })}

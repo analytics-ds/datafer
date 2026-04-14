@@ -34,6 +34,12 @@ export type NlpTerm = {
   presence: number;
   df: number;
   inHeadings: boolean;
+  // Distribution d'occurrences chez les concurrents qui utilisent le terme.
+  // `minCount` et `maxCount` sont observés sur les pages qui contiennent le
+  // terme (la page la moins fournie l'emploie X fois, la plus fournie Y fois).
+  minCount: number;
+  maxCount: number;
+  avgCount: number;
 };
 
 export type NlpResult = {
@@ -344,12 +350,30 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
       const presence = df / n;
       const headingBoost = term.split(" ").some((w) => headingTerms.has(w)) ? 1.4 : 1;
       const relevance = score * (0.3 + 0.7 * presence) * headingBoost;
+
+      // Distribution d'occurrences chez les concurrents qui EMPLOIENT le terme
+      // (on ignore les pages à 0 occurrence pour ne pas écraser la fourchette).
+      const counts: number[] = [];
+      for (const d of allTerms) {
+        const c = d.tf[term];
+        if (c && c > 0) counts.push(c);
+      }
+      counts.sort((a, b) => a - b);
+      const minCount = counts.length ? counts[0] : 0;
+      const maxCount = counts.length ? counts[counts.length - 1] : 0;
+      const avgCount = counts.length
+        ? Math.round(counts.reduce((s, c) => s + c, 0) / counts.length)
+        : 0;
+
       return {
         term,
         score: relevance,
         presence: Math.round(presence * 100),
         df,
         inHeadings: headingBoost > 1,
+        minCount,
+        maxCount,
+        avgCount,
       };
     })
     .filter((k) => {
