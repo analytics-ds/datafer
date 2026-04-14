@@ -31,44 +31,67 @@ export function LoginForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="w-full max-w-sm bg-white border border-neutral-200 rounded-2xl p-8 shadow-sm"
+      className="w-full max-w-[420px] bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-10 shadow-[var(--shadow)]"
     >
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Datafer</h1>
-        <p className="text-sm text-neutral-500 mt-1">Connexion</p>
+      <div className="flex items-center justify-between mb-8">
+        <div className="ds-logo text-[var(--text)]">
+          <div className="ds-logo-mark">
+            <div className="sq sq1" />
+            <div className="sq sq2" />
+          </div>
+          <span className="ds-logo-name">datashake</span>
+        </div>
+        <span className="inline-flex items-center gap-[5px] px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[11px] font-semibold tracking-[0.4px]">
+          CONNEXION
+        </span>
       </div>
 
-      <label className="block text-xs font-medium text-neutral-700 mb-1">Email</label>
+      <h1 className="font-[family-name:var(--font-display)] text-[38px] leading-[1.05] tracking-[-1px] mb-2">
+        Bon retour<span className="italic text-[var(--accent-dark)]">.</span>
+      </h1>
+      <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-7">
+        Connecte-toi à ton espace Datafer.
+      </p>
+
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+        Email
+      </label>
       <input
         type="email"
         required
         autoComplete="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="w-full px-3 py-2 border border-neutral-200 rounded-lg mb-4 outline-none focus:border-neutral-900 transition"
+        className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-4 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)]"
       />
 
-      <label className="block text-xs font-medium text-neutral-700 mb-1">Mot de passe</label>
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+        Mot de passe
+      </label>
       <input
         type="password"
         required
         autoComplete="current-password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="w-full px-3 py-2 border border-neutral-200 rounded-lg mb-4 outline-none focus:border-neutral-900 transition"
+        className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-5 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)]"
       />
 
-      {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+      {error && (
+        <div className="text-[13px] text-[var(--red)] bg-[var(--red-bg)] border border-[var(--red)]/20 rounded-[var(--radius-xs)] px-3 py-2 mb-4">
+          {error}
+        </div>
+      )}
 
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-neutral-900 text-white rounded-lg py-2 text-sm font-medium hover:bg-neutral-800 disabled:opacity-50 transition"
+        className="w-full bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] py-[13px] text-[14px] font-semibold hover:bg-[var(--bg-dark)] disabled:opacity-50 transition-colors"
       >
-        {loading ? "Connexion…" : "Se connecter"}
+        {loading ? "Connexion…" : "Se connecter →"}
       </button>
 
-      <p className="text-xs text-neutral-400 mt-6 text-center">
+      <p className="text-[11px] text-[var(--text-muted)] mt-7 text-center">
         Accès sur invitation uniquement.
       </p>
     </form>

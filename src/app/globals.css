@@ -1,26 +1,128 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Palette Datashake (reprise du HTML original) */
+  --bg: #FAFAF7;
+  --bg-warm: #F2F0EB;
+  --bg-card: #FFFFFF;
+  --bg-olive: #C2B642;
+  --bg-olive-light: #E8E4A0;
+  --bg-black: #1A1A1A;
+  --bg-dark: #2C2C2C;
+
+  --border: #E5E3DE;
+  --border-strong: #D0CEC7;
+
+  --text: #1A1A1A;
+  --text-secondary: #6B6B60;
+  --text-muted: #9C9C90;
+  --text-inverse: #FFFFFF;
+
+  --accent: #C2B642;
+  --accent-dark: #9A8F30;
+
+  --green: #2D8C5A;
+  --green-bg: #E8F5EE;
+  --orange: #D4890E;
+  --orange-bg: #FFF4E0;
+  --red: #C94040;
+  --red-bg: #FDE8E8;
+  --purple: #7B61FF;
+  --purple-bg: #F0EDFF;
+  --blue: #4A90D9;
+  --blue-bg: #E8F0FA;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-xs: 6px;
+  --radius-pill: 100px;
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+  --shadow: 0 2px 12px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.08);
+
+  --transition: 0.2s cubic-bezier(0.4,0,0.2,1);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-bg: var(--bg);
+  --color-bg-warm: var(--bg-warm);
+  --color-bg-card: var(--bg-card);
+  --color-bg-black: var(--bg-black);
+  --color-bg-dark: var(--bg-dark);
+  --color-bg-olive: var(--bg-olive);
+  --color-bg-olive-light: var(--bg-olive-light);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-border-default: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-inverse: var(--text-inverse);
+
+  --color-accent: var(--accent);
+  --color-accent-dark: var(--accent-dark);
+
+  --color-brand-green: var(--green);
+  --color-brand-green-bg: var(--green-bg);
+  --color-brand-orange: var(--orange);
+  --color-brand-orange-bg: var(--orange-bg);
+  --color-brand-red: var(--red);
+  --color-brand-red-bg: var(--red-bg);
+  --color-brand-purple: var(--purple);
+  --color-brand-purple-bg: var(--purple-bg);
+  --color-brand-blue: var(--blue);
+  --color-brand-blue-bg: var(--blue-bg);
+
+  --font-display: var(--font-display), Georgia, serif;
+  --font-sans: var(--font-body), -apple-system, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
+
+  --radius-pill: 100px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body), -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+/* Logo datashake (2 carrés décalés) */
+.ds-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ds-logo-mark {
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+.ds-logo-mark .sq {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  background: currentColor;
+  border-radius: 2.5px;
+}
+.ds-logo-mark .sq1 { top: 0; left: 4px; }
+.ds-logo-mark .sq2 { top: 7px; left: 11px; }
+.ds-logo-name {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.3px;
 }
