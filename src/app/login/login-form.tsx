@@ -29,11 +29,9 @@ export function LoginForm() {
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="w-full max-w-[420px] bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-10 shadow-[var(--shadow)]"
-    >
-      <div className="flex items-center justify-between mb-8">
+    <form onSubmit={onSubmit} className="w-full max-w-[380px]">
+      {/* Brand compact visible uniquement en mobile (sinon le panneau de gauche l'affiche déjà) */}
+      <div className="flex items-center gap-3 mb-10 md:hidden">
         <div className="ds-logo text-[var(--text)]">
           <div className="ds-logo-mark">
             <div className="sq sq1" />
@@ -41,16 +39,19 @@ export function LoginForm() {
           </div>
           <span className="ds-logo-name">datashake</span>
         </div>
-        <span className="inline-flex items-center gap-[5px] px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[11px] font-semibold tracking-[0.4px]">
-          CONNEXION
-        </span>
+        <div className="w-px h-6 bg-[var(--border)]" />
+        <span className="font-semibold text-[14px]">Datafer</span>
       </div>
 
-      <h1 className="font-[family-name:var(--font-display)] text-[38px] leading-[1.05] tracking-[-1px] mb-2">
-        Bon retour<span className="italic text-[var(--accent-dark)]">.</span>
+      <span className="inline-flex items-center px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.6px] uppercase mb-5">
+        Connexion
+      </span>
+
+      <h1 className="font-[family-name:var(--font-display)] text-[44px] leading-[1.05] tracking-[-1.2px] mb-2">
+        Bon retour<em className="italic text-[var(--accent-dark)]">.</em>
       </h1>
-      <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-7">
-        Connecte-toi à ton espace Datafer.
+      <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-10">
+        Connecte-toi à ton espace Datafer pour générer tes briefs et accéder à tes dossiers clients.
       </p>
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
@@ -62,7 +63,8 @@ export function LoginForm() {
         autoComplete="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-4 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)]"
+        placeholder="toi@datashake.fr"
+        className="w-full px-4 py-[12px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-4 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
@@ -74,7 +76,8 @@ export function LoginForm() {
         autoComplete="current-password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-5 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)]"
+        placeholder="••••••••"
+        className="w-full px-4 py-[12px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-6 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
 
       {error && (
@@ -91,8 +94,10 @@ export function LoginForm() {
         {loading ? "Connexion…" : "Se connecter →"}
       </button>
 
-      <p className="text-[11px] text-[var(--text-muted)] mt-7 text-center">
+      <p className="text-[11px] text-[var(--text-muted)] mt-10 text-center leading-[1.5]">
         Accès sur invitation uniquement.
+        <br />
+        Contacte ton admin pour obtenir un compte.
       </p>
     </form>
   );
