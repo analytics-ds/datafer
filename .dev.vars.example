@@ -1,0 +1,11 @@
+# Copy to .dev.vars for local development (`next dev` and `wrangler dev`)
+# Never commit .dev.vars — it is gitignored.
+
+BETTER_AUTH_SECRET="change-me-openssl-rand-base64-32"
+BETTER_AUTH_URL="http://localhost:3000"
+
+# SERPAPI — https://serpapi.com/
+SERPAPI_KEY=""
+
+# Haloscan — https://haloscan.com/
+HALOSCAN_KEY=""
