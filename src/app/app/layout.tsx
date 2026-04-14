@@ -2,8 +2,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { user as userTable } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { client, folderFavorite, user as userTable } from "@/db/schema";
+import { asc, eq } from "drizzle-orm";
 import { Sidebar } from "./sidebar";
 import { FirstLoginGate } from "./first-login-gate";
 
@@ -35,6 +35,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     );
   }
 
+  // Favoris de l'utilisateur courant (visibles dans la sidebar)
+  const favorites = await db
+    .select({ id: client.id, name: client.name, website: client.website })
+    .from(folderFavorite)
+    .innerJoin(client, eq(client.id, folderFavorite.folderId))
+    .where(eq(folderFavorite.userId, session.user.id))
+    .orderBy(asc(client.name));
+
   const displayName =
     [me?.firstName, me?.lastName].filter(Boolean).join(" ") || session.user.name;
 
@@ -47,6 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           name: displayName,
           image: me?.image ?? null,
         }}
+        favorites={favorites}
       />
       <main className="flex-1 min-w-0">{children}</main>
     </div>

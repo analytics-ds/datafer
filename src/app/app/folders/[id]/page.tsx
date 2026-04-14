@@ -3,10 +3,11 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { brief, client, user } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { brief, client, folderFavorite, user } from "@/db/schema";
+import { and, desc, eq } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../../_ui";
 import { FolderFavicon } from "../page";
+import { FavoriteButton } from "../favorite-button";
 
 export default async function FolderDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,14 +16,19 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
 
   const db = getDb();
   const [row] = await db
-    .select({ folder: client, ownerName: user.name })
+    .select({ folder: client })
     .from(client)
-    .leftJoin(user, eq(user.id, client.ownerId))
     .where(eq(client.id, id))
     .limit(1);
 
   if (!row) notFound();
   const folder = row.folder;
+
+  const [fav] = await db
+    .select()
+    .from(folderFavorite)
+    .where(and(eq(folderFavorite.userId, session.user.id), eq(folderFavorite.folderId, folder.id)))
+    .limit(1);
 
   const briefs = await db
     .select({
@@ -45,23 +51,21 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
         <span className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
           Dossier
         </span>
-        {row.ownerName && (
-          <span className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
-            · créé par {row.ownerName}
-          </span>
-        )}
       </div>
 
       <PageHeader
         title={<>{folder.name}<span className="italic text-[var(--accent-dark)]">.</span></>}
         subtitle={folder.website ?? undefined}
         action={
-          <Link
-            href={`/app/briefs/new?folder=${folder.id}`}
-            className="inline-flex items-center gap-2 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] px-4 py-[9px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] transition-colors"
-          >
-            + Nouveau brief
-          </Link>
+          <div className="flex items-center gap-2">
+            <FavoriteButton folderId={folder.id} initialFavorited={!!fav} />
+            <Link
+              href={`/app/briefs/new?folder=${folder.id}`}
+              className="inline-flex items-center gap-2 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] px-4 py-[9px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] transition-colors"
+            >
+              + Nouveau brief
+            </Link>
+          </div>
         }
       />
 

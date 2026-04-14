@@ -230,8 +230,7 @@ export function BriefEditor(props: BriefEditorProps) {
         </TabButton>
       </div>
 
-      {tab === "editor" && (
-        <div className="flex-1 grid grid-cols-[1fr_380px] overflow-hidden">
+      <div className={tab === "editor" ? "flex-1 grid grid-cols-[1fr_380px] overflow-hidden" : "hidden"}>
           {/* Editor main */}
           <div className="flex flex-col border-r border-[var(--border)] overflow-hidden">
             {/* Word count bar */}
@@ -289,11 +288,9 @@ export function BriefEditor(props: BriefEditorProps) {
             insertTermAtCursor={insertTermAtCursor}
             insertPaaAsH2={insertPaaAsH2}
           />
-        </div>
-      )}
+      </div>
 
-      {tab === "serp" && (
-        <div className="flex-1 overflow-y-auto px-7 py-6">
+      <div className={tab === "serp" ? "flex-1 overflow-y-auto px-7 py-6" : "hidden"}>
           <div className="grid gap-2 max-w-[880px]">
             {serp.map((r) => (
               <a
@@ -339,14 +336,11 @@ export function BriefEditor(props: BriefEditorProps) {
               </a>
             ))}
           </div>
-        </div>
-      )}
+      </div>
 
-      {tab === "insights" && (
-        <div className="flex-1 overflow-y-auto px-7 py-6">
-          <InsightsPane nlp={nlp} halo={halo} serp={serp} paa={paa} />
-        </div>
-      )}
+      <div className={tab === "insights" ? "flex-1 overflow-y-auto px-7 py-6" : "hidden"}>
+        <InsightsPane nlp={nlp} halo={halo} serp={serp} paa={paa} />
+      </div>
 
       <style jsx global>{`
         .rich-editor:empty::before {

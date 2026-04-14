@@ -3,12 +3,16 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth-client";
+import { faviconUrl } from "@/lib/favicon";
+
+type Favorite = { id: string; name: string; website: string | null };
 
 type SidebarProps = {
   user: { id: string; email: string; name: string; image: string | null };
+  favorites: Favorite[];
 };
 
-export function Sidebar({ user }: SidebarProps) {
+export function Sidebar({ user, favorites }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -60,6 +64,21 @@ export function Sidebar({ user }: SidebarProps) {
         >
           Tous les dossiers
         </NavItem>
+
+        {favorites.length > 0 && (
+          <NavSection title="Favoris">
+            {favorites.map((f) => (
+              <FolderItem
+                key={f.id}
+                href={`/app/folders/${f.id}`}
+                active={pathname === `/app/folders/${f.id}`}
+                website={f.website}
+              >
+                {f.name}
+              </FolderItem>
+            ))}
+          </NavSection>
+        )}
       </nav>
 
       <div className="px-3 py-3 border-t border-[var(--border)]">
@@ -126,6 +145,56 @@ function NavItem({
     >
       <span className="shrink-0 w-4 h-4">{icon}</span>
       <span>{children}</span>
+    </Link>
+  );
+}
+
+function NavSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-6">
+      <div className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
+        {title}
+      </div>
+      <div className="flex flex-col gap-[1px]">{children}</div>
+    </div>
+  );
+}
+
+function FolderItem({
+  href,
+  active,
+  website,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  website: string | null;
+  children: React.ReactNode;
+}) {
+  const favicon = faviconUrl(website, 32);
+  return (
+    <Link
+      href={href}
+      className={`flex items-center gap-[10px] px-3 py-[6px] rounded-[var(--radius-sm)] transition-colors ${
+        active
+          ? "bg-[var(--bg-warm)] text-[var(--text)] font-semibold"
+          : "text-[var(--text-secondary)] hover:bg-[var(--bg)] hover:text-[var(--text)]"
+      }`}
+    >
+      {favicon ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={favicon}
+          alt=""
+          width={16}
+          height={16}
+          className="rounded-[3px] shrink-0 bg-[var(--bg-warm)]"
+          loading="lazy"
+        />
+      ) : (
+        <span className="w-4 h-4 rounded-[3px] bg-[var(--bg-warm)] text-[var(--text-muted)] flex items-center justify-center text-[10px] shrink-0">·</span>
+      )}
+      <span className="truncate">{children}</span>
     </Link>
   );
 }

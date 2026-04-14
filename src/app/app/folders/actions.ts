@@ -3,9 +3,11 @@
 import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { and, eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { client } from "@/db/schema";
+import { client, folderFavorite } from "@/db/schema";
 
 export async function createFolderAction(formData: FormData) {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -28,4 +30,33 @@ export async function createFolderAction(formData: FormData) {
   });
 
   redirect(`/app/folders/${id}`);
+}
+
+export async function toggleFavoriteAction(folderId: string): Promise<
+  { ok: true; favorited: boolean } | { ok: false; error: string }
+> {
+  const session = await getAuth().api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Non authentifié" };
+
+  const db = getDb();
+  const [existing] = await db
+    .select()
+    .from(folderFavorite)
+    .where(and(eq(folderFavorite.userId, session.user.id), eq(folderFavorite.folderId, folderId)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .delete(folderFavorite)
+      .where(and(eq(folderFavorite.userId, session.user.id), eq(folderFavorite.folderId, folderId)));
+    revalidatePath("/app", "layout");
+    return { ok: true, favorited: false };
+  }
+
+  await db.insert(folderFavorite).values({
+    userId: session.user.id,
+    folderId,
+  });
+  revalidatePath("/app", "layout");
+  return { ok: true, favorited: true };
 }

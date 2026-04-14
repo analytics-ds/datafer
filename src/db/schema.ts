@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 // ─── Better-auth tables (names must match better-auth defaults) ──────────────
@@ -72,6 +72,18 @@ export const client = sqliteTable("client", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
+
+// Favoris de dossiers, per-user. Les dossiers favoris remontent dans la
+// sidebar gauche.
+export const folderFavorite = sqliteTable(
+  "folder_favorite",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    folderId: text("folder_id").notNull().references(() => client.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.folderId] })],
+);
 
 export const brief = sqliteTable("brief", {
   id: text("id").primaryKey(),

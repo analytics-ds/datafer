@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { brief, client, user } from "@/db/schema";
+import { brief, client } from "@/db/schema";
 import { asc, count, eq } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../_ui";
 import { faviconUrl } from "@/lib/favicon";
@@ -17,11 +17,9 @@ export default async function FoldersPage() {
       id: client.id,
       name: client.name,
       website: client.website,
-      ownerName: user.name,
       briefCount: count(brief.id),
     })
     .from(client)
-    .leftJoin(user, eq(user.id, client.ownerId))
     .leftJoin(brief, eq(brief.clientId, client.id))
     .groupBy(client.id)
     .orderBy(asc(client.name));
@@ -65,9 +63,8 @@ export default async function FoldersPage() {
                   {f.website}
                 </div>
               )}
-              <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)] font-[family-name:var(--font-mono)]">
-                <span>{f.briefCount} {f.briefCount > 1 ? "briefs" : "brief"}</span>
-                {f.ownerName && <span>par {f.ownerName}</span>}
+              <div className="text-[11px] text-[var(--text-secondary)] font-[family-name:var(--font-mono)]">
+                {f.briefCount} {f.briefCount > 1 ? "briefs" : "brief"}
               </div>
             </Link>
           ))}
