@@ -16,9 +16,20 @@
 
 import { execSync } from "node:child_process";
 import { randomUUID, randomBytes, scrypt } from "node:crypto";
-import { promisify } from "node:util";
 
-const scryptAsync = promisify(scrypt);
+function scryptAsync(
+  password: string | Buffer,
+  salt: string | Buffer,
+  keylen: number,
+  options: { N: number; r: number; p: number; maxmem: number },
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keylen, options, (err, key) => {
+      if (err) reject(err);
+      else resolve(key);
+    });
+  });
+}
 
 function parseArgs(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -42,12 +53,12 @@ function parseArgs(): Record<string, string> {
 async function hashPassword(password: string): Promise<string> {
   const N = 16384, r = 16, p = 1, dkLen = 64;
   const salt = randomBytes(16).toString("hex");
-  const key = (await scryptAsync(password.normalize("NFKC"), salt, dkLen, {
+  const key = await scryptAsync(password.normalize("NFKC"), salt, dkLen, {
     N,
     r,
     p,
     maxmem: 128 * N * r * 2,
-  })) as Buffer;
+  });
   return `${salt}:${key.toString("hex")}`;
 }
 
