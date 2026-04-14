@@ -69,6 +69,9 @@ export const client = sqliteTable("client", {
   website: text("website"),
   color: text("color"),
   notes: text("notes"),
+  // Partage externe : si shareToken est présent, le dossier est accessible
+  // en lecture seule sur /share/<token> (sans auth).
+  shareToken: text("share_token").unique(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });

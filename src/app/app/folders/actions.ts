@@ -1,6 +1,6 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -59,4 +59,37 @@ export async function toggleFavoriteAction(folderId: string): Promise<
   });
   revalidatePath("/app", "layout");
   return { ok: true, favorited: true };
+}
+
+export async function enableShareAction(folderId: string): Promise<
+  { ok: true; token: string } | { ok: false; error: string }
+> {
+  const session = await getAuth().api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Non authentifié" };
+
+  const token = randomBytes(24).toString("base64url");
+  const db = getDb();
+  await db
+    .update(client)
+    .set({ shareToken: token, updatedAt: new Date() })
+    .where(eq(client.id, folderId));
+
+  revalidatePath(`/app/folders/${folderId}`);
+  return { ok: true, token };
+}
+
+export async function revokeShareAction(folderId: string): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const session = await getAuth().api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Non authentifié" };
+
+  const db = getDb();
+  await db
+    .update(client)
+    .set({ shareToken: null, updatedAt: new Date() })
+    .where(eq(client.id, folderId));
+
+  revalidatePath(`/app/folders/${folderId}`);
+  return { ok: true };
 }
