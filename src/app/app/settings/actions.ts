@@ -13,18 +13,25 @@ export async function updateProfileAction(formData: FormData): Promise<
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) return { ok: false, error: "Non authentifié" };
 
-  const name = String(formData.get("name") ?? "").trim();
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const lastName = String(formData.get("lastName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const image = String(formData.get("image") ?? "").trim() || null;
 
-  if (!name) return { ok: false, error: "Le nom est requis" };
+  if (!firstName) return { ok: false, error: "Le prénom est requis" };
+  if (!lastName) return { ok: false, error: "Le nom est requis" };
   if (!email || !/^.+@.+\..+$/.test(email))
     return { ok: false, error: "Email invalide" };
 
   const db = getDb();
   await db
     .update(user)
-    .set({ name, email, image, updatedAt: new Date() })
+    .set({
+      firstName,
+      lastName,
+      name: `${firstName} ${lastName}`,
+      email,
+      updatedAt: new Date(),
+    })
     .where(eq(user.id, session.user.id));
 
   revalidatePath("/app", "layout");
@@ -34,6 +41,9 @@ export async function updateProfileAction(formData: FormData): Promise<
 export async function changePasswordAction(formData: FormData): Promise<
   { ok: true } | { ok: false; error: string }
 > {
+  const session = await getAuth().api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Non authentifié" };
+
   const currentPassword = String(formData.get("currentPassword") ?? "");
   const newPassword = String(formData.get("newPassword") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
@@ -52,6 +62,15 @@ export async function changePasswordAction(formData: FormData): Promise<
         revokeOtherSessions: true,
       },
     });
+
+    // Reset le flag de premier login si présent
+    const db = getDb();
+    await db
+      .update(user)
+      .set({ mustChangePassword: false, updatedAt: new Date() })
+      .where(eq(user.id, session.user.id));
+
+    revalidatePath("/app", "layout");
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erreur inconnue";

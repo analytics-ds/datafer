@@ -7,15 +7,11 @@ import { updateProfileAction } from "./actions";
 export function ProfileForm({
   initial,
 }: {
-  initial: { name: string; email: string; image: string };
+  initial: { firstName: string; lastName: string; email: string };
 }) {
   const router = useRouter();
-  const [image, setImage] = useState(initial.image);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-
-  const initials =
-    (initial.name || initial.email).slice(0, 2).toUpperCase();
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -38,45 +34,32 @@ export function ProfileForm({
       onSubmit={onSubmit}
       className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-8 shadow-[var(--shadow-sm)]"
     >
-      {/* Avatar preview */}
-      <div className="flex items-center gap-4 mb-6">
-        {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={image}
-            alt="Avatar"
-            className="w-16 h-16 rounded-full object-cover border border-[var(--border)]"
-          />
-        ) : (
-          <div className="w-16 h-16 rounded-full bg-[var(--bg-olive-light)] text-[var(--accent-dark)] flex items-center justify-center text-[20px] font-semibold">
-            {initials}
-          </div>
-        )}
-        <div className="flex-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+        <div>
           <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
-            URL de photo de profil
+            Prénom
           </label>
           <input
-            type="url"
-            name="image"
-            value={image}
-            onChange={(e) => setImage(e.target.value)}
-            placeholder="https://…/photo.jpg"
-            className="w-full px-4 py-[10px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] outline-none focus:border-[var(--bg-black)] transition-colors text-[13px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
+            type="text"
+            name="firstName"
+            required
+            defaultValue={initial.firstName}
+            className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)]"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+            Nom
+          </label>
+          <input
+            type="text"
+            name="lastName"
+            required
+            defaultValue={initial.lastName}
+            className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)]"
           />
         </div>
       </div>
-
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
-        Nom complet
-      </label>
-      <input
-        type="text"
-        name="name"
-        required
-        defaultValue={initial.name}
-        className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-5 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)]"
-      />
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
         Email

@@ -6,6 +6,7 @@ import { getDb } from "@/db";
 import { brief, client, user } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../../_ui";
+import { FolderFavicon } from "../../folders/page";
 
 export default async function AgencyFolderDetail({
   params,
@@ -44,10 +45,7 @@ export default async function AgencyFolderDetail({
   return (
     <div className="px-10 py-10 max-w-[1100px]">
       <div className="flex items-center gap-2 mb-3">
-        <span
-          className="w-4 h-4 rounded-full shrink-0"
-          style={{ background: folder.color || "var(--accent)" }}
-        />
+        <FolderFavicon website={folder.website} size={24} />
         <span className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
           Dossier datashake
         </span>

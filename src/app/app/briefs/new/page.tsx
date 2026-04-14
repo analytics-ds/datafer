@@ -6,9 +6,15 @@ import { and, asc, eq, or } from "drizzle-orm";
 import { PageHeader } from "../../_ui";
 import { NewBriefForm } from "./form";
 
-export default async function NewBriefPage() {
+export default async function NewBriefPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ folder?: string }>;
+}) {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) return null;
+
+  const { folder: defaultFolderId } = await searchParams;
 
   const db = getDb();
   const folders = await db
@@ -29,7 +35,7 @@ export default async function NewBriefPage() {
         subtitle="Renseigne le mot-clé cible et le marché. On analyse les top 10 Google, on extrait le champ sémantique et on te rend un éditeur optimisé en temps réel."
       />
 
-      <NewBriefForm folders={folders} />
+      <NewBriefForm folders={folders} defaultFolderId={defaultFolderId} />
     </div>
   );
 }

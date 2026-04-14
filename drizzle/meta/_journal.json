@@ -15,6 +15,13 @@
       "when": 1776181467890,
       "tag": "0001_add_client_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1776182045051,
+      "tag": "0002_user_names_and_pwd_flag",
+      "breakpoints": true
     }
   ]
 }

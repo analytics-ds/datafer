@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth-client";
+import { faviconUrl } from "@/lib/favicon";
 
-type Folder = { id: string; name: string; color: string | null };
+type Folder = { id: string; name: string; website: string | null };
 
 type SidebarProps = {
-  user: { id: string; email: string; name: string; image: string | null };
+  user: { id: string; email: string; name: string };
   personalFolders: Folder[];
   agencyFolders: Folder[];
 };
@@ -27,7 +27,6 @@ export function Sidebar({ user, personalFolders, agencyFolders }: SidebarProps) 
 
   return (
     <aside className="w-[260px] shrink-0 h-screen sticky top-0 bg-[var(--bg-card)] border-r border-[var(--border)] flex flex-col">
-      {/* Brand */}
       <div className="px-5 h-14 flex items-center border-b border-[var(--border)]">
         <div className="ds-logo text-[var(--text)]">
           <div className="ds-logo-mark">
@@ -38,7 +37,6 @@ export function Sidebar({ user, personalFolders, agencyFolders }: SidebarProps) 
         </div>
       </div>
 
-      {/* CTA */}
       <div className="px-4 pt-4 pb-3">
         <Link
           href="/app/briefs/new"
@@ -49,7 +47,6 @@ export function Sidebar({ user, personalFolders, agencyFolders }: SidebarProps) 
         </Link>
       </div>
 
-      {/* Main nav */}
       <nav className="flex-1 overflow-y-auto px-3 pb-4 text-[13px]">
         <NavItem href="/app" icon={<HomeIcon />} active={pathname === "/app"}>
           Accueil
@@ -62,24 +59,48 @@ export function Sidebar({ user, personalFolders, agencyFolders }: SidebarProps) 
           Tous les briefs
         </NavItem>
 
-        <NavSection title="Mes dossiers" action={<Link href="/app/folders/new" className="sb-plus-btn" aria-label="Nouveau dossier"><PlusIcon className="w-[12px] h-[12px]" /></Link>}>
+        <NavSection
+          title="Mes dossiers"
+          action={
+            <Link href="/app/folders/new" className="sb-plus-btn" aria-label="Nouveau dossier">
+              <PlusIcon className="w-[12px] h-[12px]" />
+            </Link>
+          }
+        >
           {personalFolders.length === 0 ? (
             <p className="text-[11px] text-[var(--text-muted)] px-3 py-2 italic">Aucun dossier.</p>
           ) : (
             personalFolders.map((f) => (
-              <FolderItem key={f.id} href={`/app/folders/${f.id}`} active={pathname === `/app/folders/${f.id}`} color={f.color}>
+              <FolderItem
+                key={f.id}
+                href={`/app/folders/${f.id}`}
+                active={pathname === `/app/folders/${f.id}`}
+                website={f.website}
+              >
                 {f.name}
               </FolderItem>
             ))
           )}
         </NavSection>
 
-        <NavSection title="Dossiers datashake" action={<Link href="/app/agency/new" className="sb-plus-btn" aria-label="Nouveau dossier agence"><PlusIcon className="w-[12px] h-[12px]" /></Link>}>
+        <NavSection
+          title="Dossiers datashake"
+          action={
+            <Link href="/app/agency/new" className="sb-plus-btn" aria-label="Nouveau dossier agence">
+              <PlusIcon className="w-[12px] h-[12px]" />
+            </Link>
+          }
+        >
           {agencyFolders.length === 0 ? (
             <p className="text-[11px] text-[var(--text-muted)] px-3 py-2 italic">Aucun dossier.</p>
           ) : (
             agencyFolders.map((f) => (
-              <FolderItem key={f.id} href={`/app/agency/${f.id}`} active={pathname === `/app/agency/${f.id}`} color={f.color}>
+              <FolderItem
+                key={f.id}
+                href={`/app/agency/${f.id}`}
+                active={pathname === `/app/agency/${f.id}`}
+                website={f.website}
+              >
                 {f.name}
               </FolderItem>
             ))
@@ -87,7 +108,6 @@ export function Sidebar({ user, personalFolders, agencyFolders }: SidebarProps) 
         </NavSection>
       </nav>
 
-      {/* Bottom user card */}
       <div className="px-3 py-3 border-t border-[var(--border)]">
         <Link
           href="/app/settings"
@@ -97,7 +117,9 @@ export function Sidebar({ user, personalFolders, agencyFolders }: SidebarProps) 
               : "hover:bg-[var(--bg)]"
           }`}
         >
-          <Avatar image={user.image} initials={initials} />
+          <div className="w-9 h-9 rounded-full bg-[var(--bg-olive-light)] text-[var(--accent-dark)] flex items-center justify-center text-[12px] font-semibold shrink-0">
+            {initials}
+          </div>
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-semibold truncate leading-tight">
               {user.name}
@@ -187,14 +209,15 @@ function NavSection({
 function FolderItem({
   href,
   active,
-  color,
+  website,
   children,
 }: {
   href: string;
   active: boolean;
-  color: string | null;
+  website: string | null;
   children: React.ReactNode;
 }) {
+  const favicon = faviconUrl(website, 32);
   return (
     <Link
       href={href}
@@ -204,24 +227,33 @@ function FolderItem({
           : "text-[var(--text-secondary)] hover:bg-[var(--bg)] hover:text-[var(--text)]"
       }`}
     >
-      <span
-        className="w-[8px] h-[8px] rounded-full shrink-0"
-        style={{ background: color || "var(--accent)" }}
-      />
+      <FolderIcon favicon={favicon} />
       <span className="truncate">{children}</span>
     </Link>
   );
 }
 
-function Avatar({ image, initials }: { image: string | null; initials: string }) {
-  if (image) {
+function FolderIcon({ favicon, size = 16 }: { favicon: string | null; size?: number }) {
+  if (favicon) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={image} alt="" className="w-9 h-9 rounded-full object-cover border border-[var(--border)]" />;
+    return (
+      <img
+        src={favicon}
+        alt=""
+        width={size}
+        height={size}
+        className="rounded-[3px] shrink-0 bg-[var(--bg-warm)]"
+        loading="lazy"
+      />
+    );
   }
   return (
-    <div className="w-9 h-9 rounded-full bg-[var(--bg-olive-light)] text-[var(--accent-dark)] flex items-center justify-center text-[12px] font-semibold shrink-0">
-      {initials}
-    </div>
+    <span
+      className="shrink-0 rounded-[3px] bg-[var(--bg-warm)] text-[var(--text-muted)] flex items-center justify-center text-[10px]"
+      style={{ width: size, height: size }}
+    >
+      ·
+    </span>
   );
 }
 

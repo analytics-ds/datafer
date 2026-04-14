@@ -5,6 +5,7 @@ import { getDb } from "@/db";
 import { brief, client, user } from "@/db/schema";
 import { asc, count, eq } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../_ui";
+import { FolderFavicon } from "../folders/page";
 
 export default async function AgencyFoldersPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -15,7 +16,6 @@ export default async function AgencyFoldersPage() {
     .select({
       id: client.id,
       name: client.name,
-      color: client.color,
       website: client.website,
       ownerName: user.name,
       briefCount: count(brief.id),
@@ -61,11 +61,8 @@ export default async function AgencyFoldersPage() {
               href={`/app/agency/${f.id}`}
               className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-sm)] transition-all"
             >
-              <div className="flex items-center gap-2 mb-2">
-                <span
-                  className="w-3 h-3 rounded-full shrink-0"
-                  style={{ background: f.color || "var(--accent)" }}
-                />
+              <div className="flex items-center gap-3 mb-2">
+                <FolderFavicon website={f.website} size={28} />
                 <span className="font-semibold text-[14px] truncate">{f.name}</span>
               </div>
               {f.website && (

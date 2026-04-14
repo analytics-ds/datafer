@@ -2,16 +2,16 @@
  * Create a user account directly in the D1 database.
  *
  * Usage:
- *   npm run create-user -- --email pierre@datashake.fr --password '…' --name 'Pierre'
- *   npm run create-user -- --email … --password … --local
+ *   npm run create-user -- --email pierre@datashake.fr --first-name Pierre --last-name Gaudard
+ *   # password defaults to "1234" and mustChangePassword is set; the user will
+ *   # be forced to change it on first login.
  *
- * Requires `wrangler` authenticated. Writes to the remote D1 by default;
- * pass --local to write to the local dev database.
+ *   npm run create-user -- --email … --first-name … --last-name … --password custom --no-force-change
+ *   npm run create-user -- --email … --first-name … --last-name … --local
  *
- * The password is hashed with the exact same scrypt parameters as
- * @better-auth/utils/password (N=16384, r=16, p=1, dkLen=64, NFKC-normalised
- * password, hex-encoded salt, "salt:key" output format). Verified against the
- * source at node_modules/@better-auth/utils/dist/password.node.mjs.
+ * Password hashing matches @better-auth/utils/password.node.mjs exactly:
+ *   scrypt N=16384, r=16, p=1, dkLen=64; NFKC-normalised password;
+ *   hex-encoded 16-byte salt; "<salt_hex>:<key_hex>" output.
  */
 
 import { execSync } from "node:child_process";
@@ -69,25 +69,29 @@ function sqlEscape(s: string): string {
 async function main() {
   const args = parseArgs();
   const email = args.email;
-  const password = args.password;
-  const name = args.name ?? email?.split("@")[0] ?? "User";
+  const firstName = args["first-name"] ?? args.firstName;
+  const lastName = args["last-name"] ?? args.lastName;
+  const password = args.password ?? "1234";
+  const forceChange = args["no-force-change"] !== "true";
   const mode = args.local === "true" ? "--local" : "--remote";
 
-  if (!email || !password) {
+  if (!email) {
     console.error(
-      "Usage: npm run create-user -- --email <email> --password <pwd> [--name <name>] [--local]",
+      "Usage: npm run create-user -- --email <email> --first-name <first> --last-name <last> [--password <pwd>] [--no-force-change] [--local]",
     );
     process.exit(1);
   }
 
+  const name = [firstName, lastName].filter(Boolean).join(" ") || email.split("@")[0];
   const userId = randomUUID();
   const accountId = randomUUID();
   const hash = await hashPassword(password);
   const now = Math.floor(Date.now() / 1000);
+  const mustChange = forceChange ? 1 : 0;
 
   const sql = `
-INSERT INTO user (id, name, email, email_verified, created_at, updated_at)
-VALUES ('${userId}', '${sqlEscape(name)}', '${sqlEscape(email)}', 1, ${now}, ${now});
+INSERT INTO user (id, name, first_name, last_name, email, email_verified, must_change_password, created_at, updated_at)
+VALUES ('${userId}', '${sqlEscape(name)}', ${firstName ? `'${sqlEscape(firstName)}'` : "NULL"}, ${lastName ? `'${sqlEscape(lastName)}'` : "NULL"}, '${sqlEscape(email)}', 1, ${mustChange}, ${now}, ${now});
 
 INSERT INTO account (id, user_id, account_id, provider_id, password, created_at, updated_at)
 VALUES ('${accountId}', '${userId}', '${sqlEscape(email)}', 'credential', '${hash}', ${now}, ${now});
@@ -99,6 +103,7 @@ VALUES ('${accountId}', '${userId}', '${sqlEscape(email)}', 'credential', '${has
       { stdio: "inherit" },
     );
     console.log(`\nUser created: ${email} (${userId})`);
+    console.log(`  Password:  ${password}${forceChange ? "  (must be changed on first login)" : ""}`);
   } catch {
     console.error("Failed to create user. Make sure wrangler is authenticated and D1 is set up.");
     process.exit(1);

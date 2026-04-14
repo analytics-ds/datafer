@@ -13,7 +13,6 @@ export async function createFolderAction(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const website = String(formData.get("website") ?? "").trim() || null;
-  const color = String(formData.get("color") ?? "").trim() || null;
   const scope = formData.get("scope") === "agency" ? "agency" : "personal";
 
   if (!name) throw new Error("Nom requis");
@@ -26,7 +25,6 @@ export async function createFolderAction(formData: FormData) {
     scope,
     name,
     website,
-    color,
   });
 
   redirect(scope === "agency" ? `/app/agency/${id}` : `/app/folders/${id}`);
