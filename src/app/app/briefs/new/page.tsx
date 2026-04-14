@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { client } from "@/db/schema";
-import { and, asc, eq, or } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { PageHeader } from "../../_ui";
 import { NewBriefForm } from "./form";
 
@@ -18,15 +18,9 @@ export default async function NewBriefPage({
 
   const db = getDb();
   const folders = await db
-    .select({ id: client.id, name: client.name, website: client.website, scope: client.scope })
+    .select({ id: client.id, name: client.name, website: client.website })
     .from(client)
-    .where(
-      or(
-        and(eq(client.ownerId, session.user.id), eq(client.scope, "personal")),
-        eq(client.scope, "agency"),
-      ),
-    )
-    .orderBy(asc(client.scope), asc(client.name));
+    .orderBy(asc(client.name));
 
   return (
     <div className="px-10 py-10 max-w-[720px]">

@@ -13,7 +13,6 @@ export async function createFolderAction(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const website = String(formData.get("website") ?? "").trim() || null;
-  const scope = formData.get("scope") === "agency" ? "agency" : "personal";
 
   if (!name) throw new Error("Nom requis");
 
@@ -22,10 +21,11 @@ export async function createFolderAction(formData: FormData) {
   await db.insert(client).values({
     id,
     ownerId: session.user.id,
-    scope,
+    // Tous les dossiers sont partagés à l'échelle de l'agence
+    scope: "agency",
     name,
     website,
   });
 
-  redirect(scope === "agency" ? `/app/agency/${id}` : `/app/folders/${id}`);
+  redirect(`/app/folders/${id}`);
 }

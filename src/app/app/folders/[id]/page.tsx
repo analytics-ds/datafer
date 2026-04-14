@@ -3,8 +3,8 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { brief, client } from "@/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { brief, client, user } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../../_ui";
 import { FolderFavicon } from "../page";
 
@@ -14,19 +14,15 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
   if (!session) return null;
 
   const db = getDb();
-  const [folder] = await db
-    .select()
+  const [row] = await db
+    .select({ folder: client, ownerName: user.name })
     .from(client)
-    .where(
-      and(
-        eq(client.id, id),
-        eq(client.ownerId, session.user.id),
-        eq(client.scope, "personal"),
-      ),
-    )
+    .leftJoin(user, eq(user.id, client.ownerId))
+    .where(eq(client.id, id))
     .limit(1);
 
-  if (!folder) notFound();
+  if (!row) notFound();
+  const folder = row.folder;
 
   const briefs = await db
     .select({
@@ -35,8 +31,10 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
       country: brief.country,
       score: brief.score,
       createdAt: brief.createdAt,
+      authorName: user.name,
     })
     .from(brief)
+    .leftJoin(user, eq(user.id, brief.ownerId))
     .where(eq(brief.clientId, folder.id))
     .orderBy(desc(brief.createdAt));
 
@@ -45,8 +43,13 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
       <div className="flex items-center gap-2 mb-3">
         <FolderFavicon website={folder.website} size={24} />
         <span className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
-          Mon dossier
+          Dossier
         </span>
+        {row.ownerName && (
+          <span className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+            · créé par {row.ownerName}
+          </span>
+        )}
       </div>
 
       <PageHeader
@@ -80,7 +83,12 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
               <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase">
                 {b.country}
               </span>
-              <div className="flex-1 font-semibold text-[14px] truncate">{b.keyword}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-[14px] truncate">{b.keyword}</div>
+                <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+                  par {b.authorName ?? "inconnu"}
+                </div>
+              </div>
               <div className="text-[12px] text-[var(--text-secondary)] font-[family-name:var(--font-mono)]">
                 {b.score != null ? `${b.score}/100` : "—"}
               </div>

@@ -7,7 +7,6 @@ export type FolderOption = {
   id: string;
   name: string;
   website: string | null;
-  scope: "personal" | "agency";
 };
 
 export function FolderSelect({
@@ -33,8 +32,6 @@ export function FolderSelect({
   }, []);
 
   const selected = folders.find((f) => f.id === value) ?? null;
-  const personal = folders.filter((f) => f.scope === "personal");
-  const agency = folders.filter((f) => f.scope === "agency");
 
   return (
     <div className="relative" ref={ref}>
@@ -70,40 +67,18 @@ export function FolderSelect({
               setOpen(false);
             }}
           />
-          {personal.length > 0 && (
-            <>
-              <GroupHeader>Mes dossiers</GroupHeader>
-              {personal.map((f) => (
-                <Option
-                  key={f.id}
-                  label={f.name}
-                  website={f.website}
-                  selected={value === f.id}
-                  onClick={() => {
-                    onChange(f.id);
-                    setOpen(false);
-                  }}
-                />
-              ))}
-            </>
-          )}
-          {agency.length > 0 && (
-            <>
-              <GroupHeader>Dossiers datashake</GroupHeader>
-              {agency.map((f) => (
-                <Option
-                  key={f.id}
-                  label={f.name}
-                  website={f.website}
-                  selected={value === f.id}
-                  onClick={() => {
-                    onChange(f.id);
-                    setOpen(false);
-                  }}
-                />
-              ))}
-            </>
-          )}
+          {folders.map((f) => (
+            <Option
+              key={f.id}
+              label={f.name}
+              website={f.website}
+              selected={value === f.id}
+              onClick={() => {
+                onChange(f.id);
+                setOpen(false);
+              }}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -135,14 +110,6 @@ function Option({
       <span className="truncate flex-1">{label}</span>
       {selected && <span className="text-[var(--accent-dark)] text-[12px]">✓</span>}
     </button>
-  );
-}
-
-function GroupHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
-      {children}
-    </div>
   );
 }
 

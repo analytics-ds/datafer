@@ -97,20 +97,72 @@ export async function fetchSerp(
 
 // ─── Haloscan ────────────────────────────────────────────────────────────────
 
+export type HaloscanOverview = {
+  keyword: string;
+  serpDate?: string;
+  resultCount?: number | null;
+  /**
+   * Haloscan ne renvoie actuellement pas les métriques volume/CPC/difficulté
+   * via /api/keywords/overview avec notre plan. On conserve quand même le
+   * champ pour quand ces données deviendront disponibles via un autre
+   * endpoint ou une évolution de l'API.
+   */
+  search_volume?: number;
+  cpc?: number;
+  competition?: number;
+  difficulty?: number;
+};
+
+/**
+ * Appel Haloscan. L'API attend :
+ *   - POST /api/keywords/overview
+ *   - Header d'auth : `haloscan-api-key` (PAS Bearer)
+ *   - Body JSON : { keyword, country, requested_data: [...] }
+ *
+ * Validé en recettant les endpoints le 2026-04-14. L'ancien code portait
+ * depuis seo-forge-v4.html utilisait `Authorization: Bearer ...` et renvoyait
+ * 403 Forbidden systématiquement.
+ */
 export async function fetchHaloscan(
   keyword: string,
   country: string,
   token: string,
-): Promise<unknown | null> {
+): Promise<HaloscanOverview | null> {
   try {
-    const lang = ["us", "uk"].includes(country) ? "en" : country;
-    const url = `https://api.haloscan.com/v2/keywords/overview?keyword=${encodeURIComponent(keyword)}&lang=${lang}`;
-    const r = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(10000),
+    const gl = country === "uk" ? "GB" : country.toUpperCase();
+    const r = await fetch("https://api.haloscan.com/api/keywords/overview", {
+      method: "POST",
+      headers: {
+        "haloscan-api-key": token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        keyword,
+        country: gl,
+        requested_data: ["serp"],
+      }),
+      signal: AbortSignal.timeout(15000),
     });
     if (!r.ok) return null;
-    return await r.json();
+    const raw = (await r.json()) as {
+      keyword?: string;
+      serp?: { results?: { serp_date?: string; serp?: unknown[] }; result_count?: number };
+      errors?: unknown[];
+      search_volume?: number;
+      cpc?: number;
+      competition?: number;
+      difficulty?: number;
+    };
+    const serp = raw.serp?.results;
+    return {
+      keyword: raw.keyword ?? keyword,
+      serpDate: serp?.serp_date,
+      resultCount: raw.serp?.result_count ?? null,
+      search_volume: raw.search_volume,
+      cpc: raw.cpc,
+      competition: raw.competition,
+      difficulty: raw.difficulty,
+    };
   } catch {
     return null;
   }

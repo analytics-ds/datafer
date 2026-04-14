@@ -3,17 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth-client";
-import { faviconUrl } from "@/lib/favicon";
-
-type Folder = { id: string; name: string; website: string | null };
 
 type SidebarProps = {
   user: { id: string; email: string; name: string; image: string | null };
-  personalFolders: Folder[];
-  agencyFolders: Folder[];
 };
 
-export function Sidebar({ user, personalFolders, agencyFolders }: SidebarProps) {
+export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -58,54 +53,13 @@ export function Sidebar({ user, personalFolders, agencyFolders }: SidebarProps) 
         >
           Tous les briefs
         </NavItem>
-
-        <NavSection
-          title="Mes dossiers"
-          action={
-            <Link href="/app/folders/new" className="sb-plus-btn" aria-label="Nouveau dossier">
-              <PlusIcon className="w-[12px] h-[12px]" />
-            </Link>
-          }
+        <NavItem
+          href="/app/folders"
+          icon={<FoldersIcon />}
+          active={pathname === "/app/folders" || pathname?.startsWith("/app/folders/")}
         >
-          {personalFolders.length === 0 ? (
-            <p className="text-[11px] text-[var(--text-muted)] px-3 py-2 italic">Aucun dossier.</p>
-          ) : (
-            personalFolders.map((f) => (
-              <FolderItem
-                key={f.id}
-                href={`/app/folders/${f.id}`}
-                active={pathname === `/app/folders/${f.id}`}
-                website={f.website}
-              >
-                {f.name}
-              </FolderItem>
-            ))
-          )}
-        </NavSection>
-
-        <NavSection
-          title="Dossiers datashake"
-          action={
-            <Link href="/app/agency/new" className="sb-plus-btn" aria-label="Nouveau dossier agence">
-              <PlusIcon className="w-[12px] h-[12px]" />
-            </Link>
-          }
-        >
-          {agencyFolders.length === 0 ? (
-            <p className="text-[11px] text-[var(--text-muted)] px-3 py-2 italic">Aucun dossier.</p>
-          ) : (
-            agencyFolders.map((f) => (
-              <FolderItem
-                key={f.id}
-                href={`/app/agency/${f.id}`}
-                active={pathname === `/app/agency/${f.id}`}
-                website={f.website}
-              >
-                {f.name}
-              </FolderItem>
-            ))
-          )}
-        </NavSection>
+          Tous les dossiers
+        </NavItem>
       </nav>
 
       <div className="px-3 py-3 border-t border-[var(--border)]">
@@ -146,23 +100,6 @@ export function Sidebar({ user, personalFolders, agencyFolders }: SidebarProps) 
           Déconnexion
         </button>
       </div>
-
-      <style jsx>{`
-        :global(.sb-plus-btn) {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 20px;
-          height: 20px;
-          border-radius: 6px;
-          color: var(--text-muted);
-          transition: background 0.2s, color 0.2s;
-        }
-        :global(.sb-plus-btn:hover) {
-          background: var(--bg-warm);
-          color: var(--text);
-        }
-      `}</style>
     </aside>
   );
 }
@@ -193,79 +130,6 @@ function NavItem({
   );
 }
 
-function NavSection({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="mt-6">
-      <div className="flex items-center justify-between px-3 mb-2">
-        <span className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
-          {title}
-        </span>
-        {action}
-      </div>
-      <div className="flex flex-col gap-[1px]">{children}</div>
-    </div>
-  );
-}
-
-function FolderItem({
-  href,
-  active,
-  website,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  website: string | null;
-  children: React.ReactNode;
-}) {
-  const favicon = faviconUrl(website, 32);
-  return (
-    <Link
-      href={href}
-      className={`flex items-center gap-[10px] px-3 py-[6px] rounded-[var(--radius-sm)] transition-colors ${
-        active
-          ? "bg-[var(--bg-warm)] text-[var(--text)] font-semibold"
-          : "text-[var(--text-secondary)] hover:bg-[var(--bg)] hover:text-[var(--text)]"
-      }`}
-    >
-      <FolderIcon favicon={favicon} />
-      <span className="truncate">{children}</span>
-    </Link>
-  );
-}
-
-function FolderIcon({ favicon, size = 16 }: { favicon: string | null; size?: number }) {
-  if (favicon) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return (
-      <img
-        src={favicon}
-        alt=""
-        width={size}
-        height={size}
-        className="rounded-[3px] shrink-0 bg-[var(--bg-warm)]"
-        loading="lazy"
-      />
-    );
-  }
-  return (
-    <span
-      className="shrink-0 rounded-[3px] bg-[var(--bg-warm)] text-[var(--text-muted)] flex items-center justify-center text-[10px]"
-      style={{ width: size, height: size }}
-    >
-      ·
-    </span>
-  );
-}
-
 function PlusIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 20 20" fill="none" className={className}>
@@ -286,6 +150,13 @@ function DocIcon() {
       <path d="M5 3h7l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
       <path d="M12 3v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
       <path d="M7 11h6M7 14h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+function FoldersIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="w-full h-full">
+      <path d="M3 6a1 1 0 011-1h3l2 2h7a1 1 0 011 1v7a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
     </svg>
   );
 }

@@ -4,7 +4,7 @@ import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief, client } from "@/db/schema";
 import { and, eq, or } from "drizzle-orm";
-import type { NlpResult, SerpResult, Paa } from "@/lib/analysis";
+import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
 import { BriefEditor } from "./brief-editor";
 
 export default async function BriefDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -31,7 +31,7 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
   const nlp = b.nlpJson ? (JSON.parse(b.nlpJson) as NlpResult) : null;
   const serp = b.serpJson ? (JSON.parse(b.serpJson) as SerpResult[]) : [];
   const paa = b.paaJson ? (JSON.parse(b.paaJson) as Paa[]) : [];
-  const haloscan = b.haloscanJson ? JSON.parse(b.haloscanJson) : null;
+  const haloscan = b.haloscanJson ? (JSON.parse(b.haloscanJson) as HaloscanOverview) : null;
 
   return (
     <BriefEditor
