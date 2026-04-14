@@ -2,28 +2,42 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { brief, client } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { brief, client, user } from "@/db/schema";
+import { asc, desc, eq } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../_ui";
+import { BriefCard } from "./brief-card";
 
 export default async function BriefsPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) return null;
 
   const db = getDb();
-  const rows = await db
-    .select({
-      id: brief.id,
-      keyword: brief.keyword,
-      country: brief.country,
-      score: brief.score,
-      clientName: client.name,
-      createdAt: brief.createdAt,
-    })
-    .from(brief)
-    .leftJoin(client, eq(client.id, brief.clientId))
-    .where(eq(brief.ownerId, session.user.id))
-    .orderBy(desc(brief.createdAt));
+
+  const [rows, folders] = await Promise.all([
+    db
+      .select({
+        id: brief.id,
+        keyword: brief.keyword,
+        country: brief.country,
+        score: brief.score,
+        createdAt: brief.createdAt,
+        clientId: brief.clientId,
+        folderName: client.name,
+        folderWebsite: client.website,
+        authorId: user.id,
+        authorName: user.name,
+        authorImage: user.image,
+      })
+      .from(brief)
+      .leftJoin(client, eq(client.id, brief.clientId))
+      .leftJoin(user, eq(user.id, brief.ownerId))
+      .where(eq(brief.ownerId, session.user.id))
+      .orderBy(desc(brief.createdAt)),
+    db
+      .select({ id: client.id, name: client.name, website: client.website })
+      .from(client)
+      .orderBy(asc(client.name)),
+  ]);
 
   return (
     <div className="px-10 py-10 max-w-[1100px]">
@@ -48,40 +62,26 @@ export default async function BriefsPage() {
           ctaHref="/app/briefs/new"
         />
       ) : (
-        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[var(--border)]">
-                <th className="text-left text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] px-5 py-3">Mot-clé</th>
-                <th className="text-left text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] px-5 py-3">Pays</th>
-                <th className="text-left text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] px-5 py-3">Dossier</th>
-                <th className="text-right text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] px-5 py-3">Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((b) => (
-                <tr
-                  key={b.id}
-                  className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-warm)] transition-colors"
-                >
-                  <td className="px-5 py-3 text-[13px] font-medium">
-                    <Link href={`/app/briefs/${b.id}`} className="hover:underline">
-                      {b.keyword}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3 text-[12px] font-[family-name:var(--font-mono)] uppercase text-[var(--text-secondary)]">
-                    {b.country}
-                  </td>
-                  <td className="px-5 py-3 text-[12px] text-[var(--text-secondary)]">
-                    {b.clientName ?? "—"}
-                  </td>
-                  <td className="px-5 py-3 text-[12px] font-[family-name:var(--font-mono)] text-right">
-                    {b.score != null ? `${b.score}/100` : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid gap-2">
+          {rows.map((b) => (
+            <BriefCard
+              key={b.id}
+              folders={folders}
+              brief={{
+                id: b.id,
+                keyword: b.keyword,
+                country: b.country,
+                score: b.score,
+                createdAt: b.createdAt,
+                folder: b.clientId
+                  ? { id: b.clientId, name: b.folderName ?? "", website: b.folderWebsite }
+                  : null,
+                author: b.authorId
+                  ? { id: b.authorId, name: b.authorName, image: b.authorImage }
+                  : null,
+              }}
+            />
+          ))}
         </div>
       )}
     </div>

@@ -2,9 +2,10 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { brief, client } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { brief, client, user } from "@/db/schema";
+import { asc, desc, eq } from "drizzle-orm";
 import { PageHeader, SectionTitle, EmptyState } from "./_ui";
+import { BriefCard } from "./briefs/brief-card";
 
 export default async function AppHome() {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -12,20 +13,32 @@ export default async function AppHome() {
 
   const db = getDb();
 
-  const recentBriefs = await db
-    .select({
-      id: brief.id,
-      keyword: brief.keyword,
-      country: brief.country,
-      score: brief.score,
-      clientName: client.name,
-      createdAt: brief.createdAt,
-    })
-    .from(brief)
-    .leftJoin(client, eq(client.id, brief.clientId))
-    .where(eq(brief.ownerId, session.user.id))
-    .orderBy(desc(brief.createdAt))
-    .limit(10);
+  const [recentBriefs, folders] = await Promise.all([
+    db
+      .select({
+        id: brief.id,
+        keyword: brief.keyword,
+        country: brief.country,
+        score: brief.score,
+        createdAt: brief.createdAt,
+        clientId: brief.clientId,
+        folderName: client.name,
+        folderWebsite: client.website,
+        authorId: user.id,
+        authorName: user.name,
+        authorImage: user.image,
+      })
+      .from(brief)
+      .leftJoin(client, eq(client.id, brief.clientId))
+      .leftJoin(user, eq(user.id, brief.ownerId))
+      .where(eq(brief.ownerId, session.user.id))
+      .orderBy(desc(brief.createdAt))
+      .limit(10),
+    db
+      .select({ id: client.id, name: client.name, website: client.website })
+      .from(client)
+      .orderBy(asc(client.name)),
+  ]);
 
   return (
     <div className="px-10 py-10 max-w-[1100px]">
@@ -61,26 +74,25 @@ export default async function AppHome() {
             ctaHref="/app/briefs/new"
           />
         ) : (
-          <div className="grid gap-3">
+          <div className="grid gap-2">
             {recentBriefs.map((b) => (
-              <Link
+              <BriefCard
                 key={b.id}
-                href={`/app/briefs/${b.id}`}
-                className="flex items-center gap-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] px-5 py-4 hover:border-[var(--border-strong)] transition-colors"
-              >
-                <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase">
-                  {b.country}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-[14px] truncate">{b.keyword}</div>
-                  <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
-                    {b.clientName ?? "Sans dossier"}
-                  </div>
-                </div>
-                <div className="text-[12px] text-[var(--text-secondary)] font-[family-name:var(--font-mono)]">
-                  {b.score != null ? `${b.score}/100` : "—"}
-                </div>
-              </Link>
+                folders={folders}
+                brief={{
+                  id: b.id,
+                  keyword: b.keyword,
+                  country: b.country,
+                  score: b.score,
+                  createdAt: b.createdAt,
+                  folder: b.clientId
+                    ? { id: b.clientId, name: b.folderName ?? "", website: b.folderWebsite }
+                    : null,
+                  author: b.authorId
+                    ? { id: b.authorId, name: b.authorName, image: b.authorImage }
+                    : null,
+                }}
+              />
             ))}
           </div>
         )}
@@ -88,4 +100,3 @@ export default async function AppHome() {
     </div>
   );
 }
-
