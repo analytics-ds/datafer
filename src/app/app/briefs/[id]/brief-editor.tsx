@@ -315,51 +315,11 @@ export function BriefEditor(props: BriefEditorProps) {
       </div>
 
       <div className={tab === "serp" ? "flex-1 overflow-y-auto px-7 py-6" : "hidden"}>
-          <div className="grid gap-2 max-w-[880px]">
-            {serp.map((r) => (
-              <a
-                key={r.position}
-                href={r.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="grid grid-cols-[44px_1fr_auto] gap-4 items-center bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] px-4 py-3 hover:border-[var(--border-strong)] transition-colors"
-              >
-                <span
-                  className={`w-10 h-10 flex items-center justify-center font-[family-name:var(--font-mono)] font-semibold text-[14px] rounded-[var(--radius-xs)] ${
-                    r.position <= 3
-                      ? "bg-[var(--bg-olive-light)] text-[var(--accent-dark)]"
-                      : "bg-[var(--bg-warm)] text-[var(--text-secondary)]"
-                  }`}
-                >
-                  {r.position}
-                </span>
-                <div className="min-w-0">
-                  <div className="font-semibold text-[13px] truncate">{r.title}</div>
-                  <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] truncate">
-                    {r.displayed_link}
-                  </div>
-                </div>
-                <div className="flex gap-4 text-center">
-                  <div>
-                    <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
-                      {r.wordCount ? r.wordCount : "—"}
-                    </div>
-                    <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
-                      mots
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
-                      {r.headings ?? "—"}
-                    </div>
-                    <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
-                      titres
-                    </div>
-                  </div>
-                </div>
-              </a>
-            ))}
-          </div>
+        <div className="grid gap-2 max-w-[880px]">
+          {serp.map((r) => (
+            <SerpCard key={r.position} r={r} />
+          ))}
+        </div>
       </div>
 
       <div className={tab === "insights" ? "flex-1 overflow-y-auto px-7 py-6" : "hidden"}>
@@ -537,7 +497,7 @@ function EditorSidebar({
       </div>
 
       {/* Sub-scores */}
-      <Section title="Score détaillé" dotColor="var(--bg-black)">
+      <Section title="Score détaillé" dotColor="var(--bg-black)" collapsible defaultOpen={false}>
         {subItems.map((i) => {
           const pct = Math.round((i.s.score / i.s.max) * 100);
           const valColor = pct >= 70 ? "var(--green)" : pct >= 40 ? "var(--orange)" : "var(--red)";
@@ -561,7 +521,7 @@ function EditorSidebar({
       </Section>
 
       {ek && (
-        <Section title="Mot-clé exact" dotColor="var(--accent)">
+        <Section title="Mot-clé exact" dotColor="var(--accent)" collapsible defaultOpen={false}>
           <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold px-3 py-[7px] bg-[var(--bg-warm)] rounded-[var(--radius-xs)] mb-[10px] text-center">
             &quot;{ek.keyword}&quot;
           </div>
@@ -574,10 +534,18 @@ function EditorSidebar({
         </Section>
       )}
 
+      {nlp && (essential.length || important.length || opportunity.length) > 0 && (
+        <Section title="Champ sémantique NLP" dotColor="var(--purple)">
+          <TierTags label="Essentiels" color="var(--red)" bg="#FFF0F0" border="#E8BCBC" terms={essential} lower={lower} onInsert={insertTermAtCursor} />
+          <TierTags label="Importants" color="var(--orange)" bg="var(--orange-bg)" border="#E8D6A0" terms={important} lower={lower} onInsert={insertTermAtCursor} />
+          <TierTags label="Opportunité" color="var(--blue)" bg="var(--blue-bg)" border="#B8D0E8" terms={opportunity} lower={lower} onInsert={insertTermAtCursor} />
+        </Section>
+      )}
+
       {paa.length > 0 && (
-        <Section title="People Also Ask" dotColor="var(--blue)">
+        <Section title="People Also Ask" dotColor="var(--blue)" collapsible defaultOpen={false}>
           <div className="flex flex-col gap-1">
-            {paa.slice(0, 6).map((q, i) => (
+            {paa.slice(0, 8).map((q, i) => (
               <button
                 key={i}
                 onClick={() => insertPaaAsH2(q.question)}
@@ -593,16 +561,8 @@ function EditorSidebar({
         </Section>
       )}
 
-      {nlp && (essential.length || important.length || opportunity.length) > 0 && (
-        <Section title="Champ sémantique NLP" dotColor="var(--purple)">
-          <TierTags label="Essentiels" color="var(--red)" bg="#FFF0F0" border="#E8BCBC" terms={essential} lower={lower} onInsert={insertTermAtCursor} />
-          <TierTags label="Importants" color="var(--orange)" bg="var(--orange-bg)" border="#E8D6A0" terms={important} lower={lower} onInsert={insertTermAtCursor} />
-          <TierTags label="Opportunité" color="var(--blue)" bg="var(--blue-bg)" border="#B8D0E8" terms={opportunity} lower={lower} onInsert={insertTermAtCursor} />
-        </Section>
-      )}
-
       {nlp && (
-        <Section title="Benchmarks SERP" dotColor="var(--green)">
+        <Section title="Benchmarks SERP" dotColor="var(--green)" collapsible defaultOpen={false}>
           <BenchRow label="Plage de mots" value={`${nlp.minWordCount} — ${nlp.maxWordCount}`} />
           <BenchRow label="Moyenne" value={String(nlp.avgWordCount)} />
           <BenchRow label="Titres" value={String(nlp.avgHeadings)} />
@@ -611,7 +571,7 @@ function EditorSidebar({
       )}
 
       {nlp && (
-        <Section title="Structure conseillée" dotColor="var(--orange)">
+        <Section title="Structure conseillée" dotColor="var(--orange)" collapsible defaultOpen={false}>
           <StructCard>
             <strong>H1 :</strong> 1 seul H1, avec le mot-clé. {nlp.exactKeyword.inH1Pct}% des concurrents le font.
           </StructCard>
@@ -627,14 +587,55 @@ function EditorSidebar({
   );
 }
 
-function Section({ title, dotColor, children }: { title: string; dotColor: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-5">
-      <div className="flex items-center gap-[6px] text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-[10px]">
-        <span className="w-[6px] h-[6px] rounded-full" style={{ background: dotColor }} />
-        {title}
+function Section({
+  title,
+  dotColor,
+  defaultOpen = true,
+  collapsible = false,
+  children,
+}: {
+  title: string;
+  dotColor: string;
+  defaultOpen?: boolean;
+  collapsible?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  if (!collapsible) {
+    return (
+      <div className="mb-5">
+        <div className="flex items-center gap-[6px] text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-[10px]">
+          <span className="w-[6px] h-[6px] rounded-full" style={{ background: dotColor }} />
+          {title}
+        </div>
+        {children}
       </div>
-      {children}
+    );
+  }
+
+  return (
+    <div className="mb-3">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-[6px] text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-[10px] hover:text-[var(--text)] transition-colors"
+      >
+        <span className="flex items-center gap-[6px]">
+          <span className="w-[6px] h-[6px] rounded-full" style={{ background: dotColor }} />
+          {title}
+        </span>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 20 20"
+          fill="none"
+          className="transition-transform"
+          style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+        >
+          <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && children}
     </div>
   );
 }
@@ -676,7 +677,7 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
             ? k.minCount === k.maxCount
               ? String(k.maxCount)
               : `${k.minCount}-${k.maxCount}`
-            : `${k.presence}%`;
+            : null;
 
           // Couleur : vert si dans la fourchette, orange si au-dessus, défaut du tier sinon
           let styleMode: "in-range" | "over" | "default" = "default";
@@ -706,9 +707,16 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
               style={style}
             >
               {k.term}
-              <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
-                {currentCount > 0 ? `${currentCount}/${rangeLabel}` : rangeLabel}
-              </span>
+              {rangeLabel && (
+                <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+                  {currentCount > 0 ? `${currentCount}/${rangeLabel}` : rangeLabel}
+                </span>
+              )}
+              {!rangeLabel && currentCount > 0 && (
+                <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+                  {currentCount}
+                </span>
+              )}
             </button>
           );
         })}
@@ -848,6 +856,103 @@ function FolderFavicon({ website, size }: { website: string | null; size: number
   if (!src) return null;
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt="" width={size} height={size} className="rounded-[3px] shrink-0" loading="lazy" />;
+}
+
+function SerpCard({ r }: { r: SerpResult }) {
+  const [open, setOpen] = useState(false);
+  const hasStructure = (r.h1?.length ?? 0) + (r.h2?.length ?? 0) + (r.h3?.length ?? 0) > 0;
+
+  return (
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] hover:border-[var(--border-strong)] transition-colors">
+      <div className="grid grid-cols-[44px_1fr_auto] gap-4 items-center px-4 py-3">
+        <a
+          href={r.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`w-10 h-10 flex items-center justify-center font-[family-name:var(--font-mono)] font-semibold text-[14px] rounded-[var(--radius-xs)] ${
+            r.position <= 3
+              ? "bg-[var(--bg-olive-light)] text-[var(--accent-dark)]"
+              : "bg-[var(--bg-warm)] text-[var(--text-secondary)]"
+          }`}
+          aria-label={`Ouvrir le résultat ${r.position}`}
+        >
+          {r.position}
+        </a>
+        <a
+          href={r.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="min-w-0 hover:underline"
+        >
+          <div className="font-semibold text-[13px] truncate">{r.title}</div>
+          <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] truncate">
+            {r.displayed_link}
+          </div>
+        </a>
+        <div className="flex items-center gap-4 text-center">
+          <div>
+            <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
+              {r.wordCount ? r.wordCount : "—"}
+            </div>
+            <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
+              mots
+            </div>
+          </div>
+          <div>
+            <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
+              {r.headings ?? "—"}
+            </div>
+            <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
+              titres
+            </div>
+          </div>
+          <button
+            onClick={() => setOpen((v) => !v)}
+            disabled={!hasStructure}
+            className="px-3 py-[6px] rounded-[var(--radius-xs)] text-[11px] font-semibold border border-[var(--border)] hover:bg-[var(--bg-warm)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {open ? "▲ Structure" : "▼ Structure"}
+          </button>
+        </div>
+      </div>
+
+      {open && hasStructure && (
+        <div className="border-t border-[var(--border)] px-5 py-4 bg-[var(--bg)]">
+          {(r.h1 ?? []).map((h, i) => (
+            <HeadingLine key={`h1-${i}`} level="h1" text={h} />
+          ))}
+          {(r.h2 ?? []).map((h, i) => (
+            <HeadingLine key={`h2-${i}`} level="h2" text={h} />
+          ))}
+          {(r.h3 ?? []).map((h, i) => (
+            <HeadingLine key={`h3-${i}`} level="h3" text={h} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HeadingLine({ level, text }: { level: "h1" | "h2" | "h3"; text: string }) {
+  const indent = level === "h1" ? 0 : level === "h2" ? 12 : 24;
+  const pillBg =
+    level === "h1" ? "var(--bg-olive-light)" : level === "h2" ? "var(--bg-warm)" : "var(--bg-card)";
+  const pillColor =
+    level === "h1" ? "var(--accent-dark)" : "var(--text-secondary)";
+  const fontSize = level === "h1" ? "13px" : level === "h2" ? "12px" : "11px";
+  const fontWeight = level === "h1" ? 700 : level === "h2" ? 600 : 500;
+
+  return (
+    <div className="flex items-start gap-2 py-[3px]" style={{ paddingLeft: indent }}>
+      <span
+        className="inline-flex items-center justify-center px-[6px] py-[1px] rounded-[3px] font-[family-name:var(--font-mono)] text-[9px] font-semibold uppercase shrink-0 mt-[2px]"
+        style={{ background: pillBg, color: pillColor, border: `1px solid ${pillColor}20` }}
+      >
+        {level}
+      </span>
+      <span style={{ fontSize, fontWeight }}>{text}</span>
+    </div>
+  );
 }
 
 function escapeHtml(s: string): string {

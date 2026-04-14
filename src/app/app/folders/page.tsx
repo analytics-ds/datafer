@@ -6,6 +6,7 @@ import { brief, client } from "@/db/schema";
 import { asc, count, eq } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../_ui";
 import { faviconUrl } from "@/lib/favicon";
+import { FolderListCard } from "./folder-list-card";
 
 export default async function FoldersPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -49,24 +50,7 @@ export default async function FoldersPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {rows.map((f) => (
-            <Link
-              key={f.id}
-              href={`/app/folders/${f.id}`}
-              className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-sm)] transition-all"
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <FolderFavicon website={f.website} size={28} />
-                <span className="font-semibold text-[14px] truncate">{f.name}</span>
-              </div>
-              {f.website && (
-                <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] truncate mb-3">
-                  {f.website}
-                </div>
-              )}
-              <div className="text-[11px] text-[var(--text-secondary)] font-[family-name:var(--font-mono)]">
-                {f.briefCount} {f.briefCount > 1 ? "briefs" : "brief"}
-              </div>
-            </Link>
+            <FolderListCard key={f.id} folder={f} />
           ))}
         </div>
       )}
@@ -74,6 +58,7 @@ export default async function FoldersPage() {
   );
 }
 
+// Conservé pour les autres écrans qui l'importent (folder detail, sidebar)
 export function FolderFavicon({ website, size = 24 }: { website: string | null; size?: number }) {
   const src = faviconUrl(website, Math.max(size * 2, 32));
   if (!src) {

@@ -9,6 +9,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import {
   fetchSerp,
   fetchHaloscan,
+  fetchHaloscanQuestions,
   crawlPage,
   runNLP,
   type PageContent,
@@ -86,7 +87,14 @@ export async function POST(req: Request) {
     const c = crawled[i];
     if (c) {
       pageContents.push(c);
-      return { ...r, wordCount: c.wordCount, headings: c.headings };
+      return {
+        ...r,
+        wordCount: c.wordCount,
+        headings: c.headings,
+        h1: c.h1,
+        h2: c.h2,
+        h3: c.h3,
+      };
     }
     return { ...r, wordCount: 0, headings: 0 };
   });
@@ -114,6 +122,22 @@ export async function POST(req: Request) {
   // 4) Haloscan (best-effort)
   const haloscan = haloscanKey ? await fetchHaloscan(keyword, country, haloscanKey) : null;
 
+  // 4b) Si SERPAPI n'a pas remonté assez de PAA (Google n'affiche pas toujours
+  // le bloc "Autres questions"), on complète avec Haloscan /keywords/questions.
+  let finalPaa = paa;
+  if (haloscanKey && finalPaa.length < 5) {
+    const extra = await fetchHaloscanQuestions(keyword, country, haloscanKey, 10);
+    const seen = new Set(finalPaa.map((q) => q.question.toLowerCase()));
+    for (const q of extra) {
+      const k = q.question.toLowerCase();
+      if (!seen.has(k)) {
+        finalPaa.push(q);
+        seen.add(k);
+      }
+      if (finalPaa.length >= 8) break;
+    }
+  }
+
   // 5) Insert en DB
   const id = randomUUID();
   const initialScore = scoreFromNlp(0, 0); // pas encore de contenu rédigé
@@ -127,7 +151,7 @@ export async function POST(req: Request) {
     serpJson: JSON.stringify(enrichedResults),
     nlpJson: JSON.stringify(nlp),
     haloscanJson: haloscan ? JSON.stringify(haloscan) : null,
-    paaJson: JSON.stringify(paa),
+    paaJson: JSON.stringify(finalPaa),
     editorHtml: "",
     score: initialScore,
   });

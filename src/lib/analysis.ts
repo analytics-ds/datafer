@@ -14,6 +14,9 @@ export type SerpResult = {
   displayed_link: string;
   wordCount?: number;
   headings?: number;
+  h1?: string[];
+  h2?: string[];
+  h3?: string[];
 };
 
 export type Paa = { question: string; snippet: string; link: string };
@@ -99,6 +102,36 @@ export async function fetchSerp(
     link: q.link ?? "",
   }));
   return { results, paa };
+}
+
+/**
+ * Questions connexes récupérées via Haloscan /api/keywords/questions.
+ * Utilisé en complément des PAA SERPAPI quand SERPAPI n'en renvoie pas assez
+ * (Google n'affiche pas toujours le bloc "Autres questions posées").
+ */
+export async function fetchHaloscanQuestions(
+  keyword: string,
+  country: string,
+  token: string,
+  limit = 10,
+): Promise<Paa[]> {
+  try {
+    const gl = country === "uk" ? "GB" : country.toUpperCase();
+    const r = await fetch("https://api.haloscan.com/api/keywords/questions", {
+      method: "POST",
+      headers: { "haloscan-api-key": token, "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword, country: gl }),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!r.ok) return [];
+    const d = (await r.json()) as { results?: Array<{ keyword?: string }> };
+    return (d.results ?? [])
+      .slice(0, limit)
+      .map((q) => ({ question: q.keyword ?? "", snippet: "", link: "" }))
+      .filter((q) => q.question);
+  } catch {
+    return [];
+  }
 }
 
 // ─── Haloscan ────────────────────────────────────────────────────────────────
