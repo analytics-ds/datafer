@@ -6,6 +6,7 @@ import type { NlpResult, NlpTerm, SerpResult, Paa, HaloscanOverview } from "@/li
 import { computeDetailedScore, type DetailedScore } from "@/lib/scoring";
 import { faviconUrl } from "@/lib/favicon";
 import { EditorToolbar } from "./toolbar";
+import { ShareBriefPanel } from "../share-brief-panel";
 
 type Folder = { id: string; name: string; website: string | null; scope: "personal" | "agency" };
 
@@ -27,6 +28,8 @@ type BriefEditorProps = {
   saveEndpoint?: string;
   /** Masquer le bouton "Nouvelle analyse" (ex. en mode partage). */
   hideNewAnalysis?: boolean;
+  /** Token de partage déjà actif sur le brief (mode consultant uniquement). */
+  shareToken?: string | null;
 };
 
 type Tab = "editor" | "serp" | "insights";
@@ -224,6 +227,9 @@ export function BriefEditor(props: BriefEditorProps) {
         <div className="flex items-center gap-2">
           {saveStatus === "saving" && <span className="text-[11px] text-[var(--text-muted)]">Enregistrement…</span>}
           {saveStatus === "saved" && <span className="text-[11px] text-[var(--green)] font-semibold">✓ Enregistré</span>}
+          {!hideNewAnalysis && (
+            <ShareBriefPanel briefId={id} initialToken={props.shareToken ?? null} />
+          )}
           {!hideNewAnalysis && (
             <Link
               href="/app/briefs/new"

@@ -9,6 +9,7 @@ import { PageHeader, EmptyState } from "../../_ui";
 import { FolderFavicon } from "../page";
 import { FavoriteButton } from "../favorite-button";
 import { SharePanel } from "../share-panel";
+import { DeleteFolderButton } from "../delete-folder";
 import { BriefCard } from "../../briefs/brief-card";
 
 export default async function FolderDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -74,6 +75,11 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
           <div className="flex items-center gap-2 flex-wrap">
             <FavoriteButton folderId={folder.id} initialFavorited={!!fav} />
             <SharePanel folderId={folder.id} initialToken={folder.shareToken ?? null} />
+            <DeleteFolderButton
+              folderId={folder.id}
+              folderName={folder.name}
+              folderWebsite={folder.website}
+            />
             <Link
               href={`/app/briefs/new?folder=${folder.id}`}
               className="inline-flex items-center gap-2 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] px-4 py-[9px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] transition-colors"

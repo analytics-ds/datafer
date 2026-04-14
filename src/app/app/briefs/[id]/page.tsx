@@ -53,6 +53,7 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
       serp={serp}
       paa={paa}
       haloscan={haloscan}
+      shareToken={b.shareToken ?? null}
     />
   );
 }

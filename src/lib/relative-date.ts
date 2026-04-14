@@ -1,23 +1,19 @@
 /**
- * "27 days ago" façon Surfer, en français.
+ * Format court d'une date de création (ex. "14 avr. 2026").
+ * Pas d'heure ni de format relatif : on veut savoir le jour, pas combien de
+ * temps s'est écoulé.
  */
-export function relativeDate(input: Date | number | null | undefined): string {
+export function formatDate(input: Date | number | null | undefined): string {
   if (!input) return "—";
   const date = input instanceof Date ? input : new Date(input);
   if (isNaN(date.getTime())) return "—";
-
-  const now = Date.now();
-  const diffSec = Math.round((now - date.getTime()) / 1000);
-
-  if (diffSec < 60) return "à l'instant";
-  const diffMin = Math.round(diffSec / 60);
-  if (diffMin < 60) return `il y a ${diffMin} min`;
-  const diffHour = Math.round(diffMin / 60);
-  if (diffHour < 24) return `il y a ${diffHour} h`;
-  const diffDay = Math.round(diffHour / 24);
-  if (diffDay < 30) return `il y a ${diffDay} j`;
-  const diffMonth = Math.round(diffDay / 30);
-  if (diffMonth < 12) return `il y a ${diffMonth} mois`;
-  const diffYear = Math.round(diffMonth / 12);
-  return `il y a ${diffYear} an${diffYear > 1 ? "s" : ""}`;
+  return date.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
+
+// Ancien alias conservé pour ne pas casser les imports existants pendant la
+// transition vers formatDate.
+export const relativeDate = formatDate;
