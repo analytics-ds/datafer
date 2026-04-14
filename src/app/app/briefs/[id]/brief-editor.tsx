@@ -19,12 +19,22 @@ type BriefEditorProps = {
   serp: SerpResult[];
   paa: Paa[];
   haloscan: HaloscanOverview | null;
+  /**
+   * Endpoint PATCH utilisé pour la sauvegarde débouncée du contenu.
+   * - `/api/briefs/<id>` pour les users authentifiés
+   * - `/api/share/<token>/briefs/<id>` pour les accès publics via partage
+   */
+  saveEndpoint?: string;
+  /** Masquer le bouton "Nouvelle analyse" (ex. en mode partage). */
+  hideNewAnalysis?: boolean;
 };
 
 type Tab = "editor" | "serp" | "insights";
 
 export function BriefEditor(props: BriefEditorProps) {
   const { id, keyword, country, folder, initialHtml, nlp, serp, paa, haloscan } = props;
+  const saveEndpoint = props.saveEndpoint ?? `/api/briefs/${id}`;
+  const hideNewAnalysis = props.hideNewAnalysis ?? false;
 
   const editorRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("editor");
@@ -78,7 +88,7 @@ export function BriefEditor(props: BriefEditorProps) {
     saveTimer.current = setTimeout(async () => {
       setSaveStatus("saving");
       try {
-        await fetch(`/api/briefs/${id}`, {
+        await fetch(saveEndpoint, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -95,7 +105,7 @@ export function BriefEditor(props: BriefEditorProps) {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [editorData, score.total, id]);
+  }, [editorData, score.total, saveEndpoint]);
 
   const exec = (cmd: string, value?: string) => {
     editorRef.current?.focus();
@@ -192,7 +202,7 @@ export function BriefEditor(props: BriefEditorProps) {
           <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase">
             {country}
           </span>
-          {folder && (
+          {folder && !hideNewAnalysis && (
             <Link
               href={`/app/folders/${folder.id}`}
               className="flex items-center gap-[6px] text-[12px] text-[var(--text-secondary)] hover:text-[var(--text)] font-[family-name:var(--font-mono)]"
@@ -201,6 +211,12 @@ export function BriefEditor(props: BriefEditorProps) {
               <span>{folder.name}</span>
             </Link>
           )}
+          {folder && hideNewAnalysis && (
+            <span className="flex items-center gap-[6px] text-[12px] text-[var(--text-secondary)] font-[family-name:var(--font-mono)]">
+              <FolderFavicon website={folder.website} size={14} />
+              <span>{folder.name}</span>
+            </span>
+          )}
           <span className="px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase bg-[var(--green-bg)] text-[var(--green)]">
             {crawledCount}/{serp.length} pages crawlées
           </span>
@@ -208,12 +224,14 @@ export function BriefEditor(props: BriefEditorProps) {
         <div className="flex items-center gap-2">
           {saveStatus === "saving" && <span className="text-[11px] text-[var(--text-muted)]">Enregistrement…</span>}
           {saveStatus === "saved" && <span className="text-[11px] text-[var(--green)] font-semibold">✓ Enregistré</span>}
-          <Link
-            href="/app/briefs/new"
-            className="px-4 py-[8px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[12px] font-semibold hover:bg-[var(--bg-warm)] transition-colors"
-          >
-            + Nouvelle analyse
-          </Link>
+          {!hideNewAnalysis && (
+            <Link
+              href="/app/briefs/new"
+              className="px-4 py-[8px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[12px] font-semibold hover:bg-[var(--bg-warm)] transition-colors"
+            >
+              + Nouvelle analyse
+            </Link>
+          )}
         </div>
       </div>
 
