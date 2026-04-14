@@ -54,8 +54,12 @@ export const verification = sqliteTable("verification", {
 export const client = sqliteTable("client", {
   id: text("id").primaryKey(),
   ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  // 'personal' = visible par l'owner uniquement
+  // 'agency'   = dossier datashake, visible par tous les users authentifiés
+  scope: text("scope", { enum: ["personal", "agency"] }).notNull().default("personal"),
   name: text("name").notNull(),
   website: text("website"),
+  color: text("color"),
   notes: text("notes"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),

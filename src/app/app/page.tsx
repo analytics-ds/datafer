@@ -1,44 +1,91 @@
-export default function AppHome() {
+import Link from "next/link";
+import { headers } from "next/headers";
+import { getAuth } from "@/lib/auth";
+import { getDb } from "@/db";
+import { brief, client } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
+import { PageHeader, SectionTitle, EmptyState } from "./_ui";
+
+export default async function AppHome() {
+  const session = await getAuth().api.getSession({ headers: await headers() });
+  if (!session) return null;
+
+  const db = getDb();
+
+  const recentBriefs = await db
+    .select({
+      id: brief.id,
+      keyword: brief.keyword,
+      country: brief.country,
+      score: brief.score,
+      clientName: client.name,
+      createdAt: brief.createdAt,
+    })
+    .from(brief)
+    .leftJoin(client, eq(client.id, brief.clientId))
+    .where(eq(brief.ownerId, session.user.id))
+    .orderBy(desc(brief.createdAt))
+    .limit(10);
+
   return (
-    <main className="flex flex-col items-center justify-center px-8 py-20 text-center min-h-[calc(100vh-56px)]">
-      <span className="inline-flex items-center gap-[6px] px-4 py-[6px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[11px] font-semibold tracking-[0.6px] uppercase mb-8">
-        Content Optimizer
-      </span>
+    <div className="px-10 py-10 max-w-[1100px]">
+      <PageHeader
+        title={<>Bonjour <span className="italic text-[var(--accent-dark)]">{session.user.name.split(" ")[0]}.</span></>}
+        subtitle="Reprends un brief en cours ou démarre une nouvelle analyse sémantique."
+      />
 
-      <h1 className="font-[family-name:var(--font-display)] text-[clamp(38px,5.5vw,68px)] font-normal leading-[1.05] tracking-[-1.5px] max-w-[680px] mb-4">
-        Analysez, optimisez,
-        <br />
-        <em className="italic text-[var(--accent-dark)]">dominez.</em>
-      </h1>
-      <p className="text-[var(--text-secondary)] text-[16px] leading-[1.6] max-w-[440px] mb-11">
-        Analysez les top résultats Google, extrayez les patterns NLP et optimisez votre
-        contenu en temps réel.
-      </p>
-
-      <div className="flex items-stretch w-full max-w-[560px] bg-[var(--bg-card)] border-2 border-[var(--border)] rounded-[var(--radius)] overflow-hidden shadow-[var(--shadow)] opacity-60">
-        <input
-          disabled
-          type="text"
-          placeholder="Entrez votre mot-clé cible…"
-          className="flex-1 px-[18px] py-[15px] outline-none text-[15px] bg-transparent cursor-not-allowed"
-        />
-        <select
-          disabled
-          className="px-[14px] border-l border-[var(--border)] bg-[var(--bg)] text-[13px] font-medium cursor-not-allowed"
+      <section className="mb-12">
+        <Link
+          href="/app/briefs/new"
+          className="group flex items-center justify-between bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius)] px-7 py-6 hover:bg-[var(--bg-dark)] transition-colors"
         >
-          <option>FR</option>
-        </select>
-        <button
-          disabled
-          className="px-[26px] py-[14px] bg-[var(--bg-black)] text-[var(--text-inverse)] text-[14px] font-semibold cursor-not-allowed"
-        >
-          Analyser →
-        </button>
-      </div>
+          <div>
+            <div className="text-[11px] font-semibold tracking-[0.8px] uppercase text-[var(--bg-olive-light)] mb-[2px]">
+              Content Optimizer
+            </div>
+            <div className="font-[family-name:var(--font-display)] text-[28px] leading-tight">
+              Démarrer un nouveau brief
+            </div>
+          </div>
+          <span className="text-[15px] group-hover:translate-x-1 transition-transform">→</span>
+        </Link>
+      </section>
 
-      <p className="mt-10 text-[12px] text-[var(--text-muted)]">
-        L&apos;éditeur et l&apos;analyse SERP arrivent dans la prochaine itération.
-      </p>
-    </main>
+      <section>
+        <SectionTitle>Briefs récents</SectionTitle>
+        {recentBriefs.length === 0 ? (
+          <EmptyState
+            title="Aucun brief pour l'instant"
+            description="Ton premier brief apparaîtra ici. Lance une analyse pour commencer."
+            ctaLabel="Créer un brief"
+            ctaHref="/app/briefs/new"
+          />
+        ) : (
+          <div className="grid gap-3">
+            {recentBriefs.map((b) => (
+              <Link
+                key={b.id}
+                href={`/app/briefs/${b.id}`}
+                className="flex items-center gap-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] px-5 py-4 hover:border-[var(--border-strong)] transition-colors"
+              >
+                <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase">
+                  {b.country}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-[14px] truncate">{b.keyword}</div>
+                  <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+                    {b.clientName ?? "Sans dossier"}
+                  </div>
+                </div>
+                <div className="text-[12px] text-[var(--text-secondary)] font-[family-name:var(--font-mono)]">
+                  {b.score != null ? `${b.score}/100` : "—"}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
+

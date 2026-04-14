@@ -40,7 +40,7 @@ export function LoginForm() {
           <span className="ds-logo-name">datashake</span>
         </div>
         <div className="w-px h-6 bg-[var(--border)]" />
-        <span className="font-semibold text-[14px]">Datafer</span>
+        <span className="font-semibold text-[14px]">datafer</span>
       </div>
 
       <span className="inline-flex items-center px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.6px] uppercase mb-5">
@@ -51,7 +51,7 @@ export function LoginForm() {
         Bon retour<em className="italic text-[var(--accent-dark)]">.</em>
       </h1>
       <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-10">
-        Connecte-toi à ton espace Datafer pour générer tes briefs et accéder à tes dossiers clients.
+        Connecte-toi à ton espace datafer pour générer tes briefs et accéder à tes dossiers clients.
       </p>
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">

@@ -25,7 +25,7 @@ const monoPlex = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Datafer — Content Optimizer",
+  title: "datafer — Content Optimizer",
   description: "Outil d'optimisation sémantique SEO par datashake.",
 };
 

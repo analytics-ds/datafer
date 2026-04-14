@@ -1,5 +1,5 @@
 /**
- * Aperçu stylisé de Datafer affiché à gauche de l'écran de login.
+ * Aperçu stylisé de datafer affiché à gauche de l'écran de login.
  * Reproduit en HTML/CSS une "photo" de l'outil (score ring, éditeur,
  * sidebar NLP) pour donner envie avant la connexion.
  */
@@ -28,7 +28,7 @@ export function LoginPreview() {
           <span className="ds-logo-name">datashake</span>
         </div>
         <div className="w-px h-6 bg-[var(--border)]" />
-        <span className="font-semibold text-[14px] tracking-[-0.2px]">Datafer</span>
+        <span className="font-semibold text-[14px] tracking-[-0.2px]">datafer</span>
       </div>
 
       {/* Mock de l'interface */}
