@@ -8,7 +8,7 @@ assets = { directory = ".open-next/assets", binding = "ASSETS" }
 [[d1_databases]]
 binding = "DB"
 database_name = "datafer"
-database_id = "REPLACE_WITH_DATABASE_ID"
+database_id = "52061f81-b4f5-4b32-9685-a015b0981a29"
 migrations_dir = "drizzle"
 
 [vars]
