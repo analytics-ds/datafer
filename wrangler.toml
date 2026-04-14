@@ -12,8 +12,7 @@ database_id = "52061f81-b4f5-4b32-9685-a015b0981a29"
 migrations_dir = "drizzle"
 
 [vars]
-# Non-secret vars go here (public origin, etc.)
-# BETTER_AUTH_URL = "https://datafer.pages.dev"
+BETTER_AUTH_URL = "https://datafer.analytics-e0d.workers.dev"
 
 # Secrets set via `wrangler secret put`:
 # - BETTER_AUTH_SECRET       (openssl rand -base64 32)
