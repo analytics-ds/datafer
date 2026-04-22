@@ -32,6 +32,7 @@ export function NewBriefForm({
   const [keyword, setKeyword] = useState("");
   const [country, setCountry] = useState("fr");
   const [folderId, setFolderId] = useState(defaultFolderId ?? "");
+  const [myUrl, setMyUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +51,12 @@ export function NewBriefForm({
       const res = await fetch("/api/briefs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyword: keyword.trim(), country, folderId: folderId || null }),
+        body: JSON.stringify({
+          keyword: keyword.trim(),
+          country,
+          folderId: folderId || null,
+          myUrl: myUrl.trim() || null,
+        }),
       });
       clearInterval(tick);
 
@@ -112,11 +118,25 @@ export function NewBriefForm({
         </div>
 
         <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
-          Dossier (optionnel)
+          Client (optionnel)
         </label>
-        <div className="mb-8">
+        <div className="mb-5">
           <FolderSelect name="folderId" folders={folders} value={folderId} onChange={setFolderId} />
         </div>
+
+        <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+          Mon URL existante (optionnel)
+        </label>
+        <input
+          type="url"
+          value={myUrl}
+          onChange={(e) => setMyUrl(e.target.value)}
+          placeholder="https://exemple.fr/page-existante"
+          className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-[6px] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
+        />
+        <p className="text-[11px] text-[var(--text-muted)] mb-8">
+          Si tu colles une URL, on récupère le contenu pour l&apos;injecter dans l&apos;éditeur et te donner ton score initial face à la SERP.
+        </p>
 
         {error && (
           <div className="text-[13px] text-[var(--red)] bg-[var(--red-bg)] border border-[var(--red)]/20 rounded-[var(--radius-xs)] px-3 py-2 mb-4">

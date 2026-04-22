@@ -54,10 +54,10 @@ export function SharePanel({
 
       {open && (
         <div className="absolute right-0 top-full mt-2 z-20 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] shadow-[var(--shadow-lg)] p-5 w-[400px]">
-          <div className="font-semibold text-[14px] mb-1">Partager ce dossier</div>
+          <div className="font-semibold text-[14px] mb-1">Partager ce client</div>
           <p className="text-[12px] text-[var(--text-secondary)] leading-[1.5] mb-4">
             Génère un lien public que tu peux envoyer à ton client. Il pourra consulter
-            tous les briefs du dossier en lecture seule, sans compte datafer.
+            tous les briefs du client en lecture seule, sans compte datafer.
           </p>
 
           {token ? (

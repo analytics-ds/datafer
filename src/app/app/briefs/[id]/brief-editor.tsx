@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { NlpResult, NlpTerm, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
+import type {
+  NlpResult,
+  NlpTerm,
+  SerpResult,
+  Paa,
+  HaloscanOverview,
+  Section as NlpSection,
+  Entity,
+} from "@/lib/analysis";
 import { computeDetailedScore, type DetailedScore } from "@/lib/scoring";
 import { faviconUrl } from "@/lib/favicon";
 import { EditorToolbar } from "./toolbar";
@@ -20,6 +28,9 @@ type BriefEditorProps = {
   serp: SerpResult[];
   paa: Paa[];
   haloscan: HaloscanOverview | null;
+  // Position du domaine du dossier dans la SERP (top 100), null si hors top 100
+  // ou si pas de site rattaché.
+  position: number | null;
   /**
    * Endpoint PATCH utilisé pour la sauvegarde débouncée du contenu.
    * - `/api/briefs/<id>` pour les users authentifiés
@@ -35,7 +46,7 @@ type BriefEditorProps = {
 type Tab = "editor" | "serp" | "insights";
 
 export function BriefEditor(props: BriefEditorProps) {
-  const { id, keyword, country, folder, initialHtml, nlp, serp, paa, haloscan } = props;
+  const { id, keyword, country, folder, initialHtml, nlp, serp, paa, haloscan, position } = props;
   const saveEndpoint = props.saveEndpoint ?? `/api/briefs/${id}`;
   const hideNewAnalysis = props.hideNewAnalysis ?? false;
 
@@ -305,10 +316,16 @@ export function BriefEditor(props: BriefEditorProps) {
             wc={wc}
             score={score}
             nlp={nlp}
+            serp={serp}
             paa={paa}
+            haloscan={haloscan}
+            position={position}
+            folderWebsite={folder?.website ?? null}
             editorText={editorData.text}
             editorH1Count={editorData.h1s.length}
             editorH1HasKw={editorData.h1s.some((h) => nlp ? h.toLowerCase().includes(nlp.exactKeyword.keyword) : false)}
+            editorH2s={editorData.h2s}
+            editorH3s={editorData.h3s}
             insertTermAtCursor={insertTermAtCursor}
             insertPaaAsH2={insertPaaAsH2}
           />
@@ -320,6 +337,7 @@ export function BriefEditor(props: BriefEditorProps) {
             <SerpCard key={r.position} r={r} />
           ))}
         </div>
+        <SerpScoreChart serp={serp} myScore={score.total} className="mt-6 max-w-[880px]" />
       </div>
 
       <div className={tab === "insights" ? "flex-1 overflow-y-auto px-7 py-6" : "hidden"}>
@@ -393,10 +411,16 @@ function EditorSidebar({
   wc,
   score,
   nlp,
+  serp,
   paa,
+  haloscan,
+  position,
+  folderWebsite,
   editorText,
   editorH1Count,
   editorH1HasKw,
+  editorH2s,
+  editorH3s,
   insertTermAtCursor,
   insertPaaAsH2,
 }: {
@@ -404,10 +428,16 @@ function EditorSidebar({
   wc: number;
   score: DetailedScore;
   nlp: NlpResult | null;
+  serp: SerpResult[];
   paa: Paa[];
+  haloscan: HaloscanOverview | null;
+  position: number | null;
+  folderWebsite: string | null;
   editorText: string;
   editorH1Count: number;
   editorH1HasKw: boolean;
+  editorH2s: string[];
+  editorH3s: string[];
   insertTermAtCursor: (t: string) => void;
   insertPaaAsH2: (q: string) => void;
 }) {
@@ -496,6 +526,17 @@ function EditorSidebar({
         </div>
       </div>
 
+      {/* Comparaison avec la concurrence SERP */}
+      <CompetitorScoreRow scoreTotal={scoreTotal} serp={serp} />
+
+      {/* Stats clés du mot-clé */}
+      <KeywordStatsRow
+        volume={haloscan?.search_volume ?? null}
+        kgr={haloscan?.kgr ?? null}
+        position={position}
+        folderWebsite={folderWebsite}
+      />
+
       {/* Sub-scores */}
       <Section title="Score détaillé" dotColor="var(--bg-black)" collapsible defaultOpen={false}>
         {subItems.map((i) => {
@@ -526,7 +567,7 @@ function EditorSidebar({
             &quot;{ek.keyword}&quot;
           </div>
           <Metric label="Occurrences" value={`${kwCount} / ~${ek.avgCount}`} tone={kwCount >= ek.avgCount * 0.7 ? "good" : "warn"} />
-          <Metric label="Densité" value={`${density}% / ${ek.idealDensityMin.toFixed(1)}–${ek.idealDensityMax.toFixed(1)}%`}
+          <Metric label="Densité" value={`${density}% / ${ek.idealDensityMin.toFixed(1)} à ${ek.idealDensityMax.toFixed(1)}%`}
             tone={density >= ek.idealDensityMin && density <= ek.idealDensityMax ? "good" : density > ek.idealDensityMax ? "bad" : "warn"} />
           <Metric label="Dans l'intro" value={inIntro ? "✓" : "✗"} tone={inIntro ? "good" : "warn"} />
           <Metric label="Dans le H1" value={`${editorH1HasKw ? "✓" : "✗"} (${ek.inH1Pct}% SERP)`} tone={editorH1HasKw ? "good" : "warn"} />
@@ -542,28 +583,32 @@ function EditorSidebar({
         </Section>
       )}
 
+      {nlp?.sections && nlp.sections.length > 0 && (
+        <Section title="Sections concurrentes" dotColor="var(--orange)">
+          <CompetitorSections
+            sections={nlp.sections}
+            editorH2s={editorH2s}
+            editorH3s={editorH3s}
+            onInsert={insertPaaAsH2}
+          />
+        </Section>
+      )}
+
+      {nlp?.entities && nlp.entities.length > 0 && (
+        <Section title="Entités à mentionner" dotColor="var(--green)">
+          <EntityList entities={nlp.entities} editorText={editorText} onInsert={insertTermAtCursor} />
+        </Section>
+      )}
+
       {paa.length > 0 && (
         <Section title="People Also Ask" dotColor="var(--blue)" collapsible defaultOpen={false}>
-          <div className="flex flex-col gap-1">
-            {paa.slice(0, 8).map((q, i) => (
-              <button
-                key={i}
-                onClick={() => insertPaaAsH2(q.question)}
-                title="Cliquer pour insérer comme H2"
-                className="group flex items-start gap-2 px-[10px] py-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-xs)] text-left text-[12px] leading-[1.4] hover:border-[var(--accent)] hover:bg-[var(--bg-olive-light)] transition-colors"
-              >
-                <span className="text-[var(--text-muted)] text-[11px] mt-[1px]">?</span>
-                <span className="flex-1">{q.question}</span>
-                <span className="text-[9px] text-[var(--text-muted)] font-semibold uppercase tracking-[0.5px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">→ H2</span>
-              </button>
-            ))}
-          </div>
+          <PaaCoverageList paa={paa} editorText={editorText} onInsert={insertPaaAsH2} />
         </Section>
       )}
 
       {nlp && (
         <Section title="Benchmarks SERP" dotColor="var(--green)" collapsible defaultOpen={false}>
-          <BenchRow label="Plage de mots" value={`${nlp.minWordCount} — ${nlp.maxWordCount}`} />
+          <BenchRow label="Plage de mots" value={`${nlp.minWordCount} à ${nlp.maxWordCount}`} />
           <BenchRow label="Moyenne" value={String(nlp.avgWordCount)} />
           <BenchRow label="Titres" value={String(nlp.avgHeadings)} />
           <BenchRow label="Paragraphes" value={String(nlp.avgParagraphs)} last />
@@ -579,7 +624,7 @@ function EditorSidebar({
             <strong>H2 :</strong> ~{Math.max(2, Math.round(nlp.avgHeadings * 0.6))} sous-titres H2.
           </StructCard>
           <StructCard>
-            <strong>Longueur :</strong> {nlp.minWordCount}–{nlp.maxWordCount} mots.
+            <strong>Longueur :</strong> {nlp.minWordCount} à {nlp.maxWordCount} mots.
           </StructCard>
         </Section>
       )}
@@ -650,11 +695,200 @@ function Metric({ label, value, tone, last }: { label: string; value: string; to
   );
 }
 
+// ─── Sections concurrentes détectées dans le top 10 ─────────────────────────
+function CompetitorSections({
+  sections,
+  editorH2s,
+  editorH3s,
+  onInsert,
+}: {
+  sections: NlpSection[];
+  editorH2s: string[];
+  editorH3s: string[];
+  onInsert: (text: string) => void;
+}) {
+  const userHeadings = [...editorH2s, ...editorH3s].map((h) => h.toLowerCase());
+  // Une section est couverte si au moins un key term (ou sa forme) apparaît
+  // dans un H2/H3 de l'utilisateur.
+  const coverage = sections.map((s) => {
+    const covered = s.keyTerms.some((t) =>
+      userHeadings.some((h) => h.includes(t.toLowerCase())),
+    );
+    return { section: s, covered };
+  });
+  const coveredCount = coverage.filter((c) => c.covered).length;
+  return (
+    <div>
+      <div className="text-[11px] text-[var(--text-muted)] mb-[8px]">
+        <span className="font-semibold text-[var(--text)]">{coveredCount}/{sections.length}</span> sections couvertes. Cliquer pour insérer comme H2.
+      </div>
+      <div className="flex flex-col gap-1">
+        {coverage.map(({ section, covered }) => {
+          const titleCase =
+            section.label.charAt(0).toUpperCase() + section.label.slice(1);
+          const suggestedHeading = section.sampleHeadings[0] ?? titleCase;
+          return (
+            <button
+              key={section.label}
+              onClick={() => onInsert(suggestedHeading)}
+              title={`Exemples concurrents : ${section.sampleHeadings.slice(0, 3).join(" · ")}`}
+              className="group flex items-center gap-2 px-[10px] py-[7px] bg-[var(--bg-card)] border rounded-[var(--radius-xs)] text-left text-[12px] leading-[1.4] hover:bg-[var(--bg-olive-light)] transition-colors"
+              style={{
+                borderColor: covered ? "var(--green)" : "var(--border)",
+                background: covered ? "var(--green-bg)" : undefined,
+              }}
+            >
+              <span
+                className="w-[14px] h-[14px] rounded-full border flex items-center justify-center text-[9px] shrink-0"
+                style={{
+                  borderColor: covered ? "var(--green)" : "var(--border-strong)",
+                  background: covered ? "var(--green)" : "transparent",
+                  color: covered ? "white" : "var(--text-muted)",
+                }}
+              >
+                {covered ? "✓" : ""}
+              </span>
+              <span className="flex-1 font-medium capitalize">{titleCase}</span>
+              <span className="text-[9px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] shrink-0">
+                {section.hits}/{section.total}
+              </span>
+              <span className="text-[9px] text-[var(--text-muted)] font-semibold uppercase tracking-[0.5px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                → H2
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Entités nommées à mentionner (marques, organismes, acronymes) ──────────
+function EntityList({
+  entities,
+  editorText,
+  onInsert,
+}: {
+  entities: Entity[];
+  editorText: string;
+  onInsert: (t: string) => void;
+}) {
+  const lower = editorText.toLowerCase();
+  const rows = entities.map((e) => ({
+    entity: e,
+    mentioned: lower.includes(e.label.toLowerCase()),
+  }));
+  const mentioned = rows.filter((r) => r.mentioned).length;
+  return (
+    <div>
+      <div className="text-[11px] text-[var(--text-muted)] mb-[8px]">
+        <span className="font-semibold text-[var(--text)]">{mentioned}/{entities.length}</span> entités citées. Marques, organismes et acronymes vus chez les concurrents.
+      </div>
+      <div className="flex flex-wrap gap-[5px]">
+        {rows.map(({ entity, mentioned }) => (
+          <button
+            key={entity.label}
+            onClick={() => onInsert(entity.label)}
+            title={`Cité par ${entity.hits}/${entity.total} concurrents (${entity.totalOccurrences} occurrences)`}
+            className="inline-flex items-center gap-[5px] px-[9px] py-[3px] rounded-full text-[11px] font-medium border hover:scale-[1.03] transition-transform"
+            style={{
+              background: mentioned ? "var(--green-bg)" : "var(--bg-card)",
+              borderColor: mentioned ? "var(--green)" : "var(--border)",
+              color: mentioned ? "var(--green)" : "var(--text)",
+            }}
+          >
+            {entity.label}
+            <span className="text-[9px] font-[family-name:var(--font-mono)] opacity-75">
+              {entity.hits}/{entity.total}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── People Also Ask avec détection de couverture ───────────────────────────
+function PaaCoverageList({
+  paa,
+  editorText,
+  onInsert,
+}: {
+  paa: Paa[];
+  editorText: string;
+  onInsert: (q: string) => void;
+}) {
+  const QUESTION_WORDS = new Set([
+    "est", "ce", "qui", "que", "quoi", "qu", "qu'est", "qu'il", "où", "quand",
+    "comment", "pourquoi", "combien", "quel", "quelle", "quels", "quelles",
+    "peut", "peuvent", "fait", "faire", "sont",
+  ]);
+  const lower = editorText.toLowerCase();
+  const rows = paa.slice(0, 5).map((q) => {
+    const tokens = q.question
+      .toLowerCase()
+      .replace(/[^a-zà-ÿ0-9\s'-]/g, " ")
+      .split(/\s+/)
+      .filter(
+        (w) => w.length > 2 && !QUESTION_WORDS.has(w) && !/^\d+$/.test(w),
+      );
+    if (tokens.length === 0) return { q, covered: false };
+    const hits = tokens.filter((t) => lower.includes(t)).length;
+    // Couverte : au moins la moitié (min 2) des tokens significatifs sont dans le contenu
+    const threshold = Math.max(2, Math.ceil(tokens.length * 0.5));
+    return { q, covered: hits >= threshold };
+  });
+  const coveredCount = rows.filter((r) => r.covered).length;
+  return (
+    <div>
+      <div className="text-[11px] text-[var(--text-muted)] mb-[8px]">
+        <span className="font-semibold text-[var(--text)]">{coveredCount}/{rows.length}</span> questions traitées.
+      </div>
+      <div className="flex flex-col gap-1">
+        {rows.map(({ q, covered }, i) => (
+          <button
+            key={i}
+            onClick={() => onInsert(q.question)}
+            title="Cliquer pour insérer comme H2"
+            className="group flex items-start gap-2 px-[10px] py-2 border rounded-[var(--radius-xs)] text-left text-[12px] leading-[1.4] hover:bg-[var(--bg-olive-light)] transition-colors"
+            style={{
+              background: covered ? "var(--green-bg)" : "var(--bg-card)",
+              borderColor: covered ? "var(--green)" : "var(--border)",
+            }}
+          >
+            <span
+              className="w-[14px] h-[14px] rounded-full border flex items-center justify-center text-[9px] mt-[2px] shrink-0"
+              style={{
+                borderColor: covered ? "var(--green)" : "var(--border-strong)",
+                background: covered ? "var(--green)" : "transparent",
+                color: covered ? "white" : "var(--text-muted)",
+              }}
+            >
+              {covered ? "✓" : "?"}
+            </span>
+            <span className="flex-1">{q.question}</span>
+            <span className="text-[9px] text-[var(--text-muted)] font-semibold uppercase tracking-[0.5px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              → H2
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
   label: string; color: string; bg: string; border: string; terms: NlpTerm[]; lower: string; onInsert: (t: string) => void;
 }) {
   if (!terms.length) return null;
-  const used = terms.filter((k) => lower.includes(k.term)).length;
+  // Un terme est "utilisé" si sa forme affichée OU l'une de ses variantes
+  // morphologiques apparaît dans le contenu.
+  const used = terms.filter((k) => {
+    if (k.variants && k.variants.length > 0) {
+      return k.variants.some((v) => lower.includes(v.toLowerCase()));
+    }
+    return lower.includes(k.term.toLowerCase());
+  }).length;
   return (
     <div className="mb-3">
       <div className="text-[10px] font-semibold uppercase tracking-[0.8px] mb-[6px] flex items-center gap-[5px]" style={{ color }}>
@@ -666,11 +900,16 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
       </div>
       <div className="flex flex-wrap gap-[5px]">
         {terms.map((k) => {
-          // Compte des occurrences actuelles dans l'éditeur
-          const rx = new RegExp(
-            `\\b${k.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-            "gi",
-          );
+          // Compte des occurrences actuelles dans l'éditeur. Pour les
+          // unigrammes on matche toutes les variantes morphologiques (stemming)
+          // afin que "travaille", "travaillé", "travaux" comptent tous pour le
+          // chip "travaux".
+          const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const pattern =
+            k.variants && k.variants.length > 0
+              ? k.variants.map(escape).join("|")
+              : escape(k.term);
+          const rx = new RegExp(`\\b(?:${pattern})\\b`, "gi");
           const currentCount = (lower.match(rx) ?? []).length;
           const hasRange = typeof k.minCount === "number" && k.maxCount > 0;
           const rangeLabel = hasRange
@@ -678,8 +917,10 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
               ? String(k.maxCount)
               : `${k.minCount}-${k.maxCount}`
             : null;
+          const hasTarget = typeof k.avgCount === "number" && k.avgCount > 0;
 
-          // Couleur : vert si dans la fourchette, orange si au-dessus, défaut du tier sinon
+          // Couleur : vert si dans la fourchette des concurrents, orange si on
+          // dépasse la borne haute, défaut sinon.
           let styleMode: "in-range" | "over" | "default" = "default";
           if (hasRange && currentCount >= k.minCount && currentCount <= k.maxCount) {
             styleMode = "in-range";
@@ -700,7 +941,7 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
               onClick={() => onInsert(k.term)}
               title={
                 hasRange
-                  ? `Visez ${rangeLabel} occurrences (moyenne ${k.avgCount}). Actuel : ${currentCount}.`
+                  ? `Fourchette concurrents : ${k.minCount}-${k.maxCount} occurrences (moyenne ${k.avgCount}). Actuel : ${currentCount}.`
                   : "Cliquer pour insérer"
               }
               className="inline-flex items-center gap-[5px] px-[10px] py-[4px] rounded-full text-[11px] font-medium border hover:scale-[1.03] transition-transform"
@@ -710,6 +951,9 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
               {rangeLabel && (
                 <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
                   {currentCount > 0 ? `${currentCount}/${rangeLabel}` : rangeLabel}
+                  {hasTarget && k.minCount !== k.maxCount && (
+                    <span className="opacity-60"> (~{k.avgCount})</span>
+                  )}
                 </span>
               )}
               {!rangeLabel && currentCount > 0 && (
@@ -772,29 +1016,73 @@ function InsightsPane({ nlp, halo, serp, paa }: { nlp: NlpResult | null; halo: H
   const tk = (nlp?.nlpTerms ?? []).slice(0, 12);
   const ms = tk.length ? tk[0].score : 1;
 
-  const haloHasData = halo && (halo.search_volume != null || halo.cpc != null || halo.competition != null || halo.difficulty != null || halo.resultCount != null);
+  const haloHasData =
+    halo &&
+    (halo.search_volume != null ||
+      halo.cpc != null ||
+      halo.kgr != null ||
+      halo.allintitleCount != null ||
+      halo.difficulty != null ||
+      halo.visibilityIndex != null ||
+      halo.resultCount != null);
 
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4 max-w-[1100px]">
       <InsightCard title="Données mot-clé" dotColor="var(--accent)">
         {haloHasData ? (
           <>
-            {halo?.search_volume != null && <InsightMetric label="Volume" value={halo.search_volume.toLocaleString("fr-FR")} />}
-            {halo?.cpc != null && <InsightMetric label="CPC" value={`${halo.cpc} €`} />}
-            {halo?.competition != null && <InsightMetric label="Compétition" value={String(halo.competition)} />}
-            {halo?.difficulty != null && <InsightMetric label="Difficulté" value={`${halo.difficulty}/100`} />}
-            {halo?.resultCount != null && <InsightMetric label="Résultats Google" value={halo.resultCount.toLocaleString("fr-FR")} />}
+            {halo?.search_volume != null && (
+              <InsightMetric
+                label="Volume mensuel"
+                value={halo.search_volume.toLocaleString("fr-FR")}
+                tooltip="Recherches mensuelles moyennes (Haloscan)"
+              />
+            )}
+            {halo?.cpc != null && (
+              <InsightMetric label="CPC" value={`${halo.cpc.toFixed(2)} €`} tooltip="Coût par clic Google Ads (Haloscan)" />
+            )}
+            {halo?.kgr != null && (
+              <InsightMetric
+                label="KGR"
+                value={halo.kgr.toFixed(2)}
+                tooltip="Keyword Golden Ratio. < 0.25 = excellent, < 1 = correct, > 1 = trop concurrentiel."
+              />
+            )}
+            {halo?.allintitleCount != null && (
+              <InsightMetric
+                label="Allintitle"
+                value={halo.allintitleCount.toLocaleString("fr-FR")}
+                tooltip="Pages avec le mot-clé exact dans le title (Haloscan)"
+              />
+            )}
+            {halo?.difficulty != null && (
+              <InsightMetric label="Difficulté" value={`${halo.difficulty}/100`} tooltip="Difficulté SEO estimée (Haloscan)" />
+            )}
+            {halo?.visibilityIndex != null && (
+              <InsightMetric
+                label="Visibilité"
+                value={halo.visibilityIndex.toFixed(1)}
+                tooltip="Indice de visibilité du mot-clé (Haloscan)"
+              />
+            )}
+            {halo?.resultCount != null && (
+              <InsightMetric
+                label="Résultats Google"
+                value={halo.resultCount.toLocaleString("fr-FR")}
+                tooltip="Nombre total de pages indexées Google sur le mot-clé"
+              />
+            )}
           </>
         ) : (
           <p className="text-[12px] text-[var(--text-muted)]">
-            Métriques volume/CPC/difficulté non disponibles sur ce plan Haloscan.
+            Métriques Haloscan non disponibles pour ce mot-clé (souvent le cas pour la longue traîne ou les sujets adultes).
           </p>
         )}
       </InsightCard>
 
       {paa.length > 0 && (
         <InsightCard title="People Also Ask" dotColor="var(--blue)">
-          {paa.slice(0, 8).map((q, i) => (
+          {paa.slice(0, 5).map((q, i) => (
             <div key={i} className="py-2 border-b border-[var(--border)] last:border-0">
               <span className="text-[12px]">{q.question}</span>
             </div>
@@ -830,6 +1118,181 @@ function InsightsPane({ nlp, halo, serp, paa }: { nlp: NlpResult | null; halo: H
   );
 }
 
+function CompetitorScoreRow({ scoreTotal, serp }: { scoreTotal: number; serp: SerpResult[] }) {
+  const scored = serp.filter((r): r is SerpResult & { score: number } => typeof r.score === "number");
+  if (scored.length === 0) return null;
+  const avg = Math.round(scored.reduce((s, r) => s + r.score, 0) / scored.length);
+  const best = scored.reduce((b, r) => (r.score > b.score ? r : b), scored[0]);
+  const gapAvg = scoreTotal - avg;
+  const gapBest = scoreTotal - best.score;
+
+  const tone = (gap: number): "good" | "warn" | "bad" =>
+    gap >= 0 ? "good" : gap >= -10 ? "warn" : "bad";
+
+  let bestHost = "";
+  try {
+    bestHost = new URL(best.link).hostname.replace(/^www\./, "");
+  } catch {
+    bestHost = best.link;
+  }
+
+  return (
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] p-3 mb-5">
+      <div className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-2">
+        Concurrence SERP
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <CompareCell
+          label="Moyenne"
+          value={`${avg}/100`}
+          gap={gapAvg}
+          tone={tone(gapAvg)}
+          tooltip={`Moyenne du score SEO sur les ${scored.length} concurrents crawlés.`}
+        />
+        <CompareCell
+          label="Meilleur"
+          value={`${best.score}/100`}
+          gap={gapBest}
+          tone={tone(gapBest)}
+          tooltip={`Meilleur score : ${bestHost} (position ${best.position}).`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CompareCell({
+  label,
+  value,
+  gap,
+  tone,
+  tooltip,
+}: {
+  label: string;
+  value: string;
+  gap: number;
+  tone: "good" | "warn" | "bad";
+  tooltip: string;
+}) {
+  const palette: Record<typeof tone, string> = {
+    good: "var(--green)",
+    warn: "var(--orange)",
+    bad: "var(--red)",
+  };
+  const color = palette[tone];
+  const sign = gap > 0 ? "+" : "";
+  return (
+    <div title={tooltip} className="cursor-help">
+      <div className="text-[10px] uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[2px]">{label}</div>
+      <div className="flex items-baseline gap-2">
+        <span className="font-[family-name:var(--font-mono)] font-semibold text-[15px]">{value}</span>
+        <span className="text-[11px] font-semibold font-[family-name:var(--font-mono)]" style={{ color }}>
+          {sign}
+          {gap}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function KeywordStatsRow({
+  volume,
+  kgr,
+  position,
+  folderWebsite,
+}: {
+  volume: number | null;
+  kgr: number | null;
+  position: number | null;
+  folderWebsite: string | null;
+}) {
+  // Échelle position : top 3 vert foncé, top 10 vert, top 30 orange, au-delà rouge.
+  const positionTone =
+    position == null
+      ? "muted"
+      : position <= 3
+        ? "best"
+        : position <= 10
+          ? "good"
+          : position <= 30
+            ? "warn"
+            : "bad";
+  const kgrTone =
+    kgr == null ? "muted" : kgr < 0.25 ? "good" : kgr < 1 ? "warn" : "bad";
+
+  return (
+    <div className="grid grid-cols-3 gap-2 mb-5">
+      <KeyStat
+        label="Volume"
+        value={volume != null ? volume.toLocaleString("fr-FR") : "N/A"}
+        tooltip="Volume de recherche mensuel (Haloscan)"
+        tone={volume != null ? "info" : "muted"}
+      />
+      <KeyStat
+        label="KGR"
+        value={kgr != null ? kgr.toFixed(2) : "N/A"}
+        tooltip="Keyword Golden Ratio. < 0.25 excellent, < 1 correct, > 1 trop concurrentiel."
+        tone={kgrTone}
+      />
+      <KeyStat
+        label="Position"
+        value={position != null ? `#${position}` : "N/A"}
+        tooltip={
+          folderWebsite
+            ? `Position de ${folderWebsite} dans Google (top 100). N/A = au-delà du top 100.`
+            : "Rattache un client avec un site pour suivre ta position."
+        }
+        tone={positionTone}
+      />
+    </div>
+  );
+}
+
+type StatTone = "best" | "good" | "warn" | "bad" | "info" | "muted";
+
+function KeyStat({
+  label,
+  value,
+  tooltip,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tooltip: string;
+  tone: StatTone;
+}) {
+  const palette: Record<StatTone, { bg: string; color: string; border: string }> = {
+    best: { bg: "#0E5132", color: "#FFFFFF", border: "#0E5132" },
+    good: { bg: "var(--bg-card)", color: "var(--green)", border: "var(--green)" },
+    warn: { bg: "var(--bg-card)", color: "var(--orange)", border: "var(--orange)" },
+    bad: { bg: "var(--bg-card)", color: "var(--red)", border: "var(--red)" },
+    info: { bg: "var(--bg-card)", color: "var(--text)", border: "var(--border)" },
+    muted: { bg: "var(--bg-card)", color: "var(--text-muted)", border: "var(--border)" },
+  };
+  const p = palette[tone];
+  const isBest = tone === "best";
+  return (
+    <div
+      title={tooltip}
+      className="border rounded-[var(--radius-sm)] px-3 py-[10px] flex flex-col items-center cursor-help"
+      style={{ background: p.bg, borderColor: isBest ? p.border : `${p.border}40` }}
+    >
+      <span
+        className="text-[9px] font-semibold uppercase tracking-[1px] mb-[3px]"
+        style={{ color: isBest ? "rgba(255,255,255,0.7)" : "var(--text-muted)" }}
+      >
+        {label}
+      </span>
+      <span
+        className="font-[family-name:var(--font-mono)] font-semibold text-[15px] leading-none"
+        style={{ color: p.color }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function InsightCard({ title, dotColor, children }: { title: string; dotColor: string; children: React.ReactNode }) {
   return (
     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-5">
@@ -842,9 +1305,22 @@ function InsightCard({ title, dotColor, children }: { title: string; dotColor: s
   );
 }
 
-function InsightMetric({ label, value }: { label: string; value: string }) {
+function InsightMetric({
+  label,
+  value,
+  tooltip,
+}: {
+  label: string;
+  value: string;
+  tooltip?: string;
+}) {
   return (
-    <div className="flex justify-between items-center py-2 border-b border-[var(--border)] last:border-0">
+    <div
+      title={tooltip}
+      className={`flex justify-between items-center py-2 border-b border-[var(--border)] last:border-0 ${
+        tooltip ? "cursor-help" : ""
+      }`}
+    >
       <span className="text-[13px] text-[var(--text-secondary)]">{label}</span>
       <span className="font-[family-name:var(--font-mono)] font-semibold text-[14px]">{value}</span>
     </div>
@@ -856,6 +1332,110 @@ function FolderFavicon({ website, size }: { website: string | null; size: number
   if (!src) return null;
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt="" width={size} height={size} className="rounded-[3px] shrink-0" loading="lazy" />;
+}
+
+function SerpScoreChart({
+  serp,
+  myScore,
+  className = "",
+}: {
+  serp: SerpResult[];
+  myScore: number;
+  className?: string;
+}) {
+  const scored = serp.filter((r): r is SerpResult & { score: number } => typeof r.score === "number");
+  if (scored.length === 0) return null;
+  const avg = Math.round(scored.reduce((s, r) => s + r.score, 0) / scored.length);
+  const maxValue = Math.max(100, ...scored.map((r) => r.score), myScore);
+
+  // Bar "Toi" en première position pour bien la voir, puis les concurrents par position SERP.
+  const bars: Array<{ key: string; label: string; score: number; isMe: boolean; position?: number }> = [
+    { key: "me", label: "Toi", score: myScore, isMe: true },
+    ...scored.map((r) => {
+      let host = "";
+      try {
+        host = new URL(r.link).hostname.replace(/^www\./, "");
+      } catch {
+        host = r.link;
+      }
+      return {
+        key: `${r.position}`,
+        label: host,
+        score: r.score,
+        isMe: false,
+        position: r.position,
+      };
+    }),
+  ];
+
+  return (
+    <div
+      className={`bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-5 ${className}`}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
+            Score SEO concurrents
+          </div>
+          <div className="text-[12px] text-[var(--text-secondary)] mt-[2px]">
+            Moyenne SERP <strong>{avg}/100</strong> · ton score <strong>{myScore}/100</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative">
+        {/* Ligne moyenne en pointillés */}
+        <div
+          className="absolute left-0 right-0 border-t border-dashed border-[var(--text-muted)] z-10"
+          style={{ bottom: `${(avg / maxValue) * 180}px` }}
+          title={`Moyenne SERP : ${avg}/100`}
+        >
+          <span className="absolute -top-[6px] right-0 text-[9px] font-[family-name:var(--font-mono)] text-[var(--text-muted)] bg-[var(--bg-card)] px-1">
+            moy {avg}
+          </span>
+        </div>
+
+        <div className="flex items-end gap-[6px] h-[200px] border-b border-[var(--border)]">
+          {bars.map((b) => {
+            const h = Math.max(2, (b.score / maxValue) * 180);
+            const color = b.isMe
+              ? "var(--bg-black)"
+              : b.score >= 70
+                ? "var(--green)"
+                : b.score >= 40
+                  ? "var(--orange)"
+                  : "var(--red)";
+            return (
+              <div
+                key={b.key}
+                className="flex-1 flex flex-col items-center min-w-0"
+                title={`${b.label} : ${b.score}/100${b.position ? ` (position ${b.position})` : ""}`}
+              >
+                <span className="text-[10px] font-[family-name:var(--font-mono)] font-semibold mb-[3px]">
+                  {b.score}
+                </span>
+                <div
+                  className="w-full rounded-t-[3px] transition-all"
+                  style={{ height: `${h}px`, background: color }}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex gap-[6px] mt-[4px]">
+          {bars.map((b) => (
+            <div
+              key={`l-${b.key}`}
+              className="flex-1 text-[9px] text-center text-[var(--text-muted)] font-[family-name:var(--font-mono)] truncate"
+              title={b.label}
+            >
+              {b.isMe ? "Toi" : `#${b.position}`}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SerpCard({ r }: { r: SerpResult }) {
@@ -890,9 +1470,25 @@ function SerpCard({ r }: { r: SerpResult }) {
           </div>
         </a>
         <div className="flex items-center gap-4 text-center">
+          {r.score != null && (
+            <div title="Score SEO du concurrent (même algorithme que la rédaction)">
+              <div
+                className="font-[family-name:var(--font-mono)] text-[13px] font-semibold"
+                style={{
+                  color:
+                    r.score >= 70 ? "var(--green)" : r.score >= 40 ? "var(--orange)" : "var(--red)",
+                }}
+              >
+                {r.score}
+              </div>
+              <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
+                score
+              </div>
+            </div>
+          )}
           <div>
             <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
-              {r.wordCount ? r.wordCount : "—"}
+              {r.wordCount ? r.wordCount : "N/A"}
             </div>
             <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
               mots
@@ -900,7 +1496,7 @@ function SerpCard({ r }: { r: SerpResult }) {
           </div>
           <div>
             <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
-              {r.headings ?? "—"}
+              {r.headings ?? "N/A"}
             </div>
             <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
               titres
@@ -918,15 +1514,27 @@ function SerpCard({ r }: { r: SerpResult }) {
 
       {open && hasStructure && (
         <div className="border-t border-[var(--border)] px-5 py-4 bg-[var(--bg)]">
-          {(r.h1 ?? []).map((h, i) => (
-            <HeadingLine key={`h1-${i}`} level="h1" text={h} />
-          ))}
-          {(r.h2 ?? []).map((h, i) => (
-            <HeadingLine key={`h2-${i}`} level="h2" text={h} />
-          ))}
-          {(r.h3 ?? []).map((h, i) => (
-            <HeadingLine key={`h3-${i}`} level="h3" text={h} />
-          ))}
+          {r.outline && r.outline.length > 0
+            ? r.outline.map((h, i) => (
+                <HeadingLine
+                  key={`o-${i}`}
+                  level={(`h${h.level}`) as "h1" | "h2" | "h3"}
+                  text={h.text}
+                />
+              ))
+            : (
+              <>
+                {(r.h1 ?? []).map((h, i) => (
+                  <HeadingLine key={`h1-${i}`} level="h1" text={h} />
+                ))}
+                {(r.h2 ?? []).map((h, i) => (
+                  <HeadingLine key={`h2-${i}`} level="h2" text={h} />
+                ))}
+                {(r.h3 ?? []).map((h, i) => (
+                  <HeadingLine key={`h3-${i}`} level="h3" text={h} />
+                ))}
+              </>
+            )}
         </div>
       )}
     </div>
@@ -934,7 +1542,7 @@ function SerpCard({ r }: { r: SerpResult }) {
 }
 
 function HeadingLine({ level, text }: { level: "h1" | "h2" | "h3"; text: string }) {
-  const indent = level === "h1" ? 0 : level === "h2" ? 12 : 24;
+  const indent = level === "h1" ? 0 : level === "h2" ? 22 : 44;
   const pillBg =
     level === "h1" ? "var(--bg-olive-light)" : level === "h2" ? "var(--bg-warm)" : "var(--bg-card)";
   const pillColor =
@@ -943,7 +1551,14 @@ function HeadingLine({ level, text }: { level: "h1" | "h2" | "h3"; text: string 
   const fontWeight = level === "h1" ? 700 : level === "h2" ? 600 : 500;
 
   return (
-    <div className="flex items-start gap-2 py-[3px]" style={{ paddingLeft: indent }}>
+    <div className="flex items-start gap-2 py-[3px] relative" style={{ paddingLeft: indent }}>
+      {indent > 0 && (
+        <span
+          aria-hidden
+          className="absolute top-0 bottom-0 border-l border-dashed border-[var(--border)]"
+          style={{ left: indent - 12 }}
+        />
+      )}
       <span
         className="inline-flex items-center justify-center px-[6px] py-[1px] rounded-[3px] font-[family-name:var(--font-mono)] text-[9px] font-semibold uppercase shrink-0 mt-[2px]"
         style={{ background: pillBg, color: pillColor, border: `1px solid ${pillColor}20` }}

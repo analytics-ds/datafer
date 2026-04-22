@@ -27,11 +27,14 @@ export default async function AppHome() {
         authorId: user.id,
         authorName: user.name,
         authorImage: user.image,
+        volume: brief.volume,
+        competition: brief.competition,
+        kgr: brief.kgr,
+        position: brief.position,
       })
       .from(brief)
       .leftJoin(client, eq(client.id, brief.clientId))
       .leftJoin(user, eq(user.id, brief.ownerId))
-      .where(eq(brief.ownerId, session.user.id))
       .orderBy(desc(brief.createdAt))
       .limit(10),
     db
@@ -85,6 +88,10 @@ export default async function AppHome() {
                   country: b.country,
                   score: b.score,
                   createdAt: b.createdAt,
+                  volume: b.volume,
+                  competition: b.competition,
+                  kgr: b.kgr,
+                  position: b.position,
                   folder: b.clientId
                     ? { id: b.clientId, name: b.folderName ?? "", website: b.folderWebsite }
                     : null,

@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief, client } from "@/db/schema";
-import { and, eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
 import { BriefEditor } from "./brief-editor";
 
@@ -17,12 +17,7 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
     .select({ brief, folder: client })
     .from(brief)
     .leftJoin(client, eq(client.id, brief.clientId))
-    .where(
-      and(
-        eq(brief.id, id),
-        or(eq(brief.ownerId, session.user.id), eq(client.scope, "agency")),
-      ),
-    )
+    .where(eq(brief.id, id))
     .limit(1);
 
   if (!row) notFound();
@@ -53,6 +48,7 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
       serp={serp}
       paa={paa}
       haloscan={haloscan}
+      position={b.position ?? null}
       shareToken={b.shareToken ?? null}
     />
   );

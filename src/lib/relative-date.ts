@@ -4,9 +4,9 @@
  * temps s'est écoulé.
  */
 export function formatDate(input: Date | number | null | undefined): string {
-  if (!input) return "—";
+  if (!input) return "·";
   const date = input instanceof Date ? input : new Date(input);
-  if (isNaN(date.getTime())) return "—";
+  if (isNaN(date.getTime())) return "·";
   return date.toLocaleDateString("fr-FR", {
     day: "numeric",
     month: "short",

@@ -108,7 +108,7 @@ export async function deleteFolderAction(
     .where(eq(client.id, folderId))
     .limit(1);
 
-  if (!folder) return { ok: false, error: "Dossier introuvable" };
+  if (!folder) return { ok: false, error: "Client introuvable" };
 
   // Confirmation : le consultant doit retaper le site (ou à défaut le nom du
   // dossier s'il n'a pas de site).

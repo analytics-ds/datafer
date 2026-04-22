@@ -36,6 +36,13 @@
       "when": 1776186241141,
       "tag": "0004_client_share_token",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1808900000000,
+      "tag": "0005_brief_metrics",
+      "breakpoints": true
     }
   ]
 }

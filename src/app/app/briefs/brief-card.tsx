@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { faviconUrl } from "@/lib/favicon";
 import { relativeDate } from "@/lib/relative-date";
+import { deleteBriefAction } from "./actions";
 
 export type BriefCardData = {
   id: string;
@@ -12,6 +13,10 @@ export type BriefCardData = {
   country: string;
   score: number | null;
   createdAt: Date | number | null;
+  volume: number | null;
+  competition: number | null;
+  kgr: number | null;
+  position: number | null;
   author: { id: string; name: string | null; image: string | null } | null;
   folder: { id: string; name: string; website: string | null } | null;
 };
@@ -40,6 +45,9 @@ export function BriefCard({
 }) {
   const router = useRouter();
   const [currentFolder, setCurrentFolder] = useState(brief.folder);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  const [deleting, startDelete] = useTransition();
 
   async function onFolderChange(next: FolderOption | null) {
     const prev = currentFolder;
@@ -56,8 +64,20 @@ export function BriefCard({
     router.refresh();
   }
 
+  function onDelete() {
+    startDelete(async () => {
+      await deleteBriefAction(brief.id);
+      router.refresh();
+      setConfirmOpen(false);
+    });
+  }
+
   return (
-    <div className="group grid grid-cols-[76px_1fr_auto] items-center gap-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] px-5 py-4 hover:border-[var(--border-strong)] transition-colors">
+    <div
+      className="group relative grid grid-cols-[76px_1fr_auto] items-center gap-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] px-5 py-4 hover:border-[var(--border-strong)] transition-colors"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
       <ScoreGauge score={brief.score ?? 0} />
 
       <div className="min-w-0">
@@ -67,11 +87,41 @@ export function BriefCard({
         >
           {brief.keyword}
         </Link>
-        <div className="flex items-center gap-2 mt-[6px] text-[12px] text-[var(--text-secondary)] flex-wrap">
+        <div className="flex items-center gap-[6px] mt-[6px] text-[12px] text-[var(--text-secondary)] flex-wrap">
           <span className="inline-flex items-center gap-[5px]">
             <GlobeIcon />
             {COUNTRY_LABELS[brief.country] ?? brief.country.toUpperCase()}
           </span>
+          <MetricPill
+            label="Vol"
+            value={brief.volume != null ? fmtNum(brief.volume) : "N/A"}
+            tooltip="Volume de recherche mensuel (Haloscan)"
+            tone={brief.volume != null ? "info" : "muted"}
+          />
+          <MetricPill
+            label="KGR"
+            value={brief.kgr != null ? brief.kgr.toFixed(2) : "N/A"}
+            tooltip='Keyword Golden Ratio = pages avec mot-clé exact dans le title / volume mensuel. KGR < 0.25 = excellent, < 1 = correct, > 1 = trop concurrentiel.'
+            tone={
+              brief.kgr == null
+                ? "muted"
+                : brief.kgr < 0.25
+                  ? "good"
+                  : brief.kgr < 1
+                    ? "warn"
+                    : "bad"
+            }
+          />
+          <MetricPill
+            label="Pos"
+            value={brief.position != null ? `#${brief.position}` : "N/A"}
+            tooltip={
+              brief.folder?.website
+                ? `Position de ${brief.folder.website} dans Google (top 100). N/A = au-delà du top 100.`
+                : "Rattache un client avec un site pour suivre ta position."
+            }
+            tone={positionTone(brief.position)}
+          />
         </div>
         <div className="flex items-center gap-2 mt-[6px]">
           <FolderPickerInline
@@ -87,9 +137,146 @@ export function BriefCard({
         <span className="text-[12px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] shrink-0">
           {relativeDate(brief.createdAt)}
         </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setConfirmOpen(true);
+          }}
+          aria-label="Supprimer le brief"
+          title="Supprimer le brief"
+          className={`w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--red)] hover:border-[var(--red)]/40 hover:bg-[var(--red-bg)] transition-all ${
+            hover ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <TrashIcon />
+        </button>
+      </div>
+
+      {confirmOpen && (
+        <DeleteBriefConfirm
+          keyword={brief.keyword}
+          pending={deleting}
+          onCancel={() => setConfirmOpen(false)}
+          onConfirm={onDelete}
+        />
+      )}
+    </div>
+  );
+}
+
+function DeleteBriefConfirm({
+  keyword,
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  keyword: string;
+  pending: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 bg-[rgba(0,0,0,0.45)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={() => !pending && onCancel()}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-7 w-[440px] max-w-full shadow-[var(--shadow-lg)]"
+      >
+        <div className="flex items-center gap-2 mb-3 text-[var(--red)]">
+          <TrashIcon />
+          <span className="font-semibold text-[16px]">Supprimer ce brief</span>
+        </div>
+        <p className="text-[13px] text-[var(--text-secondary)] leading-[1.55] mb-5">
+          Le brief <strong>« {keyword} »</strong> sera définitivement supprimé : analyse SERP, NLP, contenu rédigé, partage. Cette action est irréversible.
+        </p>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={pending}
+            className="px-4 py-[10px] rounded-[var(--radius-sm)] text-[13px] font-semibold border border-[var(--border)] hover:bg-[var(--bg-warm)] disabled:opacity-50 transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={pending}
+            className="px-4 py-[10px] rounded-[var(--radius-sm)] text-[13px] font-semibold bg-[var(--red)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
+          >
+            {pending ? "Suppression…" : "Supprimer"}
+          </button>
+        </div>
       </div>
     </div>
   );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+      <path
+        d="M4 6h12M8 6V4a1 1 0 011-1h2a1 1 0 011 1v2m1 0v10a1 1 0 01-1 1H7a1 1 0 01-1-1V6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+type PillTone = "best" | "good" | "warn" | "bad" | "info" | "muted";
+
+// Échelle de couleurs unifiée pour la position SERP : top 3 = vert foncé,
+// top 10 = vert normal, top 30 = orange, au-delà = rouge.
+export function positionTone(position: number | null): PillTone {
+  if (position == null) return "muted";
+  if (position <= 3) return "best";
+  if (position <= 10) return "good";
+  if (position <= 30) return "warn";
+  return "bad";
+}
+
+// ─── Pastille métrique (volume / KGR / position) ─────────────
+function MetricPill({
+  label,
+  value,
+  tooltip,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tooltip: string;
+  tone: PillTone;
+}) {
+  const palette: Record<PillTone, { bg: string; color: string; border: string }> = {
+    best: { bg: "#0E5132", color: "#FFFFFF", border: "#0E5132" },
+    good: { bg: "var(--green-bg)", color: "var(--green)", border: "var(--green)" },
+    warn: { bg: "var(--orange-bg)", color: "var(--orange)", border: "var(--orange)" },
+    bad: { bg: "var(--red-bg)", color: "var(--red)", border: "var(--red)" },
+    info: { bg: "var(--bg-warm)", color: "var(--text-secondary)", border: "var(--border)" },
+    muted: { bg: "var(--bg)", color: "var(--text-muted)", border: "var(--border)" },
+  };
+  const p = palette[tone];
+  return (
+    <span
+      title={tooltip}
+      className="inline-flex items-center gap-[5px] px-[8px] py-[2px] rounded-full text-[11px] font-medium border cursor-help"
+      style={{ background: p.bg, color: p.color, borderColor: `${p.border}40` }}
+    >
+      <span className="text-[9px] uppercase tracking-[0.5px] opacity-75">{label}</span>
+      <span className="font-[family-name:var(--font-mono)] font-semibold">{value}</span>
+    </span>
+  );
+}
+
+function fmtNum(n: number): string {
+  return n.toLocaleString("fr-FR");
 }
 
 // ─── Score gauge (demi-cercle) ─────────────────────────────────────────────
@@ -158,10 +345,10 @@ function FolderPickerInline({
       <button
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-[6px] px-[10px] py-[3px] text-[12px] text-[var(--text-secondary)] bg-[var(--bg)] hover:bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] transition-colors"
-        title="Changer le dossier"
+        title="Changer le client"
       >
         {current ? <Favicon website={current.website} size={14} /> : <FolderIcon />}
-        <span className="font-medium">{current ? current.name : "+ Dossier"}</span>
+        <span className="font-medium">{current ? current.name : "+ Client"}</span>
       </button>
 
       {open && (
@@ -176,7 +363,7 @@ function FolderPickerInline({
             }`}
           >
             <span className="w-4 h-4 rounded-[3px] bg-[var(--bg-warm)] text-[var(--text-muted)] flex items-center justify-center text-[10px] shrink-0">·</span>
-            <span className="flex-1">Aucun dossier</span>
+            <span className="flex-1">Aucun client</span>
             {!current && <span className="text-[var(--accent-dark)] text-[12px]">✓</span>}
           </button>
           {folders.map((f) => (

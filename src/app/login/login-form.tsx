@@ -51,7 +51,7 @@ export function LoginForm() {
         Bon retour<em className="italic text-[var(--accent-dark)]">.</em>
       </h1>
       <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-10">
-        Connecte-toi à ton espace datafer pour générer tes briefs et accéder à tes dossiers clients.
+        Connecte-toi à ton espace datafer pour générer tes briefs et accéder à tes clients.
       </p>
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">

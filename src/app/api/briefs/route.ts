@@ -10,11 +10,14 @@ import {
   fetchSerp,
   fetchHaloscan,
   fetchHaloscanQuestions,
+  fetchAllintitleCount,
+  findDomainPosition,
   crawlPage,
   runNLP,
   type PageContent,
   type SerpResult,
 } from "@/lib/analysis";
+import { computeDetailedScore } from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
 // Le cumul SERP + 10 crawls + Haloscan dépasse le budget par défaut.
@@ -30,6 +33,15 @@ function scoreFromNlp(wordCount: number, usedTermsPct: number): number {
   return Math.round(wcPart + semPart);
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export async function POST(req: Request) {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) {
@@ -40,20 +52,24 @@ export async function POST(req: Request) {
     keyword?: string;
     country?: string;
     folderId?: string;
+    myUrl?: string;
   } | null;
 
   const keyword = body?.keyword?.trim();
   const country = (body?.country || "fr").toLowerCase();
   const folderId = body?.folderId || null;
+  const myUrl = body?.myUrl?.trim() || null;
 
   if (!keyword) return NextResponse.json({ error: "keyword required" }, { status: 400 });
 
   const db = getDb();
 
-  // Vérifier que le dossier demandé est bien accessible au user
+  // Vérifier que le dossier demandé est bien accessible au user, et
+  // récupérer son website pour pouvoir calculer la position dans la SERP.
+  let folderWebsite: string | null = null;
   if (folderId) {
     const [f] = await db
-      .select({ id: client.id })
+      .select({ id: client.id, website: client.website })
       .from(client)
       .where(
         and(
@@ -63,6 +79,7 @@ export async function POST(req: Request) {
       )
       .limit(1);
     if (!f) return NextResponse.json({ error: "folder not accessible" }, { status: 403 });
+    folderWebsite = f.website;
   }
 
   const { env } = getCloudflareContext();
@@ -74,8 +91,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "SERPAPI_KEY missing on server" }, { status: 500 });
   }
 
-  // 1) SERP + PAA
-  const { results, paa } = await fetchSerp(keyword, country, serpKey);
+  // 1) SERP + PAA. allResults = top 100 utilisé pour la position client.
+  const { results, allResults, paa } = await fetchSerp(keyword, country, serpKey);
   if (!results.length) {
     return NextResponse.json({ error: "no SERP results" }, { status: 502 });
   }
@@ -94,6 +111,7 @@ export async function POST(req: Request) {
         h1: c.h1,
         h2: c.h2,
         h3: c.h3,
+        outline: c.outline,
       };
     }
     return { ...r, wordCount: 0, headings: 0 };
@@ -108,6 +126,7 @@ export async function POST(req: Request) {
           h1: [r.title],
           h2: [],
           h3: [],
+          outline: [{ level: 1, text: r.title }],
           headings: 1,
           paragraphs: 1,
           wordCount: (r.title + " " + r.snippet).split(/\s+/).length,
@@ -119,8 +138,39 @@ export async function POST(req: Request) {
   // 3) NLP / TF-IDF
   const nlp = runNLP(pageContents, keyword);
 
+  // 3a) Score SEO de chaque concurrent crawlé (même algo que celui appliqué
+  // à la rédaction côté éditeur). Permet d'afficher la moyenne SERP + le
+  // meilleur dans l'éditeur pour donner un objectif concret.
+  for (let i = 0; i < enrichedResults.length; i++) {
+    const c = crawled[i];
+    if (!c || c.wordCount < 50) continue;
+    const breakdown = computeDetailedScore(
+      { text: c.text, h1s: c.h1, h2s: c.h2, h3s: c.h3 },
+      nlp,
+    );
+    enrichedResults[i].score = breakdown.total;
+  }
+
   // 4) Haloscan (best-effort)
   const haloscan = haloscanKey ? await fetchHaloscan(keyword, country, haloscanKey) : null;
+  const volume = haloscan?.search_volume ?? null;
+
+  // 4a) KGR : Haloscan le donne directement quand dispo, sinon on tente le
+  // calcul via SerpAPI allintitle. Idem pour allintitle.
+  let kgr = haloscan?.kgr ?? null;
+  let allintitleCount = haloscan?.allintitleCount ?? null;
+  if (kgr == null) {
+    const fallbackAllintitle = await fetchAllintitleCount(keyword, country, serpKey);
+    if (fallbackAllintitle != null) {
+      allintitleCount = allintitleCount ?? fallbackAllintitle;
+      if (volume && volume > 0) {
+        kgr = Math.round((fallbackAllintitle / volume) * 1000) / 1000;
+      }
+    }
+  }
+
+  // 4c) Position du dossier (top 100) si on a un site rattaché.
+  const position = findDomainPosition(allResults, folderWebsite);
 
   // 4b) Si SERPAPI n'a pas remonté assez de PAA (Google n'affiche pas toujours
   // le bloc "Autres questions"), on complète avec Haloscan /keywords/questions.
@@ -138,9 +188,35 @@ export async function POST(req: Request) {
     }
   }
 
+  // 4d) Si l'utilisateur a fourni son URL, on la crawle et on injecte le
+  // contenu dans l'éditeur. On calcule aussi son score initial face à la SERP.
+  let initialEditorHtml = "";
+  let myInitialScore: number | null = null;
+  if (myUrl) {
+    const myPage = await crawlPage(myUrl);
+    if (myPage && myPage.wordCount > 50) {
+      // Reconstruction d'un HTML léger pour l'éditeur : on conserve le plan Hn
+      // dans l'ordre, et on injecte le texte tel quel en un seul paragraphe par
+      // bloc. Suffisant pour récupérer le scoring, le user pourra reformatter.
+      const blocks: string[] = [];
+      for (const h of myPage.outline) {
+        const tag = `h${h.level}`;
+        blocks.push(`<${tag}>${escapeHtml(h.text)}</${tag}>`);
+      }
+      blocks.push(`<p>${escapeHtml(myPage.text)}</p>`);
+      initialEditorHtml = blocks.join("\n");
+
+      const breakdown = computeDetailedScore(
+        { text: myPage.text, h1s: myPage.h1, h2s: myPage.h2, h3s: myPage.h3 },
+        nlp,
+      );
+      myInitialScore = breakdown.total;
+    }
+  }
+
   // 5) Insert en DB
   const id = randomUUID();
-  const initialScore = scoreFromNlp(0, 0); // pas encore de contenu rédigé
+  const initialScore = myInitialScore ?? scoreFromNlp(0, 0); // 0 si pas de contenu de départ
 
   await db.insert(brief).values({
     id,
@@ -152,8 +228,14 @@ export async function POST(req: Request) {
     nlpJson: JSON.stringify(nlp),
     haloscanJson: haloscan ? JSON.stringify(haloscan) : null,
     paaJson: JSON.stringify(finalPaa),
-    editorHtml: "",
+    editorHtml: initialEditorHtml,
     score: initialScore,
+    volume,
+    cpc: haloscan?.cpc ?? null,
+    competition: haloscan?.competition ?? null,
+    kgr,
+    allintitleCount,
+    position,
   });
 
   return NextResponse.json({

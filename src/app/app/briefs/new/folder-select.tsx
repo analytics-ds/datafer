@@ -48,7 +48,7 @@ export function FolderSelect({
               <span className="truncate">{selected.name}</span>
             </>
           ) : (
-            <span className="text-[var(--text-muted)]">— Aucun dossier —</span>
+            <span className="text-[var(--text-muted)]">Aucun client</span>
           )}
         </span>
         <svg width="12" height="12" viewBox="0 0 20 20" fill="none" className="shrink-0 text-[var(--text-muted)]">
@@ -57,9 +57,9 @@ export function FolderSelect({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] shadow-[var(--shadow-lg)] max-h-[320px] overflow-y-auto py-1">
+        <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] shadow-[var(--shadow-lg)] max-h-[220px] overflow-y-auto py-1">
           <Option
-            label="— Aucun dossier —"
+            label="Aucun client"
             selected={!value}
             muted
             onClick={() => {

@@ -62,7 +62,7 @@ export function Sidebar({ user, favorites }: SidebarProps) {
           icon={<FoldersIcon />}
           active={pathname === "/app/folders" || pathname?.startsWith("/app/folders/")}
         >
-          Tous les dossiers
+          Tous les clients
         </NavItem>
 
         {favorites.length > 0 && (

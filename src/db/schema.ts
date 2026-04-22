@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 // ─── Better-auth tables (names must match better-auth defaults) ──────────────
@@ -102,6 +102,15 @@ export const brief = sqliteTable("brief", {
   paaJson: text("paa_json"),
   editorHtml: text("editor_html"),
   score: integer("score"),
+  // Snapshots Haloscan + position client, stockés en colonnes pour pouvoir
+  // les afficher sur les listes (cards) sans relire le JSON Haloscan.
+  volume: integer("volume"),
+  cpc: real("cpc"),
+  competition: real("competition"),
+  kgr: real("kgr"),
+  allintitleCount: integer("allintitle_count"),
+  // Position du domaine du dossier dans le top 10. null = non positionné.
+  position: integer("position"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });

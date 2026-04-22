@@ -47,6 +47,10 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
         authorId: user.id,
         authorName: user.name,
         authorImage: user.image,
+        volume: brief.volume,
+        competition: brief.competition,
+        kgr: brief.kgr,
+        position: brief.position,
       })
       .from(brief)
       .leftJoin(client, eq(client.id, brief.clientId))
@@ -64,7 +68,7 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
       <div className="flex items-center gap-2 mb-3">
         <FolderFavicon website={folder.website} size={24} />
         <span className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
-          Dossier
+          Client
         </span>
       </div>
 
@@ -92,8 +96,8 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
 
       {briefs.length === 0 ? (
         <EmptyState
-          title="Aucun brief dans ce dossier"
-          description="Crée un brief et assigne-le à ce dossier pour le retrouver ici."
+          title="Aucun brief pour ce client"
+          description="Crée un brief et assigne-le à ce client pour le retrouver ici."
           ctaLabel="Nouveau brief"
           ctaHref={`/app/briefs/new?folder=${folder.id}`}
         />
@@ -109,6 +113,10 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
                 country: b.country,
                 score: b.score,
                 createdAt: b.createdAt,
+                volume: b.volume,
+                competition: b.competition,
+                kgr: b.kgr,
+                position: b.position,
                 folder: b.clientId
                   ? { id: b.clientId, name: b.folderName ?? "", website: b.folderWebsite }
                   : null,

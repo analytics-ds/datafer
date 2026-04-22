@@ -5,8 +5,8 @@ export default function NewPersonalFolderPage() {
   return (
     <div className="px-10 py-10 max-w-[720px]">
       <PageHeader
-        title={<>Nouveau dossier<span className="italic text-[var(--accent-dark)]">.</span></>}
-        subtitle="Un dossier perso visible par toi uniquement. Parfait pour tes projets PBN ou tests."
+        title={<>Nouveau client<span className="italic text-[var(--accent-dark)]">.</span></>}
+        subtitle="Crée un client pour regrouper tes briefs et suivre ses positions."
       />
       <FolderForm scope="personal" />
     </div>

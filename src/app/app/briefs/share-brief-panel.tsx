@@ -57,7 +57,7 @@ export function ShareBriefPanel({
           <div className="font-semibold text-[14px] mb-1">Partager ce brief</div>
           <p className="text-[12px] text-[var(--text-secondary)] leading-[1.5] mb-4">
             Génère un lien que tu peux envoyer à ton client. Il accède au même éditeur
-            que toi — contenu, scoring en temps réel, suggestions NLP. Pas besoin de
+            que toi : contenu, scoring en temps réel, suggestions NLP. Pas besoin de
             compte datafer.
           </p>
 

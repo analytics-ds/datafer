@@ -54,12 +54,12 @@ export function DeleteFolderButton({
           >
             <div className="flex items-center gap-2 mb-3 text-[var(--red)]">
               <TrashIcon />
-              <span className="font-semibold text-[16px]">Supprimer le dossier</span>
+              <span className="font-semibold text-[16px]">Supprimer le client</span>
             </div>
             <p className="text-[13px] text-[var(--text-secondary)] leading-[1.55] mb-5">
-              Cette action est <strong>définitive</strong>. Tous les briefs rattachés à ce dossier
+              Cette action est <strong>définitive</strong>. Tous les briefs rattachés à ce client
               seront également perdus. Pour confirmer, retape le site associé (ou le nom
-              du dossier s&apos;il n&apos;a pas de site) ci-dessous :
+              du client s&apos;il n&apos;a pas de site) ci-dessous :
             </p>
             <div className="bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] px-3 py-2 mb-3 font-[family-name:var(--font-mono)] text-[12px] text-[var(--text)] select-all">
               {expected}

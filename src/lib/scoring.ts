@@ -87,7 +87,12 @@ export function computeDetailedScore(
   const top30 = nlp.nlpTerms.slice(0, 30);
   let used = 0;
   top30.forEach((t) => {
-    if (lower.includes(t.term)) used++;
+    // On accepte n'importe quelle variante morphologique du terme (stemming).
+    if (t.variants && t.variants.length > 0) {
+      if (t.variants.some((v) => lower.includes(v.toLowerCase()))) used++;
+    } else if (lower.includes(t.term)) {
+      used++;
+    }
   });
   const cov = top30.length > 0 ? used / top30.length : 0;
   r.nlpCoverage.score =

@@ -8,9 +8,12 @@ type Folder = { id: string; name: string; scope: "personal" | "agency" };
 type HaloscanData = {
   search_volume?: number;
   cpc?: number;
-  competition?: number;
   difficulty?: number;
-} | { data?: { search_volume?: number; cpc?: number; competition?: number; difficulty?: number } };
+  kgr?: number;
+  allintitleCount?: number;
+  visibilityIndex?: number;
+  resultCount?: number | null;
+};
 
 export function BriefView({
   keyword,
@@ -29,13 +32,12 @@ export function BriefView({
   paa: Paa[];
   haloscan: HaloscanData | null;
 }) {
-  const halo = haloscan
-    ? ("data" in haloscan && haloscan.data) || haloscan
-    : null;
-  const volume = halo && "search_volume" in halo ? halo.search_volume : null;
-  const cpc = halo && "cpc" in halo ? halo.cpc : null;
-  const competition = halo && "competition" in halo ? halo.competition : null;
-  const difficulty = halo && "difficulty" in halo ? halo.difficulty : null;
+  const halo = haloscan;
+  const volume = halo?.search_volume ?? null;
+  const cpc = halo?.cpc ?? null;
+  const difficulty = halo?.difficulty ?? null;
+  const kgr = halo?.kgr ?? null;
+  const allintitleCount = halo?.allintitleCount ?? null;
 
   const crawledCount = serp.filter((s) => (s.wordCount ?? 0) > 0).length;
 
@@ -79,10 +81,11 @@ export function BriefView({
         <section className="mb-10">
           <SectionTitle>Données mot-clé</SectionTitle>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="Volume" value={volume != null ? fmtNum(volume) : "—"} />
-            <StatCard label="CPC" value={cpc != null ? `${cpc} €` : "—"} />
-            <StatCard label="Compétition" value={competition != null ? String(competition) : "—"} />
-            <StatCard label="Difficulté" value={difficulty != null ? `${difficulty}/100` : "—"} />
+            <StatCard label="Volume" value={volume != null ? fmtNum(volume) : "N/A"} />
+            <StatCard label="KGR" value={kgr != null ? kgr.toFixed(2) : "N/A"} />
+            <StatCard label="Allintitle" value={allintitleCount != null ? fmtNum(allintitleCount) : "N/A"} />
+            <StatCard label="CPC" value={cpc != null ? `${cpc.toFixed(2)} €` : "N/A"} />
+            <StatCard label="Difficulté" value={difficulty != null ? `${difficulty}/100` : "N/A"} />
           </div>
         </section>
       )}
@@ -93,7 +96,7 @@ export function BriefView({
           <div>
             <SectionTitle>Benchmarks SERP</SectionTitle>
             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] overflow-hidden">
-              <BenchRow label="Plage de mots recommandée" value={`${nlp.minWordCount} – ${nlp.maxWordCount}`} />
+              <BenchRow label="Plage de mots recommandée" value={`${nlp.minWordCount} à ${nlp.maxWordCount}`} />
               <BenchRow label="Moyenne mots" value={String(nlp.avgWordCount)} />
               <BenchRow label="Titres (H1+H2+H3)" value={String(nlp.avgHeadings)} />
               <BenchRow label="Paragraphes" value={String(nlp.avgParagraphs)} last />
@@ -107,7 +110,7 @@ export function BriefView({
                 label="Occurrences moyennes"
                 value={`~${nlp.exactKeyword.avgCount} · densité ~${nlp.exactKeyword.avgDensity.toFixed(2)}%`}
               />
-              <BenchRow label="Densité idéale" value={`${nlp.exactKeyword.idealDensityMin.toFixed(1)} – ${nlp.exactKeyword.idealDensityMax.toFixed(1)}%`} />
+              <BenchRow label="Densité idéale" value={`${nlp.exactKeyword.idealDensityMin.toFixed(1)} à ${nlp.exactKeyword.idealDensityMax.toFixed(1)}%`} />
               <BenchRow label="Dans le H1" value={`${nlp.exactKeyword.inH1Pct}% des concurrents`} />
               <BenchRow label="Dans un H2" value={`${nlp.exactKeyword.inH2Pct}% des concurrents`} last />
             </div>
@@ -141,7 +144,7 @@ export function BriefView({
         <section className="mb-10">
           <SectionTitle>People Also Ask</SectionTitle>
           <div className="grid gap-2">
-            {paa.slice(0, 8).map((q, i) => (
+            {paa.slice(0, 5).map((q, i) => (
               <div
                 key={i}
                 className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] px-4 py-3 text-[13px] flex items-start gap-3"
@@ -184,7 +187,7 @@ export function BriefView({
               <div className="flex gap-4 text-right">
                 <div>
                   <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
-                    {r.wordCount ? fmtNum(r.wordCount) : "—"}
+                    {r.wordCount ? fmtNum(r.wordCount) : "N/A"}
                   </div>
                   <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
                     mots
@@ -192,7 +195,7 @@ export function BriefView({
                 </div>
                 <div>
                   <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
-                    {r.headings ?? "—"}
+                    {r.headings ?? "N/A"}
                   </div>
                   <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
                     titres
@@ -278,7 +281,16 @@ function KwTier({
             style={{ background: bg, borderColor: color, color }}
           >
             {t.term}
-            <span className="text-[9px] opacity-80 font-[family-name:var(--font-mono)]">{t.presence}%</span>
+            {t.maxCount > 0 && (
+              <span
+                className="text-[9px] opacity-80 font-[family-name:var(--font-mono)]"
+                title={`Fourchette concurrents (moyenne ${t.avgCount})`}
+              >
+                {t.minCount === t.maxCount
+                  ? `×${t.maxCount}`
+                  : `${t.minCount}-${t.maxCount}`}
+              </span>
+            )}
           </span>
         ))}
       </div>

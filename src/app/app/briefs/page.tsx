@@ -5,7 +5,7 @@ import { getDb } from "@/db";
 import { brief, client, user } from "@/db/schema";
 import { asc, desc, eq } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../_ui";
-import { BriefCard } from "./brief-card";
+import { SearchableBriefList } from "./searchable-brief-list";
 
 export default async function BriefsPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -27,11 +27,14 @@ export default async function BriefsPage() {
         authorId: user.id,
         authorName: user.name,
         authorImage: user.image,
+        volume: brief.volume,
+        competition: brief.competition,
+        kgr: brief.kgr,
+        position: brief.position,
       })
       .from(brief)
       .leftJoin(client, eq(client.id, brief.clientId))
       .leftJoin(user, eq(user.id, brief.ownerId))
-      .where(eq(brief.ownerId, session.user.id))
       .orderBy(desc(brief.createdAt)),
     db
       .select({ id: client.id, name: client.name, website: client.website })
@@ -62,27 +65,26 @@ export default async function BriefsPage() {
           ctaHref="/app/briefs/new"
         />
       ) : (
-        <div className="grid gap-2">
-          {rows.map((b) => (
-            <BriefCard
-              key={b.id}
-              folders={folders}
-              brief={{
-                id: b.id,
-                keyword: b.keyword,
-                country: b.country,
-                score: b.score,
-                createdAt: b.createdAt,
-                folder: b.clientId
-                  ? { id: b.clientId, name: b.folderName ?? "", website: b.folderWebsite }
-                  : null,
-                author: b.authorId
-                  ? { id: b.authorId, name: b.authorName, image: b.authorImage }
-                  : null,
-              }}
-            />
-          ))}
-        </div>
+        <SearchableBriefList
+          folders={folders}
+          briefs={rows.map((b) => ({
+            id: b.id,
+            keyword: b.keyword,
+            country: b.country,
+            score: b.score,
+            createdAt: b.createdAt,
+            volume: b.volume,
+            competition: b.competition,
+            kgr: b.kgr,
+            position: b.position,
+            folder: b.clientId
+              ? { id: b.clientId, name: b.folderName ?? "", website: b.folderWebsite }
+              : null,
+            author: b.authorId
+              ? { id: b.authorId, name: b.authorName, image: b.authorImage }
+              : null,
+          }))}
+        />
       )}
     </div>
   );

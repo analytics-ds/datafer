@@ -5,6 +5,7 @@ import { getDb } from "@/db";
 import { brief, client } from "@/db/schema";
 import { faviconUrl } from "@/lib/favicon";
 import { relativeDate } from "@/lib/relative-date";
+import type { HaloscanOverview } from "@/lib/analysis";
 
 export const dynamic = "force-dynamic";
 
@@ -20,17 +21,46 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
 
   if (!folder) notFound();
 
-  const briefs = await db
+  const rows = await db
     .select({
       id: brief.id,
       keyword: brief.keyword,
       country: brief.country,
       score: brief.score,
       createdAt: brief.createdAt,
+      volume: brief.volume,
+      kgr: brief.kgr,
+      position: brief.position,
+      haloscanJson: brief.haloscanJson,
     })
     .from(brief)
     .where(eq(brief.clientId, folder.id))
     .orderBy(desc(brief.createdAt));
+
+  // KD (difficulty) n'a pas de colonne dédiée : on le lit depuis le snapshot
+  // Haloscan stocké dans haloscanJson au moment de la création du brief.
+  const briefs = rows.map((b) => {
+    let difficulty: number | null = null;
+    if (b.haloscanJson) {
+      try {
+        const halo = JSON.parse(b.haloscanJson) as HaloscanOverview;
+        difficulty = halo.difficulty ?? null;
+      } catch {
+        // snapshot malformé, on ignore
+      }
+    }
+    return {
+      id: b.id,
+      keyword: b.keyword,
+      country: b.country,
+      score: b.score,
+      createdAt: b.createdAt,
+      volume: b.volume,
+      kgr: b.kgr,
+      position: b.position,
+      difficulty,
+    };
+  });
 
   const favicon = faviconUrl(folder.website, 48);
 
@@ -58,7 +88,7 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
             <span className="w-10 h-10 rounded-[var(--radius-xs)] bg-[var(--bg-warm)]" />
           )}
           <span className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
-            Dossier client
+            Client
           </span>
         </div>
         <h1 className="font-[family-name:var(--font-display)] text-[48px] leading-[1.05] tracking-[-1.2px] mb-2">
@@ -73,7 +103,7 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
         {briefs.length === 0 ? (
           <div className="bg-[var(--bg-card)] border border-dashed border-[var(--border-strong)] rounded-[var(--radius)] px-7 py-12 text-center">
             <p className="text-[13px] text-[var(--text-muted)]">
-              Aucun brief dans ce dossier pour le moment.
+              Aucun brief pour ce client pour le moment.
             </p>
           </div>
         ) : (
@@ -87,11 +117,53 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
                 <ScoreGauge score={b.score ?? 0} />
                 <div className="min-w-0">
                   <div className="font-semibold text-[15px] leading-tight truncate">{b.keyword}</div>
-                  <div className="text-[12px] text-[var(--text-secondary)] mt-1 font-[family-name:var(--font-mono)] uppercase">
-                    {b.country}
+                  <div className="flex items-center gap-[6px] mt-[6px] text-[12px] text-[var(--text-secondary)] flex-wrap">
+                    <span className="font-[family-name:var(--font-mono)] uppercase text-[11px]">
+                      {b.country}
+                    </span>
+                    <Pill
+                      label="Vol"
+                      value={b.volume != null ? b.volume.toLocaleString("fr-FR") : "N/A"}
+                      tooltip="Volume de recherche mensuel"
+                      tone={b.volume != null ? "info" : "muted"}
+                    />
+                    <Pill
+                      label="KD"
+                      value={b.difficulty != null ? `${b.difficulty}/100` : "N/A"}
+                      tooltip="Keyword Difficulty (Haloscan)"
+                      tone={
+                        b.difficulty == null
+                          ? "muted"
+                          : b.difficulty <= 30
+                            ? "good"
+                            : b.difficulty <= 60
+                              ? "warn"
+                              : "bad"
+                      }
+                    />
+                    <Pill
+                      label="KGR"
+                      value={b.kgr != null ? b.kgr.toFixed(2) : "N/A"}
+                      tooltip="Keyword Golden Ratio. < 0.25 excellent, < 1 correct, > 1 trop concurrentiel."
+                      tone={
+                        b.kgr == null
+                          ? "muted"
+                          : b.kgr < 0.25
+                            ? "good"
+                            : b.kgr < 1
+                              ? "warn"
+                              : "bad"
+                      }
+                    />
+                    <Pill
+                      label="Pos"
+                      value={b.position != null ? `#${b.position}` : "N/A"}
+                      tooltip="Position du site dans Google (top 100)"
+                      tone={positionTone(b.position)}
+                    />
                   </div>
                 </div>
-                <span className="text-[12px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+                <span className="text-[12px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] shrink-0">
                   {relativeDate(b.createdAt)}
                 </span>
               </Link>
@@ -104,6 +176,48 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
         </footer>
       </div>
     </main>
+  );
+}
+
+type PillTone = "best" | "good" | "warn" | "bad" | "info" | "muted";
+
+function positionTone(position: number | null): PillTone {
+  if (position == null) return "muted";
+  if (position <= 3) return "best";
+  if (position <= 10) return "good";
+  if (position <= 30) return "warn";
+  return "bad";
+}
+
+function Pill({
+  label,
+  value,
+  tooltip,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tooltip: string;
+  tone: PillTone;
+}) {
+  const palette: Record<PillTone, { bg: string; color: string; border: string }> = {
+    best: { bg: "#0E5132", color: "#FFFFFF", border: "#0E5132" },
+    good: { bg: "var(--green-bg)", color: "var(--green)", border: "var(--green)" },
+    warn: { bg: "var(--orange-bg)", color: "var(--orange)", border: "var(--orange)" },
+    bad: { bg: "var(--red-bg)", color: "var(--red)", border: "var(--red)" },
+    info: { bg: "var(--bg-warm)", color: "var(--text-secondary)", border: "var(--border)" },
+    muted: { bg: "var(--bg)", color: "var(--text-muted)", border: "var(--border)" },
+  };
+  const p = palette[tone];
+  return (
+    <span
+      title={tooltip}
+      className="inline-flex items-center gap-[5px] px-[8px] py-[2px] rounded-full text-[11px] font-medium border cursor-help"
+      style={{ background: p.bg, color: p.color, borderColor: tone === "best" ? p.border : `${p.border}40` }}
+    >
+      <span className="text-[9px] uppercase tracking-[0.5px] opacity-75">{label}</span>
+      <span className="font-[family-name:var(--font-mono)] font-semibold">{value}</span>
+    </span>
   );
 }
 

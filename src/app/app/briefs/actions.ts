@@ -2,25 +2,20 @@
 
 import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { brief, client } from "@/db/schema";
+import { brief } from "@/db/schema";
 
-async function assertAccess(briefId: string, userId: string) {
+// Workspace partagé : tout user authentifié peut voir et modifier
+// n'importe quel brief, peu importe l'auteur.
+async function assertAccess(briefId: string) {
   const db = getDb();
   const [row] = await db
     .select({ id: brief.id })
     .from(brief)
-    .leftJoin(client, eq(client.id, brief.clientId))
-    .where(
-      and(
-        eq(brief.id, briefId),
-        or(eq(brief.ownerId, userId), eq(client.scope, "agency")),
-      ),
-    )
+    .where(eq(brief.id, briefId))
     .limit(1);
   return !!row;
 }
@@ -30,7 +25,7 @@ export async function enableBriefShareAction(briefId: string): Promise<
 > {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) return { ok: false, error: "Non authentifié" };
-  if (!(await assertAccess(briefId, session.user.id)))
+  if (!(await assertAccess(briefId)))
     return { ok: false, error: "Brief introuvable" };
 
   const token = randomBytes(24).toString("base64url");
@@ -45,7 +40,7 @@ export async function revokeBriefShareAction(briefId: string): Promise<
 > {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) return { ok: false, error: "Non authentifié" };
-  if (!(await assertAccess(briefId, session.user.id)))
+  if (!(await assertAccess(briefId)))
     return { ok: false, error: "Brief introuvable" };
 
   const db = getDb();
@@ -59,11 +54,12 @@ export async function deleteBriefAction(briefId: string): Promise<
 > {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) return { ok: false, error: "Non authentifié" };
-  if (!(await assertAccess(briefId, session.user.id)))
+  if (!(await assertAccess(briefId)))
     return { ok: false, error: "Brief introuvable" };
 
   const db = getDb();
   await db.delete(brief).where(eq(brief.id, briefId));
   revalidatePath("/app/briefs");
-  redirect("/app/briefs");
+  revalidatePath("/app");
+  return { ok: true };
 }

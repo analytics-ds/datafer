@@ -91,6 +91,7 @@ export default async function SharedBriefPage({
           serp={serp}
           paa={paa}
           haloscan={haloscan}
+          position={b.position ?? null}
           saveEndpoint={`/api/share/${token}/briefs/${b.id}`}
           hideNewAnalysis
         />

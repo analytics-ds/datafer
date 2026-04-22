@@ -3,19 +3,41 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { faviconUrl } from "@/lib/favicon";
-import { deleteFolderAction } from "./actions";
+import { deleteFolderAction, toggleFavoriteAction } from "./actions";
 
 type Folder = {
   id: string;
   name: string;
   website: string | null;
   briefCount: number;
+  totalVolume: number | null;
+  positionedCount: number;
+  bestPosition: number | null;
+  isFavorite: number;
 };
+
+function fmtNum(n: number): string {
+  return n.toLocaleString("fr-FR");
+}
 
 export function FolderListCard({ folder }: { folder: Folder }) {
   const [hover, setHover] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [favorited, setFavorited] = useState(folder.isFavorite === 1);
+  const [pendingFav, startFavTransition] = useTransition();
   const favicon = faviconUrl(folder.website, 56);
+
+  function onToggleFavorite(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = !favorited;
+    setFavorited(next);
+    startFavTransition(async () => {
+      const res = await toggleFavoriteAction(folder.id);
+      if (!res.ok) setFavorited(!next);
+      else setFavorited(res.favorited);
+    });
+  }
 
   return (
     <>
@@ -55,22 +77,53 @@ export function FolderListCard({ folder }: { folder: Folder }) {
           <div className="text-[11px] text-[var(--text-secondary)] font-[family-name:var(--font-mono)]">
             {folder.briefCount} {folder.briefCount > 1 ? "briefs" : "brief"}
           </div>
+          {folder.briefCount > 0 && folder.totalVolume != null && (
+            <div className="flex flex-wrap gap-[5px] mt-[10px] pointer-events-auto">
+              <span
+                title="Volume de recherche cumulé sur tous les briefs du client"
+                className="inline-flex items-center gap-[5px] px-[8px] py-[2px] rounded-full text-[11px] font-medium border cursor-help bg-[var(--bg-warm)] text-[var(--text-secondary)]"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <span className="text-[9px] uppercase tracking-[0.5px] opacity-75">Vol</span>
+                <span className="font-[family-name:var(--font-mono)] font-semibold">
+                  {fmtNum(folder.totalVolume)}
+                </span>
+              </span>
+            </div>
+          )}
         </div>
 
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setModalOpen(true);
-          }}
-          aria-label="Supprimer le dossier"
-          title="Supprimer le dossier"
-          className={`absolute top-3 right-3 z-10 w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--red)] hover:border-[var(--red)]/40 hover:bg-[var(--red-bg)] transition-all ${
-            hover ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <TrashIcon />
-        </button>
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
+          <button
+            onClick={onToggleFavorite}
+            disabled={pendingFav}
+            aria-label={favorited ? "Retirer des favoris" : "Ajouter aux favoris"}
+            title={favorited ? "Retirer des favoris" : "Ajouter aux favoris"}
+            className={`w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] border transition-all ${
+              favorited
+                ? "bg-[var(--bg-olive-light)] border-[var(--accent)] text-[var(--accent-dark)] opacity-100"
+                : `bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent-dark)] hover:border-[var(--accent)] hover:bg-[var(--bg-olive-light)] ${
+                    hover ? "opacity-100" : "opacity-0"
+                  }`
+            } disabled:opacity-50`}
+          >
+            <StarIcon filled={favorited} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setModalOpen(true);
+            }}
+            aria-label="Supprimer le client"
+            title="Supprimer le client"
+            className={`w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--red)] hover:border-[var(--red)]/40 hover:bg-[var(--red-bg)] transition-all ${
+              hover ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <TrashIcon />
+          </button>
+        </div>
       </div>
 
       {modalOpen && (
@@ -125,9 +178,9 @@ function DeleteConfirmModal({
           <span className="font-semibold text-[16px]">Supprimer « {folderName} »</span>
         </div>
         <p className="text-[13px] text-[var(--text-secondary)] leading-[1.55] mb-5">
-          Cette action est <strong>définitive</strong>. Tous les briefs rattachés à ce dossier
+          Cette action est <strong>définitive</strong>. Tous les briefs rattachés à ce client
           seront également perdus. Pour confirmer, retape le site associé (ou le nom du
-          dossier s&apos;il n&apos;a pas de site) :
+          client s&apos;il n&apos;a pas de site) :
         </p>
         <div className="bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] px-3 py-2 mb-3 font-[family-name:var(--font-mono)] text-[12px] text-[var(--text)] select-all">
           {expected}
@@ -166,6 +219,19 @@ function DeleteConfirmModal({
         </div>
       </form>
     </div>
+  );
+}
+
+function StarIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 20 20" fill={filled ? "currentColor" : "none"}>
+      <path
+        d="M10 2l2.4 5.2 5.6.6-4.2 3.9 1.2 5.7L10 14.5l-5 2.9 1.2-5.7L2 7.8l5.6-.6L10 2z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
