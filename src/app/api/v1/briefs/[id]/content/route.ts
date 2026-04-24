@@ -22,5 +22,6 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     id,
     score: res.total,
     breakdown: res.breakdown,
+    competitors: res.competitors,
   });
 }

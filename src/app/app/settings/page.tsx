@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { headers } from "next/headers";
 import { and, eq, isNull } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
@@ -7,7 +8,6 @@ import { PageHeader } from "../_ui";
 import { ProfileForm } from "./profile-form";
 import { PasswordForm } from "./password-form";
 import { ApiKeysForm } from "./api-keys-form";
-import { ApiDocs } from "./api-docs";
 
 export default async function SettingsPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -59,20 +59,20 @@ export default async function SettingsPage() {
         <PasswordForm />
       </section>
 
-      <section className="mb-10">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
-          <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent)]" />
-          Clés API
-        </h2>
-        <ApiKeysForm keys={keys} />
-      </section>
-
       <section>
-        <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
-          <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent)]" />
-          Documentation API
-        </h2>
-        <ApiDocs />
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] flex items-center gap-2">
+            <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent)]" />
+            Clés API
+          </h2>
+          <Link
+            href="/app/settings/api-docs"
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+          >
+            Voir la documentation →
+          </Link>
+        </div>
+        <ApiKeysForm keys={keys} />
       </section>
     </div>
   );

@@ -4,6 +4,7 @@ import { resolveUser } from "@/lib/api-auth";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
 import type { NlpResult } from "@/lib/analysis";
+import { computeCompetitorStats } from "@/lib/briefs-service";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       score: brief.score,
       editorHtml: brief.editorHtml,
       nlpJson: brief.nlpJson,
+      serpJson: brief.serpJson,
       volume: brief.volume,
       position: brief.position,
       createdAt: brief.createdAt,
@@ -60,6 +62,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
     avgCount: t.avgCount,
     presence: t.presence,
   })) ?? [];
+  const competitors = computeCompetitorStats(row.serpJson);
 
   return NextResponse.json({
     id: row.id,
@@ -72,6 +75,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
     editorHtml: row.editorHtml ?? "",
     targetTerms,
     targetWordCount: nlp?.avgWordCount ?? null,
+    competitors,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });

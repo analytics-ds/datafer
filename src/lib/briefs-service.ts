@@ -17,6 +17,24 @@ import {
 } from "@/lib/analysis";
 import { computeDetailedScore, type DetailedScore, type EditorData } from "@/lib/scoring";
 
+export type CompetitorStats = {
+  avg: number;
+  best: number;
+  bestUrl: string | null;
+  count: number;
+};
+
+export function computeCompetitorStats(serpJson: string | null): CompetitorStats | null {
+  if (!serpJson) return null;
+  let parsed: SerpResult[] = [];
+  try { parsed = JSON.parse(serpJson) as SerpResult[]; } catch { return null; }
+  const scored = parsed.filter((r): r is SerpResult & { score: number } => typeof r.score === "number");
+  if (scored.length === 0) return null;
+  const avg = Math.round(scored.reduce((s, r) => s + r.score, 0) / scored.length);
+  const bestRow = scored.reduce((b, r) => (r.score > b.score ? r : b), scored[0]);
+  return { avg, best: bestRow.score, bestUrl: bestRow.link ?? null, count: scored.length };
+}
+
 export type CreateBriefInput = {
   keyword: string;
   country?: string;
@@ -229,13 +247,13 @@ function stripTags(s: string): string {
 }
 
 export type RescoreResult =
-  | { ok: true; total: number; breakdown: DetailedScore }
+  | { ok: true; total: number; breakdown: DetailedScore; competitors: CompetitorStats | null }
   | { ok: false; status: number; error: string };
 
 export async function rescoreBrief(briefId: string, editorHtml: string): Promise<RescoreResult> {
   const db = getDb();
   const [row] = await db
-    .select({ id: brief.id, nlpJson: brief.nlpJson, status: brief.status })
+    .select({ id: brief.id, nlpJson: brief.nlpJson, serpJson: brief.serpJson, status: brief.status })
     .from(brief)
     .where(eq(brief.id, briefId))
     .limit(1);
@@ -253,7 +271,12 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
     .set({ editorHtml, score: breakdown.total, updatedAt: new Date() })
     .where(eq(brief.id, briefId));
 
-  return { ok: true, total: breakdown.total, breakdown };
+  return {
+    ok: true,
+    total: breakdown.total,
+    breakdown,
+    competitors: computeCompetitorStats(row.serpJson),
+  };
 }
 
 /**

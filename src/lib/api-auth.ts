@@ -37,8 +37,9 @@ export async function resolveUser(req: Request): Promise<AuthedUser | null> {
       .where(and(eq(apiKey.keyHash, hash), isNull(apiKey.revokedAt)))
       .limit(1);
     if (!row) return null;
-    // Best-effort lastUsedAt update (don't block response)
-    db.update(apiKey).set({ lastUsedAt: new Date() }).where(eq(apiKey.id, row.id)).catch(() => {});
+    try {
+      await db.update(apiKey).set({ lastUsedAt: new Date() }).where(eq(apiKey.id, row.id));
+    } catch {}
     return { id: row.userId, email: "" };
   }
   const session = await getAuth().api.getSession({ headers: await headers() });
