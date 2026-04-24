@@ -122,6 +122,11 @@ export const brief = sqliteTable("brief", {
   allintitleCount: integer("allintitle_count"),
   // Position du domaine du dossier dans le top 10. null = non positionné.
   position: integer("position"),
+  // 'pending' = analyse en cours (créé via API v1, analyse async)
+  // 'ready'   = analyse terminée, score dispo
+  // 'failed'  = l'analyse SERP/crawl a planté
+  status: text("status", { enum: ["pending", "ready", "failed"] }).notNull().default("ready"),
+  errorMessage: text("error_message"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });

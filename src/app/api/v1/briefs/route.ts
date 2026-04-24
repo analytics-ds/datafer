@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { resolveUser } from "@/lib/api-auth";
-import { createBrief } from "@/lib/briefs-service";
+import { createPendingBrief, completeBriefAnalysis } from "@/lib/briefs-service";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const user = await resolveUser(req);
@@ -17,20 +17,22 @@ export async function POST(req: Request) {
   } | null;
   if (!body?.keyword) return NextResponse.json({ error: "keyword required" }, { status: 400 });
 
-  const res = await createBrief(user.id, {
+  const input = {
     keyword: body.keyword,
     country: body.country,
     folderId: body.folderId,
     myUrl: body.myUrl,
-  });
-  if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status });
+  };
+
+  const created = await createPendingBrief(user.id, input);
+  if (!created.ok) return NextResponse.json({ error: created.error }, { status: created.status });
+
+  const { ctx } = getCloudflareContext();
+  ctx.waitUntil(completeBriefAnalysis(created.id, user.id, input));
 
   return NextResponse.json({
-    id: res.id,
-    keyword: body.keyword,
-    country: body.country || "fr",
-    score: res.score,
-    crawled: res.crawled,
-    total: res.total,
+    id: created.id,
+    status: "pending",
+    message: "brief en cours d'analyse, interroger GET /api/v1/briefs/{id}",
   });
 }

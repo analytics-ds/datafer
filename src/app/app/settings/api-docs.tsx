@@ -11,10 +11,11 @@ export function ApiDocs() {
       <H3>Authentification</H3>
       <Pre>{`Authorization: Bearer dfk_xxxxxxxxxxxxxxxxxxxxxx`}</Pre>
 
-      <H3>1. Créer un brief</H3>
+      <H3>1. Créer un brief (asynchrone)</H3>
       <p className="mb-2 text-[var(--text-muted)]">
-        Lance l'analyse SERP + Haloscan + crawl des concurrents. Compte ~30 à 60 secondes. Le <Code>folderId</Code> et{" "}
-        <Code>myUrl</Code> sont optionnels.
+        Le POST renvoie immédiatement l'id avec <Code>status: "pending"</Code>. L'analyse SERP + Haloscan + crawl tourne
+        en background (30-60s). Il faut ensuite <b>poller le GET</b> jusqu'à ce que <Code>status</Code> passe à{" "}
+        <Code>ready</Code> (ou <Code>failed</Code>). <Code>folderId</Code> et <Code>myUrl</Code> sont optionnels.
       </p>
       <Pre>{`curl -X POST ${BASE}/api/v1/briefs \\
   -H "Authorization: Bearer dfk_xxxxxxxx" \\
@@ -24,22 +25,28 @@ export function ApiDocs() {
     "country": "fr",
     "myUrl": "https://monsite.com/ma-page"
   }'`}</Pre>
-      <p className="mb-2 text-[var(--text-muted)]">Réponse :</p>
+      <p className="mb-2 text-[var(--text-muted)]">Réponse immédiate :</p>
       <Pre>{`{
   "id": "a3c1b7e8-…",
-  "keyword": "rideau thermique",
-  "country": "fr",
-  "score": 42,
-  "crawled": 9,
-  "total": 10
+  "status": "pending",
+  "message": "brief en cours d'analyse, interroger GET /api/v1/briefs/{id}"
 }`}</Pre>
 
-      <H3>2. Lire un brief + son score</H3>
+      <H3>2. Lire un brief (polling)</H3>
       <Pre>{`curl ${BASE}/api/v1/briefs/<id> \\
   -H "Authorization: Bearer dfk_xxxxxxxx"`}</Pre>
-      <p className="mb-2 text-[var(--text-muted)]">Réponse :</p>
+      <p className="mb-2 text-[var(--text-muted)]">Tant que l'analyse tourne :</p>
       <Pre>{`{
   "id": "a3c1b7e8-…",
+  "status": "pending",
+  "keyword": "rideau thermique",
+  "country": "fr",
+  "message": "brief pas encore prêt, analyse en cours"
+}`}</Pre>
+      <p className="mb-2 text-[var(--text-muted)]">Une fois prêt :</p>
+      <Pre>{`{
+  "id": "a3c1b7e8-…",
+  "status": "ready",
   "keyword": "rideau thermique",
   "country": "fr",
   "score": 42,
@@ -50,9 +57,13 @@ export function ApiDocs() {
     { "term": "isolation", "avgCount": 14, "presence": 0.9 },
     { "term": "occultant",  "avgCount": 6,  "presence": 0.7 }
   ],
-  "targetWordCount": 1420,
-  "createdAt": 1777,
-  "updatedAt": 1777
+  "targetWordCount": 1420
+}`}</Pre>
+      <p className="mb-2 text-[var(--text-muted)]">En cas d'échec :</p>
+      <Pre>{`{
+  "id": "a3c1b7e8-…",
+  "status": "failed",
+  "error": "no SERP results"
 }`}</Pre>
 
       <H3>3. Soumettre du contenu et récupérer le score</H3>
@@ -88,7 +99,8 @@ export function ApiDocs() {
         <li><Code>400 keyword required</Code> / <Code>editorHtml required</Code> : body mal formé</li>
         <li><Code>403 folder not accessible</Code> : dossier inaccessible pour ce user</li>
         <li><Code>404 not found</Code> : brief introuvable</li>
-        <li><Code>502 no SERP results</Code> : échec SerpAPI</li>
+        <li><Code>409 brief not ready yet</Code> : tentative de scorer un brief pas encore analysé</li>
+        <li><Code>502 no SERP results</Code> : échec SerpAPI (remonté en <Code>status:"failed"</Code>)</li>
       </ul>
     </div>
   );

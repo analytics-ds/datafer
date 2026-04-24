@@ -7,15 +7,17 @@ import type { NlpResult } from "@/lib/analysis";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const user = await resolveUser(_req);
+  const user = await resolveUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const db = getDb();
   const [row] = await db
     .select({
       id: brief.id,
+      status: brief.status,
+      errorMessage: brief.errorMessage,
       keyword: brief.keyword,
       country: brief.country,
       score: brief.score,
@@ -31,6 +33,27 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
     .limit(1);
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
 
+  if (row.status === "pending") {
+    return NextResponse.json({
+      id: row.id,
+      status: "pending",
+      keyword: row.keyword,
+      country: row.country,
+      message: "brief pas encore prêt, analyse en cours",
+      createdAt: row.createdAt,
+    });
+  }
+  if (row.status === "failed") {
+    return NextResponse.json({
+      id: row.id,
+      status: "failed",
+      keyword: row.keyword,
+      country: row.country,
+      error: row.errorMessage ?? "analysis failed",
+      createdAt: row.createdAt,
+    }, { status: 200 });
+  }
+
   const nlp = row.nlpJson ? (JSON.parse(row.nlpJson) as NlpResult) : null;
   const targetTerms = nlp?.nlpTerms?.slice(0, 50).map((t) => ({
     term: t.term,
@@ -40,6 +63,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
 
   return NextResponse.json({
     id: row.id,
+    status: "ready",
     keyword: row.keyword,
     country: row.country,
     score: row.score,
