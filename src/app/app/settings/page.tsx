@@ -1,11 +1,13 @@
 import { headers } from "next/headers";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { user as userTable } from "@/db/schema";
+import { apiKey, user as userTable } from "@/db/schema";
 import { PageHeader } from "../_ui";
 import { ProfileForm } from "./profile-form";
 import { PasswordForm } from "./password-form";
+import { ApiKeysForm } from "./api-keys-form";
+import { ApiDocs } from "./api-docs";
 
 export default async function SettingsPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -18,17 +20,27 @@ export default async function SettingsPage() {
     .where(eq(userTable.id, session.user.id))
     .limit(1);
 
-  // Si les champs firstName/lastName ne sont pas encore peuplés (compte créé
-  // avant le split Prénom/Nom), on dérive depuis `name` en fallback.
   const parts = (session.user.name || "").split(" ");
   const firstName = me?.firstName ?? parts[0] ?? "";
   const lastName = me?.lastName ?? parts.slice(1).join(" ") ?? "";
+
+  const keys = await db
+    .select({
+      id: apiKey.id,
+      name: apiKey.name,
+      prefix: apiKey.prefix,
+      createdAt: apiKey.createdAt,
+      lastUsedAt: apiKey.lastUsedAt,
+    })
+    .from(apiKey)
+    .where(and(eq(apiKey.userId, session.user.id), isNull(apiKey.revokedAt)))
+    .orderBy(apiKey.createdAt);
 
   return (
     <div className="px-10 py-10 max-w-[720px]">
       <PageHeader
         title={<>Paramètres<span className="italic text-[var(--accent-dark)]">.</span></>}
-        subtitle="Gère ton profil et tes identifiants de connexion."
+        subtitle="Gère ton profil, tes identifiants et tes clés API."
       />
 
       <section className="mb-10">
@@ -39,12 +51,28 @@ export default async function SettingsPage() {
         <ProfileForm initial={{ firstName, lastName, email: session.user.email }} />
       </section>
 
-      <section>
+      <section className="mb-10">
         <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
           <span className="w-[5px] h-[5px] rounded-full bg-[var(--red)]" />
           Sécurité
         </h2>
         <PasswordForm />
+      </section>
+
+      <section className="mb-10">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
+          <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent)]" />
+          Clés API
+        </h2>
+        <ApiKeysForm keys={keys} />
+      </section>
+
+      <section>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
+          <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent)]" />
+          Documentation API
+        </h2>
+        <ApiDocs />
       </section>
     </div>
   );

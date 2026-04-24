@@ -2,10 +2,11 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { and, eq, isNull } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { user } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { apiKey, user } from "@/db/schema";
+import { generateApiKey, newApiKeyId } from "@/lib/api-auth";
 
 export async function updateProfileAction(formData: FormData): Promise<
   { ok: true } | { ok: false; error: string }
@@ -76,4 +77,44 @@ export async function changePasswordAction(formData: FormData): Promise<
     const msg = e instanceof Error ? e.message : "Erreur inconnue";
     return { ok: false, error: msg };
   }
+}
+
+export async function createApiKeyAction(formData: FormData): Promise<
+  { ok: true; key: string; prefix: string; id: string } | { ok: false; error: string }
+> {
+  const session = await getAuth().api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Non authentifié" };
+
+  const name = String(formData.get("name") ?? "").trim() || "Clé API";
+
+  const { raw, prefix, hash } = await generateApiKey();
+  const id = newApiKeyId();
+
+  const db = getDb();
+  await db.insert(apiKey).values({
+    id,
+    userId: session.user.id,
+    name,
+    keyHash: hash,
+    prefix,
+  });
+
+  revalidatePath("/app/settings");
+  return { ok: true, key: raw, prefix, id };
+}
+
+export async function revokeApiKeyAction(id: string): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const session = await getAuth().api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Non authentifié" };
+
+  const db = getDb();
+  await db
+    .update(apiKey)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(apiKey.id, id), eq(apiKey.userId, session.user.id), isNull(apiKey.revokedAt)));
+
+  revalidatePath("/app/settings");
+  return { ok: true };
 }

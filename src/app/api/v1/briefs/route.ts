@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { getAuth } from "@/lib/auth";
+import { resolveUser } from "@/lib/api-auth";
 import { createBrief } from "@/lib/briefs-service";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const user = await resolveUser(req);
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as {
     keyword?: string;
@@ -18,7 +17,7 @@ export async function POST(req: Request) {
   } | null;
   if (!body?.keyword) return NextResponse.json({ error: "keyword required" }, { status: 400 });
 
-  const res = await createBrief(session.user.id, {
+  const res = await createBrief(user.id, {
     keyword: body.keyword,
     country: body.country,
     folderId: body.folderId,
@@ -28,7 +27,9 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     id: res.id,
-    redirect: `/app/briefs/${res.id}`,
+    keyword: body.keyword,
+    country: body.country || "fr",
+    score: res.score,
     crawled: res.crawled,
     total: res.total,
   });
