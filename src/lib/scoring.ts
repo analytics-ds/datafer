@@ -4,6 +4,18 @@
  */
 import type { NlpResult } from "./analysis";
 
+/**
+ * Normalisation lowercase + suppression des diacritiques (accents).
+ * Utilisée des deux côtés du matching KW pour que "moto électrique" et
+ * "moto electrique" matchent la même chose. Google fait pareil en SERP.
+ */
+function normalize(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
 export type EditorData = {
   text: string;
   h1s: string[];
@@ -60,12 +72,14 @@ export function computeDetailedScore(
   const wc = words.length;
   if (wc < 5) return { ...EMPTY };
 
-  const lower = text.toLowerCase();
+  const lowerNorm = normalize(text);
   const ek = nlp.exactKeyword;
+  const kwNorm = normalize(ek.keyword);
+  const variationsNorm = (ek.variations ?? []).map(normalize);
 
   // 1. KEYWORD /15
-  const rx = new RegExp(ek.keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-  const m = lower.match(rx);
+  const rx = new RegExp(kwNorm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  const m = lowerNorm.match(rx);
   const count = m ? m.length : 0;
   const density = wc > 0 ? ((count * ek.keyword.split(/\s+/).length) / wc) * 100 : 0;
   let dS =
@@ -88,9 +102,10 @@ export function computeDetailedScore(
   let used = 0;
   top30.forEach((t) => {
     // On accepte n'importe quelle variante morphologique du terme (stemming).
+    // Normalisation des accents des deux côtés (texte et terme NLP).
     if (t.variants && t.variants.length > 0) {
-      if (t.variants.some((v) => lower.includes(v.toLowerCase()))) used++;
-    } else if (lower.includes(t.term)) {
+      if (t.variants.some((v) => lowerNorm.includes(normalize(v)))) used++;
+    } else if (lowerNorm.includes(normalize(t.term))) {
       used++;
     }
   });
@@ -122,19 +137,21 @@ export function computeDetailedScore(
   // 4. HEADINGS /18
   {
     let s = 0;
+    const h1sNorm = ed.h1s.map(normalize);
+    const h2sNorm = ed.h2s.map(normalize);
     if (ed.h1s.length === 1) s += 6;
     else if (ed.h1s.length > 1) s += 2;
-    if (ed.h1s.some((h) => h.toLowerCase().includes(ek.keyword))) s += 5;
-    else if (ed.h1s.some((h) => ek.variations.some((v) => h.toLowerCase().includes(v)))) s += 2;
+    if (h1sNorm.some((h) => h.includes(kwNorm))) s += 5;
+    else if (h1sNorm.some((h) => variationsNorm.some((v) => h.includes(v)))) s += 2;
     const h2T = Math.max(2, Math.round(nlp.avgHeadings * 0.6));
     if (ed.h2s.length >= h2T) s += 4;
     else if (ed.h2s.length >= h2T * 0.5) s += 2;
     else if (ed.h2s.length > 0) s += 1;
     if (
-      ed.h2s.some(
+      h2sNorm.some(
         (h) =>
-          h.toLowerCase().includes(ek.keyword) ||
-          ek.variations.some((v) => h.toLowerCase().includes(v)),
+          h.includes(kwNorm) ||
+          variationsNorm.some((v) => h.includes(v)),
       )
     )
       s += 2;
@@ -144,27 +161,23 @@ export function computeDetailedScore(
       h1: ed.h1s.length,
       h2: ed.h2s.length,
       h3: ed.h3s.length,
-      h1HasKw: ed.h1s.some((h) => h.toLowerCase().includes(ek.keyword)),
+      h1HasKw: h1sNorm.some((h) => h.includes(kwNorm)),
     };
   }
 
   // 5. PLACEMENT /15
   {
     let s = 0;
-    const f100 = words.slice(0, 100).join(" ").toLowerCase();
-    if (f100.includes(ek.keyword)) s += 5;
-    else if (ek.variations.some((v) => f100.includes(v))) s += 2;
-    if (text.split(/[.!?]\s/)[0].toLowerCase().includes(ek.keyword)) s += 3;
-    if (words.slice(-100).join(" ").toLowerCase().includes(ek.keyword)) s += 2;
+    const f100 = normalize(words.slice(0, 100).join(" "));
+    if (f100.includes(kwNorm)) s += 5;
+    else if (variationsNorm.some((v) => f100.includes(v))) s += 2;
+    if (normalize(text.split(/[.!?]\s/)[0]).includes(kwNorm)) s += 3;
+    if (normalize(words.slice(-100).join(" ")).includes(kwNorm)) s += 2;
     const qL = Math.floor(words.length / 4);
     let qK = 0;
     for (let q = 0; q < 4; q++) {
       if (
-        words
-          .slice(q * qL, (q + 1) * qL)
-          .join(" ")
-          .toLowerCase()
-          .includes(ek.keyword)
+        normalize(words.slice(q * qL, (q + 1) * qL).join(" ")).includes(kwNorm)
       )
         qK++;
     }
@@ -199,7 +212,7 @@ export function computeDetailedScore(
     const aS = sents.length > 0 ? wc / sents.length : wc;
     if (aS >= 10 && aS <= 25) s += 3;
     else if (aS > 5 && aS < 35) s += 1;
-    const kwD = ((lower.match(rx) ?? []).length * ek.keyword.split(/\s+/).length) / wc * 100;
+    const kwD = ((lowerNorm.match(rx) ?? []).length * ek.keyword.split(/\s+/).length) / wc * 100;
     if (kwD <= 3) s += 2;
     const uniq = new Set(words.map((w) => w.toLowerCase()));
     const div = uniq.size / words.length;
