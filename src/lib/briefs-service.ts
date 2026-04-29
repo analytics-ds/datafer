@@ -123,7 +123,8 @@ export async function createBrief(
   const { results, allResults, paa } = await fetchSerp(keyword, country, serpKey);
   if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
 
-  const crawled = await Promise.all(results.map((r) => crawlPage(r.link)));
+  const settled = await Promise.allSettled(results.map((r) => crawlPage(r.link)));
+  const crawled = settled.map((s) => (s.status === "fulfilled" ? s.value : null));
   const pageContents: PageContent[] = [];
   const enrichedResults: SerpResult[] = results.map((r, i) => {
     const c = crawled[i];
@@ -311,6 +312,8 @@ export async function createPendingBrief(
   return { ok: true, id };
 }
 
+const ANALYSIS_DEADLINE_MS = 90_000;
+
 export async function completeBriefAnalysis(
   briefId: string,
   userId: string,
@@ -318,7 +321,16 @@ export async function completeBriefAnalysis(
 ): Promise<void> {
   const db = getDb();
   try {
-    const res = await createBriefAnalysisPayload(userId, input);
+    const deadline = new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`analysis timed out after ${ANALYSIS_DEADLINE_MS}ms`)),
+        ANALYSIS_DEADLINE_MS,
+      ),
+    );
+    const res = await Promise.race([
+      createBriefAnalysisPayload(userId, input),
+      deadline,
+    ]);
     if (!res.ok) {
       await db
         .update(brief)
@@ -395,7 +407,8 @@ async function createBriefAnalysisPayload(userId: string, input: CreateBriefInpu
   const { results, allResults, paa } = await fetchSerp(keyword, country, serpKey);
   if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
 
-  const crawled = await Promise.all(results.map((r) => crawlPage(r.link)));
+  const settled = await Promise.allSettled(results.map((r) => crawlPage(r.link)));
+  const crawled = settled.map((s) => (s.status === "fulfilled" ? s.value : null));
   const pageContents: PageContent[] = [];
   const enrichedResults: SerpResult[] = results.map((r, i) => {
     const c = crawled[i];

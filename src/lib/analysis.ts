@@ -362,7 +362,8 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
     });
     if (!r.ok) return null;
     const html = await r.text();
-    return parseHTML(html);
+    const truncated = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
+    return parseHTML(truncated);
   } catch {
     return null;
   }
