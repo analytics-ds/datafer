@@ -193,6 +193,23 @@ export function BriefEditor(props: BriefEditorProps) {
     [editorData, nlp, geoSignals],
   );
 
+  // Premier save : on rattrape les briefs avec un score obsolète en BDD
+  // (changement de formule, debounce raté à la session précédente…). On
+  // déclenche dès le 1er calcul utile et on ne le rejoue pas.
+  const initialSaveDone = useRef(false);
+  useEffect(() => {
+    if (initialSaveDone.current) return;
+    if (editorData.text.length === 0 && !editorRef.current?.innerHTML) return;
+    initialSaveDone.current = true;
+    fetch(saveEndpoint, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ score: score.total }),
+    }).catch(() => {
+      // best-effort : si ça échoue, le debounce save reprendra plus tard.
+    });
+  }, [editorData.text, score.total, saveEndpoint]);
+
   // Debounced save
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);

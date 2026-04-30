@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { getAuth } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
+
 import { getDb } from "@/db";
 import { brief, client, user } from "@/db/schema";
 import { asc, desc, eq } from "drizzle-orm";

@@ -9,6 +9,10 @@ import { SearchableBriefList } from "./searchable-brief-list";
 import { listAllTags, listTagsForBriefs } from "@/lib/tags-service";
 import type { WorkflowStatus } from "./workflow-status";
 
+// Toujours dynamique : le score en BDD bouge à chaque édition,
+// la liste doit refléter la dernière valeur sans cache.
+export const dynamic = "force-dynamic";
+
 export default async function BriefsPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) return null;

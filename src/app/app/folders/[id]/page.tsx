@@ -14,6 +14,8 @@ import { SearchableBriefList } from "../../briefs/searchable-brief-list";
 import { listTagsForBriefs, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "../../briefs/workflow-status";
 
+export const dynamic = "force-dynamic";
+
 export default async function FolderDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getAuth().api.getSession({ headers: await headers() });
