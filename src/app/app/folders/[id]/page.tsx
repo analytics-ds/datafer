@@ -10,7 +10,7 @@ import { FolderFavicon } from "../page";
 import { FavoriteButton } from "../favorite-button";
 import { SharePanel } from "../share-panel";
 import { DeleteFolderButton } from "../delete-folder";
-import { BriefCard } from "../../briefs/brief-card";
+import { SearchableBriefList } from "../../briefs/searchable-brief-list";
 import { listTagsForBriefs, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "../../briefs/workflow-status";
 
@@ -111,34 +111,29 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
           ctaHref={`/app/briefs/new?folder=${folder.id}`}
         />
       ) : (
-        <div className="grid gap-2">
-          {briefs.map((b) => (
-            <BriefCard
-              key={b.id}
-              folders={folders}
-              availableTags={scopedAvailableTags.map((t) => ({ id: t.id, name: t.name, color: t.color }))}
-              brief={{
-                id: b.id,
-                keyword: b.keyword,
-                country: b.country,
-                score: b.score,
-                createdAt: b.createdAt,
-                volume: b.volume,
-                competition: b.competition,
-                kgr: b.kgr,
-                position: b.position,
-                workflowStatus: b.workflowStatus as WorkflowStatus,
-                tags: tagsByBrief.get(b.id) ?? [],
-                folder: b.clientId
-                  ? { id: b.clientId, name: b.folderName ?? "", website: b.folderWebsite }
-                  : null,
-                author: b.authorId
-                  ? { id: b.authorId, name: b.authorName, image: b.authorImage }
-                  : null,
-              }}
-            />
-          ))}
-        </div>
+        <SearchableBriefList
+          folders={folders}
+          availableTags={scopedAvailableTags}
+          briefs={briefs.map((b) => ({
+            id: b.id,
+            keyword: b.keyword,
+            country: b.country,
+            score: b.score,
+            createdAt: b.createdAt,
+            volume: b.volume,
+            competition: b.competition,
+            kgr: b.kgr,
+            position: b.position,
+            workflowStatus: b.workflowStatus as WorkflowStatus,
+            tags: tagsByBrief.get(b.id) ?? [],
+            folder: b.clientId
+              ? { id: b.clientId, name: b.folderName ?? "", website: b.folderWebsite }
+              : null,
+            author: b.authorId
+              ? { id: b.authorId, name: b.authorName, image: b.authorImage }
+              : null,
+          }))}
+        />
       )}
     </div>
   );
