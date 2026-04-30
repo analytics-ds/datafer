@@ -337,6 +337,20 @@ export async function completeBriefAnalysis(
 ): Promise<void> {
   const db = getDb();
   console.log("[brief-analysis] start", { briefId, keyword: input.keyword });
+  // Hook que createBriefAnalysisPayload appelle pour déclarer son étape
+  // courante. On l'écrit dans la BDD pour que le frontend (qui poll
+  // /api/briefs/[id]/progress) puisse l'afficher en live.
+  const setStep = async (step: string) => {
+    try {
+      await db
+        .update(brief)
+        .set({ analysisStep: step })
+        .where(eq(brief.id, briefId));
+    } catch {
+      // best-effort : si l'update échoue (race / DB indisponible) on
+      // continue le crawl, c'est juste de l'info live.
+    }
+  };
   try {
     const deadline = new Promise<never>((_, reject) =>
       setTimeout(
@@ -345,7 +359,7 @@ export async function completeBriefAnalysis(
       ),
     );
     const res = await Promise.race([
-      createBriefAnalysisPayload(userId, input),
+      createBriefAnalysisPayload(userId, input, setStep),
       deadline,
     ]);
     console.log("[brief-analysis] payload computed", {
@@ -409,7 +423,11 @@ type AnalysisPayload =
     }
   | { ok: false; status: number; error: string };
 
-async function createBriefAnalysisPayload(userId: string, input: CreateBriefInput): Promise<AnalysisPayload> {
+async function createBriefAnalysisPayload(
+  userId: string,
+  input: CreateBriefInput,
+  setStep: (step: string) => Promise<void> = async () => {},
+): Promise<AnalysisPayload> {
   const keyword = input.keyword.trim();
   const country = (input.country || "fr").toLowerCase();
   const folderId = input.folderId || null;
@@ -434,9 +452,11 @@ async function createBriefAnalysisPayload(userId: string, input: CreateBriefInpu
       error: `${provider === "serpapi" ? "SERPAPI_KEY" : "CRAZYSERP_KEY"} missing on server`,
     };
 
+  await setStep("fetching_serp");
   const { results, allResults, paa } = await fetchSerp(keyword, country, serpKey, provider);
   if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
 
+  await setStep("crawling");
   const settled = await Promise.allSettled(results.map((r) => crawlPage(r.link)));
   const crawled = settled.map((s) => (s.status === "fulfilled" ? s.value : null));
   const pageContents: PageContent[] = [];
@@ -461,6 +481,7 @@ async function createBriefAnalysisPayload(userId: string, input: CreateBriefInpu
     });
   }
 
+  await setStep("analyzing_nlp");
   const nlp = runNLP(pageContents, keyword);
   for (let i = 0; i < enrichedResults.length; i++) {
     const c = crawled[i];
@@ -472,6 +493,7 @@ async function createBriefAnalysisPayload(userId: string, input: CreateBriefInpu
     enrichedResults[i].score = breakdown.total;
   }
 
+  await setStep("scoring");
   const haloscan = haloscanKey ? await fetchHaloscan(keyword, country, haloscanKey) : null;
   const volume = haloscan?.search_volume ?? null;
   let kgr = haloscan?.kgr ?? null;

@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getAuth } from "@/lib/auth";
-import { createBrief } from "@/lib/briefs-service";
+import { createPendingBrief, completeBriefAnalysis } from "@/lib/briefs-service";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
+/**
+ * Création d'un brief depuis l'UI : on insère un brief en pending tout
+ * de suite et on lance l'analyse en background via ctx.waitUntil. Le
+ * frontend reçoit l'id et poll /api/briefs/[id]/progress pour suivre
+ * l'analyse en temps réel.
+ */
 export async function POST(req: Request) {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -18,18 +24,21 @@ export async function POST(req: Request) {
   } | null;
   if (!body?.keyword) return NextResponse.json({ error: "keyword required" }, { status: 400 });
 
-  const res = await createBrief(session.user.id, {
+  const input = {
     keyword: body.keyword,
     country: body.country,
     folderId: body.folderId,
     myUrl: body.myUrl,
-  });
-  if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status });
+  };
+  const created = await createPendingBrief(session.user.id, input);
+  if (!created.ok) return NextResponse.json({ error: created.error }, { status: created.status });
+
+  const { ctx } = getCloudflareContext();
+  ctx.waitUntil(completeBriefAnalysis(created.id, session.user.id, input));
 
   return NextResponse.json({
-    id: res.id,
-    redirect: `/app/briefs/${res.id}`,
-    crawled: res.crawled,
-    total: res.total,
+    id: created.id,
+    status: "pending",
+    redirect: `/app/briefs/${created.id}`,
   });
 }

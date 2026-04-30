@@ -127,6 +127,9 @@ export const brief = sqliteTable("brief", {
   // 'failed'  = l'analyse SERP/crawl a planté
   status: text("status", { enum: ["pending", "ready", "failed"] }).notNull().default("ready"),
   errorMessage: text("error_message"),
+  // Étape courante de l'analyse, pour le suivi temps réel côté UI :
+  // "fetching_serp" → "crawling" → "analyzing_nlp" → "scoring" → "saving".
+  analysisStep: text("analysis_step"),
   // Statut éditorial du brief, distinct du `status` technique ci-dessus.
   // 'pending'     = en attente (créé, pas encore commencé)
   // 'in_progress' = en cours de rédaction

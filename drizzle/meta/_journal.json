@@ -71,6 +71,13 @@
       "when": 1777547283847,
       "tag": "0009_tags_per_client",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1777583169277,
+      "tag": "0011_brief_analysis_step",
+      "breakpoints": true
     }
   ]
 }

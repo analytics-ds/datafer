@@ -13,33 +13,42 @@ const COUNTRIES = [
   { value: "it", label: "Italie" },
 ];
 
-const LOADING_STEPS: Array<{ label: string; sub: string; durationMs: number }> = [
+// L'index correspond à l'ordre d'apparition. Le mapping `analysisStep`
+// reçu du backend (via /api/briefs/[id]/progress) sélectionne l'étape
+// courante. Si le backend n'a encore rien dit, on reste sur 0 (le POST
+// initial vient juste de partir).
+const LOADING_STEPS: Array<{
+  key: string;
+  label: string;
+  sub: string;
+}> = [
   {
+    key: "fetching_serp",
     label: "Récupération du top 10 Google",
     sub: "Interrogation SERP via CrazySerp",
-    durationMs: 4000,
   },
   {
+    key: "crawling",
     label: "Crawl des 10 sites concurrents",
     sub: "Rendering JS via IPs résidentielles (ScrapingBee)",
-    durationMs: 25000,
   },
   {
+    key: "analyzing_nlp",
     label: "Extraction du champ sémantique",
     sub: "TF-IDF + entités nommées",
-    durationMs: 4000,
   },
   {
+    key: "scoring",
     label: "Calcul du score concurrentiel",
     sub: "Scoring détaillé de chaque concurrent",
-    durationMs: 3000,
-  },
-  {
-    label: "Préparation du brief",
-    sub: "Sauvegarde et indexation",
-    durationMs: 2000,
   },
 ];
+
+function stepIndex(analysisStep: string | null): number {
+  if (!analysisStep) return 0;
+  const i = LOADING_STEPS.findIndex((s) => s.key === analysisStep);
+  return i === -1 ? 0 : i;
+}
 
 export function NewBriefForm({
   folders,
@@ -63,20 +72,16 @@ export function NewBriefForm({
     setLoading(true);
     setStep(0);
 
-    // Avance les étapes selon les durées estimées de chacune. C'est un
-    // visuel basé sur des moyennes observées, pas un retour temps réel
-    // du backend (à terme : polling sur un champ analysis_step en BDD).
-    const stepTimers: ReturnType<typeof setTimeout>[] = [];
-    let cumulative = 0;
-    LOADING_STEPS.forEach((s, i) => {
-      cumulative += s.durationMs;
-      if (i < LOADING_STEPS.length - 1) {
-        stepTimers.push(setTimeout(() => setStep(i + 1), cumulative));
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    const stopPolling = () => {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
       }
-    });
-    const clearTimers = () => stepTimers.forEach(clearTimeout);
+    };
 
     try {
+      // 1. POST → renvoie immédiatement l'id (l'analyse tourne en background)
       const res = await fetch("/api/briefs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,18 +92,46 @@ export function NewBriefForm({
           myUrl: myUrl.trim() || null,
         }),
       });
-      clearTimers();
-
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
         setError(j.error ?? `Erreur ${res.status}`);
         setLoading(false);
         return;
       }
-      const j = (await res.json()) as { redirect: string };
-      router.push(j.redirect);
+      const { id } = (await res.json()) as { id: string };
+
+      // 2. Poll progress toutes les 1.5s
+      const poll = async () => {
+        try {
+          const r = await fetch(`/api/briefs/${id}/progress`, { cache: "no-store" });
+          if (r.ok) {
+            const data = (await r.json()) as {
+              status: "pending" | "ready" | "failed";
+              analysisStep: string | null;
+              errorMessage: string | null;
+              redirect: string | null;
+            };
+            setStep(stepIndex(data.analysisStep));
+            if (data.status === "ready" && data.redirect) {
+              stopPolling();
+              router.push(data.redirect);
+              return;
+            }
+            if (data.status === "failed") {
+              stopPolling();
+              setError(data.errorMessage ?? "L'analyse a échoué");
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {
+          // Erreur réseau passagère : on retry au prochain tick
+        }
+        pollTimer = setTimeout(poll, 1500);
+      };
+      pollTimer = setTimeout(poll, 1500);
     } catch (err) {
-      clearTimers();
+      stopPolling();
       setError(err instanceof Error ? err.message : "Erreur inconnue");
       setLoading(false);
     }

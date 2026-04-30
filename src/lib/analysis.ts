@@ -742,16 +742,12 @@ const NOISE_TAGS = new Set([
 ]);
 
 /**
- * Class / id qui signalent une zone non-éditoriale. On reste très
- * conservateur : trop de termes génériques (related, widget, filter)
- * écrasaient des pans entiers de contenu utile sur des sites mal
- * structurés (ex. div class="article-related-section").
- *
- * On garde uniquement les patterns vraiment caractéristiques d'une
- * zone non-content.
+ * Class / id qui signalent une zone non-éditoriale (sidebar, breadcrumb,
+ * filtre produit, popup cookie, social share, listing produits…).
+ * Word boundaries strictes pour éviter de matcher au milieu d'un mot.
  */
 const NOISE_CLASS_RE =
-  /\b(?:cookie-banner|cookie-consent|gdpr-banner|newsletter-signup|skip-link|skip-to-content|main-menu|mega-menu|site-header|site-footer|recently-viewed|breadcrumb-nav)\b/i;
+  /\b(?:cookie[-_]?banner|cookie[-_]?consent|gdpr|newsletter|skip[-_]?link|skip[-_]?to|main[-_]?menu|mega[-_]?menu|nav[-_]?menu|site[-_]?header|site[-_]?footer|recently[-_]viewed|breadcrumb|filter[s]?[-_]|sort[-_]?by|pagination|toolbar|product[-_]?(card|grid|list|tile|teaser)|category[-_]?(list|tile|nav)|cart|wishlist|mini[-_]?cart|product[-_]?count|sidebar|side[-_]?panel|popup|modal|drawer|hero[-_]?banner|promo[-_]?banner|social[-_]?(share|links?))\b/i;
 
 function parseHTML(html: string): PageContent {
   // Si la page contient un <main>/<article> (ou attribut équivalent), on
@@ -785,9 +781,20 @@ function parseHTML(html: string): PageContent {
   // entre dans le main/article. Sinon on collecte dès le départ.
   let collecting = !hasMainRegion;
 
+  // Un vrai paragraphe éditorial fait quasiment toujours plus de 5 mots et
+  // contient une ponctuation. Sous ce seuil c'est presque toujours un
+  // label de filtre / un item de menu / un nom de catégorie, qu'on
+  // n'aurait pas dû extraire. On les rejette.
+  const isMeaningfulParagraph = (t: string): boolean => {
+    if (t.length < 25) return false;
+    const words = t.split(/\s+/).filter(Boolean);
+    if (words.length < 5) return false;
+    return true;
+  };
+
   const flushParagraph = () => {
     const t = currentParagraph.replace(/\s+/g, " ").trim();
-    if (t) {
+    if (t && isMeaningfulParagraph(t)) {
       paragraphs.push(t);
       blocks.push({ tag: "p", text: t });
     }
