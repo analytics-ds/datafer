@@ -148,7 +148,7 @@ export async function createBrief(
         pageContents.push({
           text: r.title + " " + r.snippet,
           h1: [r.title], h2: [], h3: [], outline: [{ level: 1, text: r.title }],
-          headings: 1, paragraphs: 1,
+          headings: 1, paragraphs: 1, structuredHtml: "",
           wordCount: (r.title + " " + r.snippet).split(/\s+/).length,
         });
       }
@@ -442,7 +442,7 @@ async function createBriefAnalysisPayload(userId: string, input: CreateBriefInpu
         pageContents.push({
           text: r.title + " " + r.snippet,
           h1: [r.title], h2: [], h3: [], outline: [{ level: 1, text: r.title }],
-          headings: 1, paragraphs: 1,
+          headings: 1, paragraphs: 1, structuredHtml: "",
           wordCount: (r.title + " " + r.snippet).split(/\s+/).length,
         });
       }

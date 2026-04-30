@@ -41,6 +41,10 @@ export type PageContent = {
   headings: number;
   paragraphs: number;
   wordCount: number;
+  // Reconstitution simple du contenu scrapé en HTML balisé. Conserve
+  // l'ordre du document original (H1, P, H2, P, H3, P…) pour qu'on
+  // puisse l'afficher en éditeur ou faire des comparaisons concurrentielles.
+  structuredHtml: string;
 };
 
 export type NlpTerm = {
@@ -695,12 +699,16 @@ const NOISE_TAGS = new Set([
 ]);
 
 /**
- * Class / id qui signalent une zone non-éditoriale (sidebar, breadcrumb,
- * filtre produit, popup cookie, social share…). On match large mais avec
- * des word boundaries pour ne pas attraper « narrative » via "nav".
+ * Class / id qui signalent une zone non-éditoriale. On reste très
+ * conservateur : trop de termes génériques (related, widget, filter)
+ * écrasaient des pans entiers de contenu utile sur des sites mal
+ * structurés (ex. div class="article-related-section").
+ *
+ * On garde uniquement les patterns vraiment caractéristiques d'une
+ * zone non-content.
  */
 const NOISE_CLASS_RE =
-  /\b(?:menu|navbar|navigation|sidebar|breadcrumb|cookie|newsletter|share|socials?|related|comments?|advert|ads?|popup|modal|search-form|filter[s_-]|sponsor|widget|dropdown|tooltip|skip-link|skip-to|cart|wishlist|recently[-_]viewed)\b/i;
+  /\b(?:cookie-banner|cookie-consent|gdpr-banner|newsletter-signup|skip-link|skip-to-content|main-menu|mega-menu|site-header|site-footer|recently-viewed|breadcrumb-nav)\b/i;
 
 function parseHTML(html: string): PageContent {
   // Si la page contient un <main>/<article> (ou attribut équivalent), on
@@ -711,6 +719,10 @@ function parseHTML(html: string): PageContent {
 
   const headings: Heading[] = [];
   const paragraphs: string[] = []; // textes extraits par paragraphe
+  // Blocs structurés dans l'ordre du document pour reconstituer un HTML
+  // propre balisé (utile pour l'affichage côté client et la comparaison
+  // concurrentielle).
+  const blocks: Array<{ tag: "h1" | "h2" | "h3" | "p"; text: string }> = [];
   let currentHeading: { level: 1 | 2 | 3; text: string } | null = null;
   let currentParagraph = "";
   let pCount = 0;
@@ -732,7 +744,10 @@ function parseHTML(html: string): PageContent {
 
   const flushParagraph = () => {
     const t = currentParagraph.replace(/\s+/g, " ").trim();
-    if (t) paragraphs.push(t);
+    if (t) {
+      paragraphs.push(t);
+      blocks.push({ tag: "p", text: t });
+    }
     currentParagraph = "";
   };
 
@@ -756,6 +771,14 @@ function parseHTML(html: string): PageContent {
 
         // Tag noise → on entre dans une zone à ignorer.
         if (NOISE_TAGS.has(lower)) {
+          noiseStack.push(depth);
+          return;
+        }
+
+        // Liens internes (table des matières, anchor jumps) : on ignore
+        // leur texte, sinon on récupère 2× les titres (TOC + heading
+        // réel) et le contenu paraît bordélique.
+        if (lower === "a" && (attrs.href ?? "").startsWith("#")) {
           noiseStack.push(depth);
           return;
         }
@@ -808,6 +831,10 @@ function parseHTML(html: string): PageContent {
             // Le texte du heading nourrit aussi le corpus global
             // (utile pour la NLP / TF-IDF).
             paragraphs.push(t);
+            blocks.push({
+              tag: lower as "h1" | "h2" | "h3",
+              text: t,
+            });
           }
           currentHeading = null;
         }
@@ -840,6 +867,15 @@ function parseHTML(html: string): PageContent {
   const text = paragraphs.join(" ").replace(/\s+/g, " ").trim();
   const wordCount = text.split(/\s+/).filter(Boolean).length;
 
+  const escapeHtml = (s: string) =>
+    s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  const structuredHtml = blocks
+    .map((b) => `<${b.tag}>${escapeHtml(b.text)}</${b.tag}>`)
+    .join("\n");
+
   return {
     text,
     h1,
@@ -849,6 +885,7 @@ function parseHTML(html: string): PageContent {
     headings: headings.length,
     paragraphs: pCount || paragraphs.length,
     wordCount,
+    structuredHtml,
   };
 }
 

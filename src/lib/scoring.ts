@@ -19,10 +19,16 @@ const GEO_WEIGHT = 0.1;
  * "moto electrique" matchent la même chose. Google fait pareil en SERP.
  */
 function normalize(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
+  return (
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      // Apostrophes typographiques et droites → espaces. Sans ça
+      // « d'électrostimulation » bloquait le matching mot-à-mot
+      // (pas d'espace entre l'apostrophe et le mot suivant).
+      .replace(/['']/g, " ")
+  );
 }
 
 function escapeRegex(s: string): string {
@@ -75,13 +81,14 @@ function frenchStem(word: string): string {
 export function buildKeywordRegex(keyword: string): RegExp {
   const words = normalize(keyword).split(/\s+/).filter(Boolean);
   if (words.length === 0) return /(?!.*)/g;
-  // 5 lettres de tolérance pour absorber les suffixes longs ("iques",
-  // "ements"…) tout en limitant les faux positifs.
-  const patterns = words.map((w) => `${escapeRegex(frenchStem(w))}[a-z]{0,5}`);
+  // [a-z]* : tolérance illimitée pour les suffixes (« kine »
+  // → « kinesitherapeutes »). Faux positifs marginaux acceptables :
+  // un keyword court comme « kine » peut matcher « kinema », mais ces
+  // mots sont rares en pratique et le gain de couverture est largement
+  // supérieur (matche genre/nombre + dérivés du même radical).
+  const patterns = words.map((w) => `${escapeRegex(frenchStem(w))}[a-z]*`);
   // Entre les termes du keyword on autorise jusqu'à 2 mots interposés :
-  // « meilleur transport » matche aussi « meilleure entreprise transport »
-  // ou « meilleurs trains de transport ». Au-delà la corrélation
-  // sémantique devient trop faible.
+  // « meilleur transport » matche aussi « meilleure entreprise transport ».
   const between = `(?:\\s+[a-z'-]+){0,2}\\s+`;
   return new RegExp(`\\b${patterns.join(between)}\\b`, "gi");
 }
