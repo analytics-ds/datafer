@@ -216,19 +216,18 @@ async function fetchSerpFromCrazyserp(
     link: "",
   }));
 
-  // Si moins de 10 résultats sur la page 1, on pagine pour atteindre 10.
-  // Au-delà on s'arrête : économie de crédits, et le top 10 suffit à la
-  // NLP et au crawl.
-  let page = 2;
-  let attempts = 0;
-  while (allOrganic.length < 10 && attempts < 2) {
-    attempts++;
-    const next = await fetchCrazyserpPage(keyword, country, apiKey, page);
-    if (!next) break;
-    const more = next.parsed_data?.organic ?? [];
-    if (more.length === 0) break;
-    allOrganic = [...allOrganic, ...more];
-    page++;
+  // Particularité CrazySerp : `page=N` est cumulatif et coûte N crédits
+  // (pas incrémental). Donc page=1 puis page=2 = 1+2 = 3 crédits, pas 2.
+  // On ne re-fetch que si on a vraiment trop peu de résultats (< 7) :
+  // 7-9 organiques suffisent à la NLP et économisent des crédits.
+  if (allOrganic.length < 7) {
+    const next = await fetchCrazyserpPage(keyword, country, apiKey, 2);
+    if (next) {
+      const more = next.parsed_data?.organic ?? [];
+      if (more.length > allOrganic.length) {
+        allOrganic = more;
+      }
+    }
   }
 
   const allResults: SerpResult[] = allOrganic.map((r, i) => ({
