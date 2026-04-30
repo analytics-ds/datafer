@@ -12,6 +12,12 @@ import type {
   Entity,
 } from "@/lib/analysis";
 import { computeDetailedScore, type DetailedScore } from "@/lib/scoring";
+import {
+  extractGeoSignals,
+  EMPTY_GEO_SIGNALS,
+  GEO_LABELS,
+  type GeoSignals,
+} from "@/lib/geo-scoring";
 import { faviconUrl } from "@/lib/favicon";
 import { EditorToolbar } from "./toolbar";
 import { ShareBriefPanel } from "../share-brief-panel";
@@ -140,6 +146,7 @@ export function BriefEditor(props: BriefEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("editor");
   const [editorData, setEditorData] = useState({ text: "", h1s: [] as string[], h2s: [] as string[], h3s: [] as string[] });
+  const [geoSignals, setGeoSignals] = useState<GeoSignals>(EMPTY_GEO_SIGNALS);
   const [currentTag, setCurrentTag] = useState<"h1" | "h2" | "h3" | "p" | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -160,6 +167,7 @@ export function BriefEditor(props: BriefEditorProps) {
     const h2s = [...el.querySelectorAll("h2")].map((h) => (h.textContent || "").trim()).filter(Boolean);
     const h3s = [...el.querySelectorAll("h3")].map((h) => (h.textContent || "").trim()).filter(Boolean);
     setEditorData({ text, h1s, h2s, h3s });
+    setGeoSignals(extractGeoSignals(el));
     updateCurrentTag();
   }, []);
 
@@ -180,7 +188,10 @@ export function BriefEditor(props: BriefEditorProps) {
     setCurrentTag(tag as "h1" | "h2" | "h3" | "p" | null);
   }, []);
 
-  const score: DetailedScore = useMemo(() => computeDetailedScore(editorData, nlp), [editorData, nlp]);
+  const score: DetailedScore = useMemo(
+    () => computeDetailedScore(editorData, nlp, geoSignals),
+    [editorData, nlp, geoSignals],
+  );
 
   // Debounced save
   useEffect(() => {
@@ -622,9 +633,22 @@ function EditorSidebar({
             <span className="text-[10px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] mt-[2px]">/ 100</span>
           </div>
         </div>
-        <div className="flex flex-col gap-[4px] min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">Score SEO</span>
-          <span className="text-[13px] font-semibold leading-tight">{scoreHint}</span>
+        <div className="flex flex-col gap-[4px] min-w-0 flex-1">
+          <span className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">Score SEO + GEO</span>
+          <span className="text-[13px] font-semibold leading-tight mb-[4px]">{scoreHint}</span>
+          <div className="flex items-center gap-3 text-[11px] text-[var(--text-secondary)]">
+            <span>
+              <span className="text-[var(--text-muted)]">SEO</span>{" "}
+              <span className="font-[family-name:var(--font-mono)] font-semibold text-[var(--text)]">{score.seoTotal}</span>
+              <span className="text-[var(--text-muted)]">/100</span>
+            </span>
+            <span className="w-px h-3 bg-[var(--border)]" />
+            <span>
+              <span className="text-[var(--text-muted)]">GEO</span>{" "}
+              <span className="font-[family-name:var(--font-mono)] font-semibold text-[var(--text)]">{score.geoTotal}</span>
+              <span className="text-[var(--text-muted)]">/100</span>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -639,8 +663,20 @@ function EditorSidebar({
         folderWebsite={folderWebsite}
       />
 
+      {/* Score GEO : 5 critères de structure pour les LLMs (Perplexity, ChatGPT…) */}
+      <Section title="Score GEO" dotColor="var(--purple)" collapsible defaultOpen={false}>
+        <p className="text-[11px] text-[var(--text-muted)] mb-[10px] leading-[1.4]">
+          Patterns appréciés par les moteurs génératifs (LLMs) pour citer ton contenu comme source.
+        </p>
+        <GeoCriterionRow label={GEO_LABELS.table} c={score.geo.table} />
+        <GeoCriterionRow label={GEO_LABELS.bulletList} c={score.geo.bulletList} />
+        <GeoCriterionRow label={GEO_LABELS.quickSummary} c={score.geo.quickSummary} />
+        <GeoCriterionRow label={GEO_LABELS.faq} c={score.geo.faq} />
+        <GeoCriterionRow label={GEO_LABELS.statistics} c={score.geo.statistics} last />
+      </Section>
+
       {/* Sub-scores */}
-      <Section title="Score détaillé" dotColor="var(--bg-black)" collapsible defaultOpen={false}>
+      <Section title="Score détaillé SEO" dotColor="var(--bg-black)" collapsible defaultOpen={false}>
         {subItems.map((i) => {
           const pct = Math.round((i.s.score / i.s.max) * 100);
           const valColor = pct >= 70 ? "var(--green)" : pct >= 40 ? "var(--orange)" : "var(--red)";
@@ -1076,6 +1112,39 @@ function BenchRow({ label, value, last }: { label: string; value: string; last?:
     <div className={`flex justify-between py-[7px] text-[12px] ${last ? "" : "border-b border-[var(--border)]"}`}>
       <span className="text-[var(--text-secondary)]">{label}</span>
       <span className="font-[family-name:var(--font-mono)] font-semibold">{value}</span>
+    </div>
+  );
+}
+
+function GeoCriterionRow({
+  label,
+  c,
+  last,
+}: {
+  label: string;
+  c: { ok: boolean; score: number; max: number };
+  last?: boolean;
+}) {
+  const pct = Math.round((c.score / c.max) * 100);
+  const color = c.ok ? "var(--green)" : pct > 0 ? "var(--orange)" : "var(--text-muted)";
+  return (
+    <div className={`flex items-center gap-2 py-[7px] text-[12px] ${last ? "" : "border-b border-[var(--border)]"}`}>
+      <span
+        className="inline-flex items-center justify-center w-4 h-4 rounded-full shrink-0"
+        style={{ background: c.ok ? "var(--green-bg)" : "var(--bg-warm)", color }}
+      >
+        {c.ok ? (
+          <svg width="9" height="9" viewBox="0 0 20 20" fill="none">
+            <path d="M4 11l4 4 8-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : (
+          <span className="w-[6px] h-[6px] rounded-full" style={{ background: color }} />
+        )}
+      </span>
+      <span className="flex-1 text-[var(--text-secondary)]">{label}</span>
+      <span className="font-[family-name:var(--font-mono)] text-[11px] font-semibold" style={{ color }}>
+        {c.score}/{c.max}
+      </span>
     </div>
   );
 }

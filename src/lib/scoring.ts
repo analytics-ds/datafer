@@ -1,8 +1,15 @@
 /**
- * Scoring /100 sur 7 critères, porté depuis seo-forge-v4.html.
- * Exécuté côté client à chaque édition pour un feedback temps réel.
+ * Scoring /100 combinant SEO classique et GEO (Generative Engine Opt.).
+ *
+ * Total = 0.8 * score SEO + 0.2 * score GEO. Le SEO reste l'essentiel et
+ * GEO valorise les patterns appréciés par les LLMs (table, listes, TL;DR,
+ * FAQ, données chiffrées). Exécuté côté client à chaque édition.
  */
 import type { NlpResult } from "./analysis";
+import { computeGeoScore, EMPTY_GEO_SIGNALS, type GeoScore, type GeoSignals } from "./geo-scoring";
+
+const SEO_WEIGHT = 0.8;
+const GEO_WEIGHT = 0.2;
 
 /**
  * Normalisation lowercase + suppression des diacritiques (accents).
@@ -30,7 +37,9 @@ export type ScoreCriterion = {
 };
 
 export type DetailedScore = {
-  total: number;
+  total: number;       // /100, combiné SEO+GEO
+  seoTotal: number;    // /100, juste SEO
+  geoTotal: number;    // /100, juste GEO
   keyword: ScoreCriterion;
   nlpCoverage: ScoreCriterion;
   contentLength: ScoreCriterion;
@@ -38,10 +47,13 @@ export type DetailedScore = {
   placement: ScoreCriterion;
   structure: ScoreCriterion;
   quality: ScoreCriterion;
+  geo: GeoScore;
 };
 
 const EMPTY: DetailedScore = {
   total: 0,
+  seoTotal: 0,
+  geoTotal: 0,
   keyword: { score: 0, max: 15, details: {} },
   nlpCoverage: { score: 0, max: 20, details: {} },
   contentLength: { score: 0, max: 12, details: {} },
@@ -49,14 +61,19 @@ const EMPTY: DetailedScore = {
   placement: { score: 0, max: 15, details: {} },
   structure: { score: 0, max: 10, details: {} },
   quality: { score: 0, max: 10, details: {} },
+  geo: computeGeoScore(EMPTY_GEO_SIGNALS),
 };
 
 export function computeDetailedScore(
   ed: EditorData,
   nlp: NlpResult | null,
+  geoSignals: GeoSignals = EMPTY_GEO_SIGNALS,
 ): DetailedScore {
+  const geo = computeGeoScore(geoSignals);
   const r: DetailedScore = {
     total: 0,
+    seoTotal: 0,
+    geoTotal: geo.total,
     keyword: { score: 0, max: 15, details: {} },
     nlpCoverage: { score: 0, max: 20, details: {} },
     contentLength: { score: 0, max: 12, details: {} },
@@ -64,8 +81,14 @@ export function computeDetailedScore(
     placement: { score: 0, max: 15, details: {} },
     structure: { score: 0, max: 10, details: {} },
     quality: { score: 0, max: 10, details: {} },
+    geo,
   };
-  if (!nlp?.nlpTerms) return r;
+  if (!nlp?.nlpTerms) {
+    // Sans NLP on ne peut pas calculer le SEO ; on remonte quand même
+    // le score GEO car il dépend uniquement du contenu rédigé.
+    r.total = Math.round(geo.total * GEO_WEIGHT);
+    return r;
+  }
 
   const text = ed.text;
   const words = text.trim().split(/\s+/).filter(Boolean);
@@ -225,7 +248,7 @@ export function computeDetailedScore(
     r.quality.details = { diversity: Math.round(div * 100) };
   }
 
-  r.total = Math.min(
+  r.seoTotal = Math.min(
     100,
     r.keyword.score +
       r.nlpCoverage.score +
@@ -234,6 +257,10 @@ export function computeDetailedScore(
       r.placement.score +
       r.structure.score +
       r.quality.score,
+  );
+  r.total = Math.min(
+    100,
+    Math.round(r.seoTotal * SEO_WEIGHT + r.geoTotal * GEO_WEIGHT),
   );
   return r;
 }
