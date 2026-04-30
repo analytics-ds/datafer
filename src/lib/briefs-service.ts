@@ -456,8 +456,20 @@ async function createBriefAnalysisPayload(
   const { results, allResults, paa } = await fetchSerp(keyword, country, serpKey, provider);
   if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
 
-  await setStep("crawling");
-  const settled = await Promise.allSettled(results.map((r) => crawlPage(r.link)));
+  await setStep(`crawling:0/${results.length}`);
+  // Compteur live partagé : on update analysisStep dès qu'un site
+  // termine son crawl (success ou échec). L'UI poll et voit X/10
+  // monter en temps réel.
+  let done = 0;
+  const settled = await Promise.allSettled(
+    results.map(async (r) => {
+      const c = await crawlPage(r.link);
+      done++;
+      // best-effort, on s'en fiche si l'update DB échoue ponctuellement
+      void setStep(`crawling:${done}/${results.length}`);
+      return c;
+    }),
+  );
   const crawled = settled.map((s) => (s.status === "fulfilled" ? s.value : null));
   const pageContents: PageContent[] = [];
   const enrichedResults: SerpResult[] = results.map((r, i) => {
@@ -542,6 +554,7 @@ async function createBriefAnalysisPayload(
   }
 
   const initialScore = myInitialScore ?? scoreFromNlp(0, 0);
+  await setStep("saving");
 
   return {
     ok: true,

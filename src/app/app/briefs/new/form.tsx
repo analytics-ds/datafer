@@ -40,14 +40,29 @@ const LOADING_STEPS: Array<{
   {
     key: "scoring",
     label: "Calcul du score concurrentiel",
-    sub: "Scoring détaillé de chaque concurrent",
+    sub: "Scoring détaillé de chaque concurrent + position SERP",
+  },
+  {
+    key: "saving",
+    label: "Préparation du brief",
+    sub: "Génération de l'éditeur et écriture en base",
   },
 ];
 
 function stepIndex(analysisStep: string | null): number {
   if (!analysisStep) return 0;
-  const i = LOADING_STEPS.findIndex((s) => s.key === analysisStep);
+  // Le crawl peut envoyer "crawling:3/10", on extrait juste la clé.
+  const key = analysisStep.split(":")[0];
+  const i = LOADING_STEPS.findIndex((s) => s.key === key);
   return i === -1 ? 0 : i;
+}
+
+/** Extrait le compteur "X/Y" d'un analysisStep type "crawling:3/10". */
+function stepProgress(analysisStep: string | null): { done: number; total: number } | null {
+  if (!analysisStep) return null;
+  const m = analysisStep.match(/:(\d+)\/(\d+)$/);
+  if (!m) return null;
+  return { done: Number(m[1]), total: Number(m[2]) };
 }
 
 export function NewBriefForm({
@@ -64,6 +79,7 @@ export function NewBriefForm({
   const [myUrl, setMyUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
+  const [progressLabel, setProgressLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
@@ -112,6 +128,8 @@ export function NewBriefForm({
               redirect: string | null;
             };
             setStep(stepIndex(data.analysisStep));
+            const p = stepProgress(data.analysisStep);
+            setProgressLabel(p ? `${p.done}/${p.total} sites traités` : null);
             if (data.status === "ready" && data.redirect) {
               stopPolling();
               router.push(data.redirect);
@@ -260,7 +278,11 @@ export function NewBriefForm({
                     >
                       {s.label}
                     </span>
-                    <span className="text-[11px] text-[var(--text-muted)]">{s.sub}</span>
+                    <span className="text-[11px] text-[var(--text-muted)]">
+                      {state === "current" && progressLabel && s.key === "crawling"
+                        ? progressLabel
+                        : s.sub}
+                    </span>
                   </div>
                 </li>
               );
