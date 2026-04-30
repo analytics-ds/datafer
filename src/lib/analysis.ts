@@ -583,28 +583,27 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
 }
 
 /**
- * Tente Browser Rendering puis ScrapingBee, retourne le meilleur
- * résultat. `baseline` = ce qu'on a déjà (peut être null) : on ne le
- * remplace que si on fait strictement mieux en wordCount.
+ * Tente ScrapingBee directement (IP résidentielles, ~2-3s) en priorité.
+ * `baseline` = ce qu'on a déjà (peut être null) : on ne le remplace que
+ * si on fait strictement mieux en wordCount.
+ *
+ * Cloudflare Browser Rendering reste appelable via crawlWithBrowser mais
+ * n'est plus utilisé dans la cascade par défaut : le free tier (10 min/jour)
+ * s'épuise vite et BR ne contourne pas les WAF que ScrapingBee passe
+ * (Akamai, Cloudflare strict). On garde le code disponible pour usage
+ * futur (genre quota ScrapingBee épuisé), mais la stratégie courante est
+ * fetch direct → ScrapingBee.
  */
 async function escalateCrawl(
   url: string,
   baseline: PageContent | null,
 ): Promise<PageContent | null> {
-  // Niveau 2 : Cloudflare Browser Rendering
-  const brHtml = await crawlWithBrowser(url);
   let best = baseline;
-  if (brHtml && !looksLikeChallengePage(brHtml)) {
-    const parsed = parseHTML(brHtml);
-    if (parsed.wordCount >= 100 && (!best || parsed.wordCount > best.wordCount)) {
-      best = parsed;
-    }
-  }
-  if (best && best.wordCount >= 200) return best;
 
-  // Niveau 3 : ScrapingBee (IP résidentielle, contourne les WAF stricts)
+  // Niveau 2 : ScrapingBee (proxy résidentiel, rapide, fiable, payant
+  // après 1000 crédits free)
   const sbHtml = await crawlWithScrapingBee(url);
-  if (sbHtml) {
+  if (sbHtml && !looksLikeChallengePage(sbHtml)) {
     const parsed = parseHTML(sbHtml);
     if (parsed.wordCount >= 100 && (!best || parsed.wordCount > best.wordCount)) {
       best = parsed;
