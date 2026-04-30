@@ -536,6 +536,18 @@ const GOOGLEBOT_UA =
  * Le browser rendering coûte du temps de quota (10 min/jour en free tier),
  * on ne l'active que pour les pages réellement bloquées.
  */
+/**
+ * Stratégie de crawl en 3 niveaux (option C hybride) :
+ *
+ *   1. fetch direct avec UA Googlebot (rapide, gratuit, ~80% des sites)
+ *   2. Cloudflare Browser Rendering (~5-15s, gratuit 10min/jour, passe
+ *      les sites SPA et certains WAF moyens)
+ *   3. ScrapingBee avec IP résidentielle (payant, passe les sites
+ *      tier-1 type FAGUO/Akamai où Cloudflare BR rend une page challenge)
+ *
+ * On ne descend dans les niveaux suivants que si nécessaire pour
+ * économiser quota/coût.
+ */
 export async function crawlPage(url: string): Promise<PageContent | null> {
   // 1. Tentative fetch direct
   try {
@@ -553,28 +565,96 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
       const html = await r.text();
       const truncated = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
       const parsed = parseHTML(truncated);
-      // Sites SPA ou pages de challenge Cloudflare : 200 OK mais contenu
-      // quasi-vide (< 100 mots utiles). Dans ce cas on retombe sur le
-      // browser rendering pour récupérer la version rendue.
-      if (parsed.wordCount < 100 || looksLikeChallengePage(truncated)) {
-        const rendered = await crawlWithBrowser(url);
-        if (rendered) {
-          const reparsed = parseHTML(rendered);
-          if (reparsed.wordCount > parsed.wordCount) return reparsed;
-        }
+      // Si la page semble bonne, on s'arrête là (économie quotas).
+      if (parsed.wordCount >= 100 && !looksLikeChallengePage(truncated)) {
+        return parsed;
       }
-      return parsed;
+      // Sinon on escalade au niveau 2 puis 3.
+      const upgraded = await escalateCrawl(url, parsed);
+      return upgraded ?? parsed;
     }
-    // Status 403/429/503 = WAF anti-bot probable, on tente le fallback browser.
     if (r.status === 403 || r.status === 429 || r.status === 503) {
-      const html = await crawlWithBrowser(url);
-      if (html && !looksLikeChallengePage(html)) return parseHTML(html);
+      return (await escalateCrawl(url, null)) ?? null;
     }
     return null;
   } catch {
-    // Timeout / TLS error / DNS : on tente quand même le browser
-    const html = await crawlWithBrowser(url);
-    if (html && !looksLikeChallengePage(html)) return parseHTML(html);
+    return (await escalateCrawl(url, null)) ?? null;
+  }
+}
+
+/**
+ * Tente Browser Rendering puis ScrapingBee, retourne le meilleur
+ * résultat. `baseline` = ce qu'on a déjà (peut être null) : on ne le
+ * remplace que si on fait strictement mieux en wordCount.
+ */
+async function escalateCrawl(
+  url: string,
+  baseline: PageContent | null,
+): Promise<PageContent | null> {
+  // Niveau 2 : Cloudflare Browser Rendering
+  const brHtml = await crawlWithBrowser(url);
+  let best = baseline;
+  if (brHtml && !looksLikeChallengePage(brHtml)) {
+    const parsed = parseHTML(brHtml);
+    if (parsed.wordCount >= 100 && (!best || parsed.wordCount > best.wordCount)) {
+      best = parsed;
+    }
+  }
+  if (best && best.wordCount >= 200) return best;
+
+  // Niveau 3 : ScrapingBee (IP résidentielle, contourne les WAF stricts)
+  const sbHtml = await crawlWithScrapingBee(url);
+  if (sbHtml) {
+    const parsed = parseHTML(sbHtml);
+    if (parsed.wordCount >= 100 && (!best || parsed.wordCount > best.wordCount)) {
+      best = parsed;
+    }
+  }
+  return best;
+}
+
+/**
+ * Niveau 3 : ScrapingBee REST API. Utilise des IPs résidentielles et
+ * peut activer le rendering JS, ce qui contourne les WAF stricts type
+ * Akamai. Plan free : 1000 crédits offerts.
+ *
+ * Endpoint : GET https://app.scrapingbee.com/api/v1/
+ *
+ * Retourne null si la clé n'est pas configurée ou si la requête échoue.
+ */
+async function crawlWithScrapingBee(url: string): Promise<string | null> {
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const env = getCloudflareContext().env as unknown as Record<
+      string,
+      string | undefined
+    >;
+    const apiKey = env.SCRAPINGBEE_KEY;
+    if (!apiKey) return null;
+
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      url,
+      render_js: "true",
+      premium_proxy: "true",
+      country_code: "fr",
+      // wait_browser : attend que le DOM soit stable (équivalent
+      // networkidle0). Important pour les SPA.
+      wait_browser: "domcontentloaded",
+      block_resources: "false",
+    });
+    const r = await fetch(`https://app.scrapingbee.com/api/v1/?${params.toString()}`, {
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!r.ok) {
+      console.log("[scrapingbee] http error", { url, status: r.status });
+      return null;
+    }
+    const html = await r.text();
+    console.log("[scrapingbee] ok", { url, htmlLength: html.length });
+    return html;
+  } catch (e) {
+    console.log("[scrapingbee] exception", { url, err: String(e) });
     return null;
   }
 }

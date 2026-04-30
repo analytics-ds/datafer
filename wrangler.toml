@@ -27,3 +27,4 @@ CF_ACCOUNT_ID = "e0dd71e4cd791925c9b37a85496aa259"
 # - SERPAPI_KEY              (serpapi.com, provider de fallback)
 # - HALOSCAN_KEY             (haloscan JWT)
 # - CF_BROWSER_TOKEN         (Cloudflare API token, perm. "Browser Rendering: Edit")
+# - SCRAPINGBEE_KEY          (scrapingbee.com, fallback niveau 3 IP résidentielles)
