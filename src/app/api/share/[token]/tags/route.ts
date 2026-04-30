@@ -7,8 +7,8 @@ import { createTag, TAG_COLORS } from "@/lib/tags-service";
 export const dynamic = "force-dynamic";
 
 /**
- * Création d'un tag depuis la vue partagée /share/<token>.
- * Auth : token de partage. Le tag créé est marqué `source: 'client'`.
+ * Création d'un tag depuis la vue partagée /share/<token>. Le tag est
+ * automatiquement scopé au folder partagé (Faguo crée chez Faguo).
  */
 export async function POST(
   req: Request,
@@ -32,7 +32,9 @@ export async function POST(
     .limit(1);
   if (!folder) return NextResponse.json({ error: "invalid token" }, { status: 404 });
 
-  const res = await createTag(body.name, body.color, "client");
+  const res = await createTag(folder.id, body.name, body.color, "client");
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
-  return NextResponse.json({ tag: res.tag });
+  return NextResponse.json({
+    tag: { id: res.tag.id, name: res.tag.name, color: res.tag.color },
+  });
 }

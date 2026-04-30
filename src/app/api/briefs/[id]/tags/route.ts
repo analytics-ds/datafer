@@ -27,7 +27,8 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   if (!body?.tagId) return NextResponse.json({ error: "bad body" }, { status: 400 });
   if (!(await assertAccess(id))) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  await attachTagToBrief(id, body.tagId);
+  const res = await attachTagToBrief(id, body.tagId);
+  if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
   return NextResponse.json({ ok: true });
 }
 

@@ -64,6 +64,13 @@
       "when": 1777543003995,
       "tag": "0008_stiff_centennial",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1777547283847,
+      "tag": "0009_tags_per_client",
+      "breakpoints": true
     }
   ]
 }

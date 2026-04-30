@@ -11,8 +11,9 @@ import { FavoriteButton } from "../favorite-button";
 import { SharePanel } from "../share-panel";
 import { DeleteFolderButton } from "../delete-folder";
 import { BriefCard } from "../../briefs/brief-card";
-import { listAllTags, listTagsForBriefs } from "@/lib/tags-service";
+import { listTagsForBriefs, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "../../briefs/workflow-status";
+import { TagsPanel } from "./tags-panel";
 
 export default async function FolderDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -64,10 +65,13 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
       .select({ id: client.id, name: client.name, website: client.website })
       .from(client)
       .orderBy(asc(client.name)),
-    listAllTags(),
+    // Tags scopés à ce folder uniquement : c'est le seul scope visible ici.
+    listTagsForClient(folder.id),
   ]);
 
   const tagsByBrief = await listTagsForBriefs(briefs.map((b) => b.id));
+  // Le SearchableBriefList attend des tags scopés ; on injecte clientId.
+  const scopedAvailableTags = availableTags.map((t) => ({ ...t, clientId: folder.id }));
 
   return (
     <div className="px-10 py-10 max-w-[1100px]">
@@ -100,6 +104,12 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
         }
       />
 
+      <TagsPanel
+        folderId={folder.id}
+        folderName={folder.name}
+        initialTags={availableTags}
+      />
+
       {briefs.length === 0 ? (
         <EmptyState
           title="Aucun brief pour ce client"
@@ -113,7 +123,7 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
             <BriefCard
               key={b.id}
               folders={folders}
-              availableTags={availableTags}
+              availableTags={scopedAvailableTags.map((t) => ({ id: t.id, name: t.name, color: t.color }))}
               brief={{
                 id: b.id,
                 keyword: b.keyword,

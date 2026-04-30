@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 // ─── Better-auth tables (names must match better-auth defaults) ──────────────
@@ -138,17 +138,23 @@ export const brief = sqliteTable("brief", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
-// Tags globaux au workspace (datashake). Visibles par tous les users
-// authentifiés et par les clients via leur lien de partage.
-export const tag = sqliteTable("tag", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  color: text("color").notNull(),
-  // Trace l'origine : 'agency' (créé en backoffice) ou 'client' (créé via
-  // un lien /share/<token>). Permet de distinguer dans l'UI si besoin.
-  source: text("source", { enum: ["agency", "client"] }).notNull().default("agency"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
-});
+// Tags scopés par client (folder). Le tag "saison hiver" de Faguo n'existe
+// que dans l'écosystème Faguo. Unique sur (client_id, name) pour qu'un
+// même nom puisse réapparaître chez un autre client.
+export const tag = sqliteTable(
+  "tag",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id").notNull().references(() => client.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color").notNull(),
+    // Trace l'origine : 'agency' (créé en backoffice) ou 'client' (créé via
+    // un lien /share/<token>). Permet de distinguer dans l'UI si besoin.
+    source: text("source", { enum: ["agency", "client"] }).notNull().default("agency"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (t) => [uniqueIndex("tag_client_name_unique").on(t.clientId, t.name)],
+);
 
 // M2M brief ↔ tag.
 export const briefTag = sqliteTable(

@@ -4,7 +4,7 @@ import { getDb } from "@/db";
 import { brief, client } from "@/db/schema";
 import { faviconUrl } from "@/lib/favicon";
 import type { HaloscanOverview } from "@/lib/analysis";
-import { listAllTags, listTagsForBriefs } from "@/lib/tags-service";
+import { listTagsForBriefs, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
 import { SharedBriefList, type SharedBriefRow } from "./shared-brief-list";
 
@@ -41,7 +41,7 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
 
   const [tagsByBrief, availableTags] = await Promise.all([
     listTagsForBriefs(rows.map((r) => r.id)),
-    listAllTags(),
+    listTagsForClient(folder.id),
   ]);
 
   // KD (difficulty) n'a pas de colonne dédiée : on le lit depuis le snapshot

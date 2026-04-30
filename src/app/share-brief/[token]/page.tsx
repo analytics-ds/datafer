@@ -4,7 +4,7 @@ import { getDb } from "@/db";
 import { brief, client } from "@/db/schema";
 import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
 import { BriefEditor } from "@/app/app/briefs/[id]/brief-editor";
-import { listAllTags, listTagsForBrief } from "@/lib/tags-service";
+import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +35,7 @@ export default async function SharedSingleBriefPage({
 
   const [initialTags, availableTags] = await Promise.all([
     listTagsForBrief(b.id),
-    listAllTags(),
+    b.clientId ? listTagsForClient(b.clientId) : Promise.resolve([]),
   ]);
 
   return (

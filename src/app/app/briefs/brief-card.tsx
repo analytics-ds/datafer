@@ -113,7 +113,7 @@ export function BriefCard({
   }
 
   async function onCreateTag(name: string, color: string): Promise<TagDTO | null> {
-    const res = await createTagAction(name, color);
+    const res = await createTagAction(brief.id, name, color);
     if (!res.ok) return null;
     setTags((curr) => (curr.some((x) => x.id === res.tag.id) ? curr : [...curr, res.tag]));
     const attach = await attachTagAction(brief.id, res.tag.id);
@@ -190,6 +190,11 @@ export function BriefCard({
             onDetach={onDetachTag}
             onCreate={onCreateTag}
             size="sm"
+            disabledReason={
+              brief.folder
+                ? null
+                : "Rattache le brief à un client pour ajouter des tags."
+            }
           />
         </div>
       </div>

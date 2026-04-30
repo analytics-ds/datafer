@@ -6,7 +6,7 @@ import { brief, client } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
 import { BriefEditor } from "./brief-editor";
-import { listAllTags, listTagsForBrief } from "@/lib/tags-service";
+import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "../workflow-status";
 
 export default async function BriefDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -32,7 +32,9 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
 
   const [initialTags, availableTags] = await Promise.all([
     listTagsForBrief(b.id),
-    listAllTags(),
+    // Tags scopés au client du brief : impossible d'attacher un tag d'un
+    // autre client. Si le brief n'a pas de client, pas de tags possibles.
+    b.clientId ? listTagsForClient(b.clientId) : Promise.resolve([]),
   ]);
 
   return (

@@ -5,6 +5,8 @@ import { BriefCard, type BriefCardData, type FolderOption } from "./brief-card";
 import { FilterBar, EMPTY_FILTERS, type FilterState } from "./filter-bar";
 import type { TagDTO } from "./tag-picker";
 
+export type ScopedTag = TagDTO & { clientId: string };
+
 export function SearchableBriefList({
   briefs,
   folders,
@@ -12,14 +14,34 @@ export function SearchableBriefList({
 }: {
   briefs: BriefCardData[];
   folders: FolderOption[];
-  availableTags: TagDTO[];
+  /** Tous les tags du workspace, scopés. Filtrés par client au moment du
+   *  rendu de chaque card. */
+  availableTags: ScopedTag[];
 }) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+
+  // Tags par client : on regroupe une fois pour éviter de filtrer sur chaque
+  // re-render des cards.
+  const tagsByClient = useMemo(() => {
+    const map = new Map<string, TagDTO[]>();
+    for (const t of availableTags) {
+      const list = map.get(t.clientId) ?? [];
+      list.push({ id: t.id, name: t.name, color: t.color });
+      map.set(t.clientId, list);
+    }
+    return map;
+  }, [availableTags]);
+
+  // Pour la barre de filtres (transversale) on a besoin de tous les tags,
+  // sans clientId.
+  const flatTags = useMemo(
+    () => availableTags.map((t) => ({ id: t.id, name: t.name, color: t.color })),
+    [availableTags],
+  );
 
   const filtered = useMemo(() => {
     const q = filters.query.trim().toLowerCase();
     const fromTs = filters.dateFrom ? new Date(filters.dateFrom).getTime() : null;
-    // dateTo inclus jusqu'à la fin de la journée locale.
     const toTs = filters.dateTo
       ? new Date(filters.dateTo).getTime() + 24 * 60 * 60 * 1000 - 1
       : null;
@@ -50,7 +72,7 @@ export function SearchableBriefList({
 
   return (
     <>
-      <FilterBar state={filters} onChange={setFilters} availableTags={availableTags} />
+      <FilterBar state={filters} onChange={setFilters} availableTags={flatTags} />
       {filtered.length === 0 ? (
         <div className="text-center py-10 text-[13px] text-[var(--text-muted)]">
           Aucun brief ne correspond aux filtres.
@@ -62,7 +84,9 @@ export function SearchableBriefList({
               key={b.id}
               brief={b}
               folders={folders}
-              availableTags={availableTags}
+              availableTags={
+                b.folder ? tagsByClient.get(b.folder.id) ?? [] : []
+              }
             />
           ))}
         </div>
@@ -74,6 +98,5 @@ export function SearchableBriefList({
 function toTimestamp(value: Date | number | null): number | null {
   if (value == null) return null;
   if (value instanceof Date) return value.getTime();
-  // Drizzle renvoie parfois un nombre en secondes (unixepoch) ou ms selon le mode.
   return value > 1e12 ? value : value * 1000;
 }

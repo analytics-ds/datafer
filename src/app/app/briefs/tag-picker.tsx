@@ -70,6 +70,9 @@ export function TagList({
 /**
  * Picker complet : montre les tags du brief, permet d'attacher des tags
  * existants, créer de nouveaux tags et détacher.
+ *
+ * `disabledReason` non vide → l'ajout est verrouillé et la raison s'affiche
+ * en tooltip. Utilisé quand le brief n'a pas de client (pas de scope possible).
  */
 export function TagPicker({
   attached,
@@ -79,6 +82,7 @@ export function TagPicker({
   onCreate,
   size = "md",
   buttonLabel = "+ Tag",
+  disabledReason = null,
 }: {
   attached: TagDTO[];
   available: TagDTO[];
@@ -87,6 +91,7 @@ export function TagPicker({
   onCreate: (name: string, color: string) => Promise<TagDTO | null>;
   size?: "sm" | "md";
   buttonLabel?: string;
+  disabledReason?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -126,18 +131,25 @@ export function TagPicker({
           key={t.id}
           tag={t}
           size={size}
-          onRemove={() => void onDetach(t.id)}
+          onRemove={disabledReason ? undefined : () => void onDetach(t.id)}
         />
       ))}
       <span className="relative">
         <button
           type="button"
+          disabled={!!disabledReason}
+          title={disabledReason ?? undefined}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (disabledReason) return;
             setOpen((v) => !v);
           }}
-          className="inline-flex items-center gap-[4px] px-[8px] py-[2px] text-[11px] text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--bg)] hover:bg-[var(--bg-warm)] border border-dashed border-[var(--border-strong)] rounded-[var(--radius-pill)] transition-colors cursor-pointer"
+          className={`inline-flex items-center gap-[4px] px-[8px] py-[2px] text-[11px] bg-[var(--bg)] border border-dashed border-[var(--border-strong)] rounded-[var(--radius-pill)] transition-colors ${
+            disabledReason
+              ? "text-[var(--text-muted)] opacity-50 cursor-not-allowed"
+              : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] cursor-pointer"
+          }`}
         >
           {buttonLabel}
         </button>

@@ -28,7 +28,8 @@ export async function POST(
   if (!(await assertShareAccess(token, id)))
     return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  await attachTagToBrief(id, body.tagId);
+  const res = await attachTagToBrief(id, body.tagId);
+  if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
   return NextResponse.json({ ok: true });
 }
 

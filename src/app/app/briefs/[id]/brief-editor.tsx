@@ -329,6 +329,11 @@ export function BriefEditor(props: BriefEditorProps) {
             onDetach={detachTagFromThisBrief}
             onCreate={createTagInline}
             size="sm"
+            disabledReason={
+              folder
+                ? null
+                : "Rattache le brief à un client pour ajouter des tags."
+            }
           />
         </div>
         <div className="flex items-center gap-2">

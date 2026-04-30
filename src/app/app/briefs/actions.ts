@@ -99,7 +99,26 @@ export async function updateWorkflowStatusAction(
 
 // ─── Tags ──────────────────────────────────────────────────────────────────
 
+/**
+ * Récupère le clientId d'un brief. Retourne null si le brief n'existe pas
+ * ou n'est pas rattaché à un client (auquel cas il ne peut pas avoir de tags).
+ */
+async function getBriefClientId(briefId: string): Promise<string | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({ clientId: brief.clientId })
+    .from(brief)
+    .where(eq(brief.id, briefId))
+    .limit(1);
+  return row?.clientId ?? null;
+}
+
+/**
+ * Création d'un tag dans le scope du brief courant. Le clientId est lu en
+ * BDD : on évite ainsi qu'un appelant choisisse arbitrairement le scope.
+ */
 export async function createTagAction(
+  briefId: string,
   name: string,
   color: string,
 ): Promise<{ ok: true; tag: { id: string; name: string; color: string } } | { ok: false; error: string }> {
@@ -107,9 +126,15 @@ export async function createTagAction(
   if (!session) return { ok: false, error: "Non authentifié" };
   if (!(TAG_COLORS as readonly string[]).includes(color))
     return { ok: false, error: "Couleur invalide" };
-  const res = await createTag(name, color, "agency");
+
+  const clientId = await getBriefClientId(briefId);
+  if (!clientId)
+    return { ok: false, error: "Rattache le brief à un client pour créer des tags." };
+
+  const res = await createTag(clientId, name, color, "agency");
   if (!res.ok) return res;
   revalidatePath("/app/briefs");
+  revalidatePath(`/app/folders/${clientId}`);
   return { ok: true, tag: { id: res.tag.id, name: res.tag.name, color: res.tag.color } };
 }
 
@@ -120,6 +145,7 @@ export async function deleteTagAction(
   if (!session) return { ok: false, error: "Non authentifié" };
   await deleteTagGlobally(tagId);
   revalidatePath("/app/briefs");
+  revalidatePath("/app/folders");
   return { ok: true };
 }
 
@@ -131,7 +157,8 @@ export async function attachTagAction(
   if (!session) return { ok: false, error: "Non authentifié" };
   if (!(await assertAccess(briefId)))
     return { ok: false, error: "Brief introuvable" };
-  await attachTagToBrief(briefId, tagId);
+  const res = await attachTagToBrief(briefId, tagId);
+  if (!res.ok) return res;
   revalidatePath("/app/briefs");
   revalidatePath(`/app/briefs/${briefId}`);
   return { ok: true };

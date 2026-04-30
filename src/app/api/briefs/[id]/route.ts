@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
+import { detachAllTagsFromBrief } from "@/lib/tags-service";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
   // Workspace partagé : tout user authentifié peut éditer n'importe quel brief.
   const [row] = await db
-    .select({ id: brief.id })
+    .select({ id: brief.id, clientId: brief.clientId })
     .from(brief)
     .where(eq(brief.id, id))
     .limit(1);
@@ -46,6 +47,14 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     if (!["in_progress", "drafted", "published"].includes(body.workflowStatus))
       return NextResponse.json({ error: "bad workflowStatus" }, { status: 400 });
     patch.workflowStatus = body.workflowStatus;
+  }
+
+  // Si le brief change de client, ses tags actuels appartiennent à l'ancien
+  // client et ne sont plus dans le scope du nouveau. On les détache pour
+  // éviter des liens fantômes invisibles dans le picker.
+  const clientChanged = body.clientId !== undefined && body.clientId !== row.clientId;
+  if (clientChanged) {
+    await detachAllTagsFromBrief(id);
   }
 
   await db.update(brief).set(patch).where(eq(brief.id, id));
