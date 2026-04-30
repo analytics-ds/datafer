@@ -129,61 +129,51 @@ export function BriefCard({
   const countryLabel = COUNTRY_LABELS[brief.country] ?? brief.country.toUpperCase();
   return (
     <div
-      className="group relative bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] px-5 py-4 hover:border-[var(--border-strong)] transition-colors"
+      className="group relative bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] px-5 py-[14px] hover:border-[var(--border-strong)] transition-colors"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div className="grid grid-cols-[64px_1fr_auto] items-start gap-4">
+      <div className="grid grid-cols-[56px_1fr_auto] items-center gap-4">
         <ScoreGauge score={brief.score ?? 0} />
 
-        <div className="min-w-0 flex flex-col gap-[8px]">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <Link
-                href={`/app/briefs/${brief.id}`}
-                className="font-semibold text-[15px] leading-tight hover:underline truncate block"
-              >
-                {brief.keyword}
-              </Link>
-              <div className="flex items-center gap-[8px] mt-[3px] text-[11px] text-[var(--text-muted)]">
-                <FolderPickerInline
-                  current={currentFolder}
-                  folders={folders}
-                  onChange={onFolderChange}
-                />
-                <span>·</span>
-                <span className="inline-flex items-center gap-[4px]">
-                  <GlobeIcon />
-                  {countryLabel}
-                </span>
-                <span>·</span>
-                <span className="font-[family-name:var(--font-mono)]">
-                  {relativeDate(brief.createdAt)}
-                </span>
-              </div>
-            </div>
-            <StatusPicker status={status} onChange={onStatusChange} size="sm" />
-          </div>
+        <div className="min-w-0 flex flex-col gap-[5px]">
+          {/* L1 : titre */}
+          <Link
+            href={`/app/briefs/${brief.id}`}
+            className="font-semibold text-[15px] leading-tight hover:underline truncate block"
+          >
+            {brief.keyword}
+          </Link>
 
-          <div className="flex items-center gap-[14px] text-[12px] text-[var(--text-secondary)]">
-            <Metric
-              label="Volume"
-              value={brief.volume != null ? fmtNum(brief.volume) : "N/A"}
-              tone={brief.volume != null ? "default" : "muted"}
+          {/* L2 : meta + métriques sur la même ligne */}
+          <div className="flex items-center gap-[10px] text-[12px] flex-wrap">
+            <FolderPickerInline
+              current={currentFolder}
+              folders={folders}
+              onChange={onFolderChange}
             />
-            <Sep />
-            <Metric
+            <span className="inline-flex items-center gap-[4px] text-[var(--text-muted)]">
+              <GlobeIcon />
+              {countryLabel}
+            </span>
+            <span className="text-[var(--text-muted)] font-[family-name:var(--font-mono)] text-[11px]">
+              {relativeDate(brief.createdAt)}
+            </span>
+            <span className="w-[1px] h-3 bg-[var(--border)]" />
+            <InlineMetric
+              label="Vol"
+              value={brief.volume != null ? fmtNum(brief.volume) : "—"}
+              tone="default"
+            />
+            <InlineMetric
               label="KGR"
-              value={brief.kgr != null ? brief.kgr.toFixed(2) : "N/A"}
-              // Vert quand le KGR est bon (opportunité), neutre sinon. Pas de
-              // rouge : un KGR élevé n'est pas une « erreur », juste un signal.
+              value={brief.kgr != null ? brief.kgr.toFixed(2) : "—"}
               tone={brief.kgr != null && brief.kgr < 0.25 ? "good" : "default"}
-              tooltip='Keyword Golden Ratio. < 0.25 excellent (opportunité forte).'
+              tooltip="Keyword Golden Ratio. < 0.25 = opportunité forte."
             />
-            <Sep />
-            <Metric
-              label="Position"
-              value={brief.position != null ? `#${brief.position}` : "N/A"}
+            <InlineMetric
+              label="Pos"
+              value={brief.position != null ? `#${brief.position}` : "—"}
               tone={positionTone(brief.position) as "good" | "warn" | "bad" | "best" | "muted"}
               tooltip={
                 brief.folder?.website
@@ -193,6 +183,7 @@ export function BriefCard({
             />
           </div>
 
+          {/* L3 : tags */}
           <div className="flex items-center gap-[6px] flex-wrap">
             <TagPicker
               attached={tags}
@@ -215,7 +206,9 @@ export function BriefCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0 self-start">
+        {/* Colonne droite : statut + bouton delete */}
+        <div className="flex flex-col items-end gap-2 shrink-0 self-start">
+          <StatusPicker status={status} onChange={onStatusChange} size="sm" />
           <button
             type="button"
             onClick={(e) => {
@@ -246,7 +239,12 @@ export function BriefCard({
   );
 }
 
-function Metric({
+/**
+ * Métrique inline ultra-compacte (label + valeur sur la même baseline)
+ * pour aligner les chiffres dans le sous-titre de la card sans pills ni
+ * fond coloré.
+ */
+function InlineMetric({
   label,
   value,
   tone,
@@ -268,14 +266,14 @@ function Metric({
   return (
     <span
       title={tooltip}
-      className="inline-flex items-baseline gap-[6px]"
+      className="inline-flex items-baseline gap-[5px]"
       style={{ cursor: tooltip ? "help" : "default" }}
     >
-      <span className="text-[10px] uppercase tracking-[0.5px] text-[var(--text-muted)]">
+      <span className="text-[10px] uppercase tracking-[0.5px] text-[var(--text-muted)] font-medium">
         {label}
       </span>
       <span
-        className="font-[family-name:var(--font-mono)] font-semibold"
+        className="font-[family-name:var(--font-mono)] font-semibold text-[12px]"
         style={{ color: colors[tone] }}
       >
         {value}
@@ -284,9 +282,6 @@ function Metric({
   );
 }
 
-function Sep() {
-  return <span className="text-[var(--border-strong)]">·</span>;
-}
 
 function DeleteBriefConfirm({
   keyword,
