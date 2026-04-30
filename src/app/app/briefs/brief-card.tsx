@@ -175,16 +175,10 @@ export function BriefCard({
             <Metric
               label="KGR"
               value={brief.kgr != null ? brief.kgr.toFixed(2) : "N/A"}
-              tone={
-                brief.kgr == null
-                  ? "muted"
-                  : brief.kgr < 0.25
-                    ? "good"
-                    : brief.kgr < 1
-                      ? "warn"
-                      : "bad"
-              }
-              tooltip='Keyword Golden Ratio. < 0.25 excellent, < 1 correct, > 1 trop concurrentiel.'
+              // Vert quand le KGR est bon (opportunité), neutre sinon. Pas de
+              // rouge : un KGR élevé n'est pas une « erreur », juste un signal.
+              tone={brief.kgr != null && brief.kgr < 0.25 ? "good" : "default"}
+              tooltip='Keyword Golden Ratio. < 0.25 excellent (opportunité forte).'
             />
             <Sep />
             <Metric
@@ -222,7 +216,6 @@ export function BriefCard({
         </div>
 
         <div className="flex items-center gap-2 shrink-0 self-start">
-          <AuthorAvatar author={brief.author} />
           <button
             type="button"
             onClick={(e) => {

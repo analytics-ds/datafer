@@ -16,15 +16,16 @@ export function StatusBadge({
   size?: "sm" | "md";
 }) {
   const tone = WORKFLOW_STATUS_TONES[status];
-  const sz =
-    size === "sm"
-      ? "text-[10px] px-[7px] py-[1px]"
-      : "text-[11px] px-[9px] py-[2px]";
+  const sz = size === "sm" ? "text-[11px]" : "text-[12px]";
   return (
     <span
-      className={`inline-flex items-center rounded-[var(--radius-pill)] font-semibold uppercase tracking-[0.4px] border ${sz}`}
-      style={{ background: tone.bg, color: tone.color, borderColor: `${tone.border}40` }}
+      className={`inline-flex items-center gap-[6px] font-semibold ${sz}`}
+      style={{ color: tone.color }}
     >
+      <span
+        className="inline-block w-[7px] h-[7px] rounded-full"
+        style={{ background: tone.color }}
+      />
       {WORKFLOW_STATUS_LABELS[status]}
     </span>
   );
