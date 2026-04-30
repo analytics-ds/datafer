@@ -565,34 +565,53 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
 }
 
 /**
- * Fallback via Cloudflare Browser Rendering : lance un Chromium headless
- * et récupère le HTML rendu. Plus lent (~3-5s) et limité par le quota
- * (10 min/jour en free, illimité en Workers Paid).
+ * Fallback via Cloudflare Browser Rendering REST API : lance un Chromium
+ * headless côté Cloudflare et récupère le HTML rendu. Plus lent (~3-5s)
+ * et limité par le quota (10 min/jour en Workers Free).
  *
- * Retourne null si le binding n'est pas disponible (dev local sans
- * `wrangler dev --remote`) ou si le navigateur échoue.
+ * Endpoint :
+ *   POST /client/v4/accounts/{account_id}/browser-rendering/content
+ *
+ * Auth : header `Authorization: Bearer <CF_BROWSER_TOKEN>` (token API
+ * avec permission "Account → Browser Rendering: Edit").
+ *
+ * Retourne null si les credentials ne sont pas configurés ou si la
+ * requête échoue.
  */
 async function crawlWithBrowser(url: string): Promise<string | null> {
   try {
-    // Imports dynamiques : on ne charge la lib que si on en a besoin,
-    // et on évite de péter le build local sans le binding configuré.
-    const [{ getCloudflareContext }, puppeteerModule] = await Promise.all([
-      import("@opennextjs/cloudflare"),
-      import("@cloudflare/puppeteer"),
-    ]);
-    const env = getCloudflareContext().env as { BROWSER?: unknown };
-    if (!env.BROWSER) return null;
-    const puppeteer = puppeteerModule.default;
-    const browser = await puppeteer.launch(env.BROWSER as never);
-    try {
-      const page = await browser.newPage();
-      await page.setUserAgent(GOOGLEBOT_UA);
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-      const html = await page.content();
-      return html;
-    } finally {
-      await browser.close().catch(() => {});
-    }
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const env = getCloudflareContext().env as unknown as Record<
+      string,
+      string | undefined
+    >;
+    const accountId = env.CF_ACCOUNT_ID;
+    const token = env.CF_BROWSER_TOKEN;
+    if (!accountId || !token) return null;
+
+    const r = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/content`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url,
+          userAgent: GOOGLEBOT_UA,
+          waitForTimeout: 5000,
+          // gotoOptions : on rend la main dès le DOM chargé (pas besoin
+          // d'attendre la fin de tous les requêtes/scripts).
+          gotoOptions: { waitUntil: "domcontentloaded", timeout: 20000 },
+        }),
+        signal: AbortSignal.timeout(30000),
+      },
+    );
+    if (!r.ok) return null;
+    const data = (await r.json()) as { success?: boolean; result?: string };
+    if (!data.success || !data.result) return null;
+    return data.result;
   } catch {
     return null;
   }

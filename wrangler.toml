@@ -11,22 +11,19 @@ database_name = "datafer"
 database_id = "52061f81-b4f5-4b32-9685-a015b0981a29"
 migrations_dir = "drizzle"
 
-# Browser Rendering pour fallback de crawl quand le fetch HTTP est bloqué
-# (sites avec WAF anti-bot type Akamai/Cloudflare strict).
-# Free tier : 10 min/jour, 3 browsers concurrents. Workers Paid plan
-# requis pour le binding (~5$/mois).
-[browser]
-binding = "BROWSER"
-
 [vars]
 BETTER_AUTH_URL = "https://datafer.analytics-e0d.workers.dev"
 # Provider SERP : "crazyserp" (par défaut, ~$0.50/1k FR) ou "serpapi"
 # (~$10/1k). Peut être basculé sans redeploy via `wrangler secret put` ou
 # en éditant cette ligne et `npm run deploy`.
 SERP_PROVIDER = "crazyserp"
+# Compte Cloudflare pour appeler la Browser Rendering REST API en
+# fallback de crawl (sites bloquants type Akamai). Free tier : 10 min/j.
+CF_ACCOUNT_ID = "e0dd71e4cd791925c9b37a85496aa259"
 
 # Secrets set via `wrangler secret put`:
 # - BETTER_AUTH_SECRET       (openssl rand -base64 32)
 # - CRAZYSERP_KEY            (crazyserp.com, provider par défaut)
 # - SERPAPI_KEY              (serpapi.com, provider de fallback)
 # - HALOSCAN_KEY             (haloscan JWT)
+# - CF_BROWSER_TOKEN         (Cloudflare API token, perm. "Browser Rendering: Edit")
