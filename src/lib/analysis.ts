@@ -216,11 +216,11 @@ async function fetchSerpFromCrazyserp(
     link: "",
   }));
 
-  // Particularité CrazySerp : `page=N` est cumulatif et coûte N crédits
-  // (pas incrémental). Donc page=1 puis page=2 = 1+2 = 3 crédits, pas 2.
-  // On ne re-fetch que si on a vraiment trop peu de résultats (< 7) :
-  // 7-9 organiques suffisent à la NLP et économisent des crédits.
-  if (allOrganic.length < 7) {
+  // CrazySerp : `page=N` est cumulatif et coûte N crédits. Si on a <10
+  // organiques sur la page 1 (Google insère souvent des blocs spéciaux),
+  // on demande directement la page 2 (2 crédits, ~17 organiques) pour
+  // garantir le top 10 complet.
+  if (allOrganic.length < 10) {
     const next = await fetchCrazyserpPage(keyword, country, apiKey, 2);
     if (next) {
       const more = next.parsed_data?.organic ?? [];
@@ -548,7 +548,18 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
     if (r.ok) {
       const html = await r.text();
       const truncated = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
-      return parseHTML(truncated);
+      const parsed = parseHTML(truncated);
+      // Sites SPA ou pages de challenge Cloudflare : 200 OK mais contenu
+      // quasi-vide (< 100 mots utiles). Dans ce cas on retombe sur le
+      // browser rendering pour récupérer la version rendue.
+      if (parsed.wordCount < 100 || looksLikeChallengePage(truncated)) {
+        const rendered = await crawlWithBrowser(url);
+        if (rendered) {
+          const reparsed = parseHTML(rendered);
+          if (reparsed.wordCount > parsed.wordCount) return reparsed;
+        }
+      }
+      return parsed;
     }
     // Status 403/429/503 = WAF anti-bot probable, on tente le fallback browser.
     if (r.status === 403 || r.status === 429 || r.status === 503) {
@@ -562,6 +573,22 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
     if (html) return parseHTML(html);
     return null;
   }
+}
+
+/**
+ * Heuristique pour détecter une page de challenge Cloudflare/Akamai/etc.
+ * On regarde quelques marqueurs courants dans le HTML brut.
+ */
+function looksLikeChallengePage(html: string): boolean {
+  const sample = html.slice(0, 5000).toLowerCase();
+  return (
+    sample.includes("cf-browser-verification") ||
+    sample.includes("checking your browser") ||
+    sample.includes("challenge-platform") ||
+    sample.includes("just a moment") ||
+    sample.includes("ray id") ||
+    (sample.includes("cloudflare") && html.length < 5000)
+  );
 }
 
 /**
@@ -587,7 +614,13 @@ async function crawlWithBrowser(url: string): Promise<string | null> {
     >;
     const accountId = env.CF_ACCOUNT_ID;
     const token = env.CF_BROWSER_TOKEN;
-    if (!accountId || !token) return null;
+    if (!accountId || !token) {
+      console.log("[browser-render] missing config", {
+        hasAccount: !!accountId,
+        hasToken: !!token,
+      });
+      return null;
+    }
 
     const r = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/content`,
@@ -600,19 +633,37 @@ async function crawlWithBrowser(url: string): Promise<string | null> {
         body: JSON.stringify({
           url,
           userAgent: GOOGLEBOT_UA,
-          waitForTimeout: 5000,
-          // gotoOptions : on rend la main dès le DOM chargé (pas besoin
-          // d'attendre la fin de tous les requêtes/scripts).
-          gotoOptions: { waitUntil: "domcontentloaded", timeout: 20000 },
+          // 8s pour laisser le JS d'un SPA hydrater et rendre le contenu.
+          waitForTimeout: 8000,
+          // networkidle0 : attend que TOUS les XHR/scripts soient finis.
+          // Plus lent mais nécessaire pour Vue/React/Next côté client.
+          gotoOptions: { waitUntil: "networkidle0", timeout: 30000 },
         }),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(45000),
       },
     );
-    if (!r.ok) return null;
-    const data = (await r.json()) as { success?: boolean; result?: string };
-    if (!data.success || !data.result) return null;
+    if (!r.ok) {
+      const text = await r.text().catch(() => "");
+      console.log("[browser-render] http error", { url, status: r.status, body: text.slice(0, 200) });
+      return null;
+    }
+    const data = (await r.json()) as {
+      success?: boolean;
+      result?: string;
+      errors?: Array<{ message?: string }>;
+    };
+    if (!data.success || !data.result) {
+      console.log("[browser-render] api error", {
+        url,
+        success: data.success,
+        errors: data.errors,
+      });
+      return null;
+    }
+    console.log("[browser-render] ok", { url, htmlLength: data.result.length });
     return data.result;
-  } catch {
+  } catch (e) {
+    console.log("[browser-render] exception", { url, err: String(e) });
     return null;
   }
 }
