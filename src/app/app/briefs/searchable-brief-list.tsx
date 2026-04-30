@@ -11,7 +11,7 @@ export function SearchableBriefList({
   briefs,
   folders,
   availableTags,
-  searchPlaceholder = "Rechercher par mot-clé, client, auteur…",
+  searchPlaceholder = "Rechercher un mot-clé, un client, un auteur, un tag…",
 }: {
   briefs: BriefCardData[];
   folders: FolderOption[];

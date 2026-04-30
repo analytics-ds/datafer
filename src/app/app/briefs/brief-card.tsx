@@ -126,105 +126,119 @@ export function BriefCard({
     return res.tag;
   }
 
+  const countryLabel = COUNTRY_LABELS[brief.country] ?? brief.country.toUpperCase();
   return (
     <div
-      className="group relative grid grid-cols-[76px_1fr_auto] items-center gap-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] px-5 py-4 hover:border-[var(--border-strong)] transition-colors"
+      className="group relative bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] px-5 py-4 hover:border-[var(--border-strong)] transition-colors"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <ScoreGauge score={brief.score ?? 0} />
+      <div className="grid grid-cols-[64px_1fr_auto] items-start gap-4">
+        <ScoreGauge score={brief.score ?? 0} />
 
-      <div className="min-w-0">
-        <Link
-          href={`/app/briefs/${brief.id}`}
-          className="font-semibold text-[15px] leading-tight hover:underline truncate block"
-        >
-          {brief.keyword}
-        </Link>
-        <div className="flex items-center gap-[6px] mt-[6px] text-[12px] text-[var(--text-secondary)] flex-wrap">
-          <span className="inline-flex items-center gap-[5px]">
-            <GlobeIcon />
-            {COUNTRY_LABELS[brief.country] ?? brief.country.toUpperCase()}
-          </span>
-          <MetricPill
-            label="Vol"
-            value={brief.volume != null ? fmtNum(brief.volume) : "N/A"}
-            tooltip="Volume de recherche mensuel (Haloscan)"
-            tone={brief.volume != null ? "info" : "muted"}
-          />
-          <MetricPill
-            label="KGR"
-            value={brief.kgr != null ? brief.kgr.toFixed(2) : "N/A"}
-            tooltip='Keyword Golden Ratio = pages avec mot-clé exact dans le title / volume mensuel. KGR < 0.25 = excellent, < 1 = correct, > 1 = trop concurrentiel.'
-            tone={
-              brief.kgr == null
-                ? "muted"
-                : brief.kgr < 0.25
-                  ? "good"
-                  : brief.kgr < 1
-                    ? "warn"
-                    : "bad"
-            }
-          />
-          <MetricPill
-            label="Pos"
-            value={brief.position != null ? `#${brief.position}` : "N/A"}
-            tooltip={
-              brief.folder?.website
-                ? `Position de ${brief.folder.website} dans Google (top 100). N/A = au-delà du top 100.`
-                : "Rattache un client avec un site pour suivre ta position."
-            }
-            tone={positionTone(brief.position)}
-          />
+        <div className="min-w-0 flex flex-col gap-[8px]">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Link
+                href={`/app/briefs/${brief.id}`}
+                className="font-semibold text-[15px] leading-tight hover:underline truncate block"
+              >
+                {brief.keyword}
+              </Link>
+              <div className="flex items-center gap-[8px] mt-[3px] text-[11px] text-[var(--text-muted)]">
+                <FolderPickerInline
+                  current={currentFolder}
+                  folders={folders}
+                  onChange={onFolderChange}
+                />
+                <span>·</span>
+                <span className="inline-flex items-center gap-[4px]">
+                  <GlobeIcon />
+                  {countryLabel}
+                </span>
+                <span>·</span>
+                <span className="font-[family-name:var(--font-mono)]">
+                  {relativeDate(brief.createdAt)}
+                </span>
+              </div>
+            </div>
+            <StatusPicker status={status} onChange={onStatusChange} size="sm" />
+          </div>
+
+          <div className="flex items-center gap-[14px] text-[12px] text-[var(--text-secondary)]">
+            <Metric
+              label="Volume"
+              value={brief.volume != null ? fmtNum(brief.volume) : "N/A"}
+              tone={brief.volume != null ? "default" : "muted"}
+            />
+            <Sep />
+            <Metric
+              label="KGR"
+              value={brief.kgr != null ? brief.kgr.toFixed(2) : "N/A"}
+              tone={
+                brief.kgr == null
+                  ? "muted"
+                  : brief.kgr < 0.25
+                    ? "good"
+                    : brief.kgr < 1
+                      ? "warn"
+                      : "bad"
+              }
+              tooltip='Keyword Golden Ratio. < 0.25 excellent, < 1 correct, > 1 trop concurrentiel.'
+            />
+            <Sep />
+            <Metric
+              label="Position"
+              value={brief.position != null ? `#${brief.position}` : "N/A"}
+              tone={positionTone(brief.position) as "good" | "warn" | "bad" | "best" | "muted"}
+              tooltip={
+                brief.folder?.website
+                  ? `Position de ${brief.folder.website} dans Google (top 100).`
+                  : "Rattache un client avec un site pour suivre ta position."
+              }
+            />
+          </div>
+
+          <div className="flex items-center gap-[6px] flex-wrap">
+            <TagPicker
+              attached={tags}
+              available={availableTags}
+              onAttach={onAttachTag}
+              onDetach={onDetachTag}
+              onCreate={onCreateTag}
+              onDeleteTag={async (tagId) => {
+                await deleteTagAction(tagId);
+                setTags((curr) => curr.filter((t) => t.id !== tagId));
+                router.refresh();
+              }}
+              size="sm"
+              disabledReason={
+                brief.folder
+                  ? null
+                  : "Rattache le brief à un client pour ajouter des tags."
+              }
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-[6px] flex-wrap mt-[6px]">
-          <FolderPickerInline
-            current={currentFolder}
-            folders={folders}
-            onChange={onFolderChange}
-          />
-          <StatusPicker status={status} onChange={onStatusChange} size="sm" />
-          <TagPicker
-            attached={tags}
-            available={availableTags}
-            onAttach={onAttachTag}
-            onDetach={onDetachTag}
-            onCreate={onCreateTag}
-            onDeleteTag={async (tagId) => {
-              await deleteTagAction(tagId);
-              setTags((curr) => curr.filter((t) => t.id !== tagId));
-              router.refresh();
+
+        <div className="flex items-center gap-2 shrink-0 self-start">
+          <AuthorAvatar author={brief.author} />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setConfirmOpen(true);
             }}
-            size="sm"
-            disabledReason={
-              brief.folder
-                ? null
-                : "Rattache le brief à un client pour ajouter des tags."
-            }
-          />
+            aria-label="Supprimer le brief"
+            title="Supprimer le brief"
+            className={`w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--red)] hover:border-[var(--red)]/40 hover:bg-[var(--red-bg)] transition-all ${
+              hover ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <TrashIcon />
+          </button>
         </div>
-      </div>
-
-      <div className="flex items-center gap-3 shrink-0">
-        <AuthorAvatar author={brief.author} />
-        <span className="text-[12px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] shrink-0">
-          {relativeDate(brief.createdAt)}
-        </span>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setConfirmOpen(true);
-          }}
-          aria-label="Supprimer le brief"
-          title="Supprimer le brief"
-          className={`w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--red)] hover:border-[var(--red)]/40 hover:bg-[var(--red-bg)] transition-all ${
-            hover ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <TrashIcon />
-        </button>
       </div>
 
       {confirmOpen && (
@@ -237,6 +251,48 @@ export function BriefCard({
       )}
     </div>
   );
+}
+
+function Metric({
+  label,
+  value,
+  tone,
+  tooltip,
+}: {
+  label: string;
+  value: string;
+  tone: "default" | "muted" | "good" | "warn" | "bad" | "best";
+  tooltip?: string;
+}) {
+  const colors: Record<string, string> = {
+    default: "var(--text)",
+    muted: "var(--text-muted)",
+    good: "var(--green)",
+    warn: "var(--orange)",
+    bad: "var(--red)",
+    best: "#0E5132",
+  };
+  return (
+    <span
+      title={tooltip}
+      className="inline-flex items-baseline gap-[6px]"
+      style={{ cursor: tooltip ? "help" : "default" }}
+    >
+      <span className="text-[10px] uppercase tracking-[0.5px] text-[var(--text-muted)]">
+        {label}
+      </span>
+      <span
+        className="font-[family-name:var(--font-mono)] font-semibold"
+        style={{ color: colors[tone] }}
+      >
+        {value}
+      </span>
+    </span>
+  );
+}
+
+function Sep() {
+  return <span className="text-[var(--border-strong)]">·</span>;
 }
 
 function DeleteBriefConfirm({
@@ -313,39 +369,6 @@ export function positionTone(position: number | null): PillTone {
   if (position <= 10) return "good";
   if (position <= 30) return "warn";
   return "bad";
-}
-
-// ─── Pastille métrique (volume / KGR / position) ─────────────
-function MetricPill({
-  label,
-  value,
-  tooltip,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tooltip: string;
-  tone: PillTone;
-}) {
-  const palette: Record<PillTone, { bg: string; color: string; border: string }> = {
-    best: { bg: "#0E5132", color: "#FFFFFF", border: "#0E5132" },
-    good: { bg: "var(--green-bg)", color: "var(--green)", border: "var(--green)" },
-    warn: { bg: "var(--orange-bg)", color: "var(--orange)", border: "var(--orange)" },
-    bad: { bg: "var(--red-bg)", color: "var(--red)", border: "var(--red)" },
-    info: { bg: "var(--bg-warm)", color: "var(--text-secondary)", border: "var(--border)" },
-    muted: { bg: "var(--bg)", color: "var(--text-muted)", border: "var(--border)" },
-  };
-  const p = palette[tone];
-  return (
-    <span
-      title={tooltip}
-      className="inline-flex items-center gap-[5px] px-[8px] py-[2px] rounded-full text-[11px] font-medium border cursor-help"
-      style={{ background: p.bg, color: p.color, borderColor: `${p.border}40` }}
-    >
-      <span className="text-[9px] uppercase tracking-[0.5px] opacity-75">{label}</span>
-      <span className="font-[family-name:var(--font-mono)] font-semibold">{value}</span>
-    </span>
-  );
 }
 
 function fmtNum(n: number): string {
