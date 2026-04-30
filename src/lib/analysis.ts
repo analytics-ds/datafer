@@ -398,7 +398,7 @@ function normalizeDomain(input: string | null | undefined): string | null {
 // laissent passer Googlebot (raisons SEO) là où ils blockent les bots custom.
 // Référence : https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers
 const GOOGLEBOT_UA =
-  "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.92 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
+  "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.7258.156 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 
 export async function crawlPage(url: string): Promise<PageContent | null> {
   try {
