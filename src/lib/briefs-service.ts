@@ -172,8 +172,11 @@ export async function createBrief(
 
   let kgr = haloscan?.kgr ?? null;
   let allintitleCount = haloscan?.allintitleCount ?? null;
-  if (kgr == null) {
-    const fallbackAllintitle = await fetchAllintitleCount(keyword, country, serpKey);
+  // fetchAllintitleCount utilise SerpAPI hardcoded ; n'a de sens que si
+  // le provider courant est SerpAPI (avec CrazySerp on n'a pas l'opérateur
+  // allintitle). Sinon kgr reste null.
+  if (kgr == null && provider === "serpapi" && e.SERPAPI_KEY) {
+    const fallbackAllintitle = await fetchAllintitleCount(keyword, country, e.SERPAPI_KEY);
     if (fallbackAllintitle != null) {
       allintitleCount = allintitleCount ?? fallbackAllintitle;
       if (volume && volume > 0) kgr = Math.round((fallbackAllintitle / volume) * 1000) / 1000;
@@ -333,6 +336,7 @@ export async function completeBriefAnalysis(
   input: CreateBriefInput,
 ): Promise<void> {
   const db = getDb();
+  console.log("[brief-analysis] start", { briefId, keyword: input.keyword });
   try {
     const deadline = new Promise<never>((_, reject) =>
       setTimeout(
@@ -344,6 +348,11 @@ export async function completeBriefAnalysis(
       createBriefAnalysisPayload(userId, input),
       deadline,
     ]);
+    console.log("[brief-analysis] payload computed", {
+      briefId,
+      ok: res.ok,
+      error: res.ok ? undefined : res.error,
+    });
     if (!res.ok) {
       await db
         .update(brief)
@@ -467,8 +476,11 @@ async function createBriefAnalysisPayload(userId: string, input: CreateBriefInpu
   const volume = haloscan?.search_volume ?? null;
   let kgr = haloscan?.kgr ?? null;
   let allintitleCount = haloscan?.allintitleCount ?? null;
-  if (kgr == null) {
-    const fallbackAllintitle = await fetchAllintitleCount(keyword, country, serpKey);
+  // fetchAllintitleCount utilise SerpAPI hardcoded ; n'a de sens que si
+  // le provider courant est SerpAPI (avec CrazySerp on n'a pas l'opérateur
+  // allintitle). Sinon kgr reste null.
+  if (kgr == null && provider === "serpapi" && e.SERPAPI_KEY) {
+    const fallbackAllintitle = await fetchAllintitleCount(keyword, country, e.SERPAPI_KEY);
     if (fallbackAllintitle != null) {
       allintitleCount = allintitleCount ?? fallbackAllintitle;
       if (volume && volume > 0) kgr = Math.round((fallbackAllintitle / volume) * 1000) / 1000;
