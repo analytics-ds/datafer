@@ -111,6 +111,42 @@ export type NlpResult = {
 
 // ─── SERPAPI ─────────────────────────────────────────────────────────────────
 
+type SerpRaw = {
+  organic_results?: Array<{
+    position?: number;
+    title?: string;
+    link?: string;
+    snippet?: string;
+    displayed_link?: string;
+  }>;
+  related_questions?: Array<{ question?: string; snippet?: string; link?: string }>;
+  error?: string;
+};
+
+async function fetchSerpPage(
+  keyword: string,
+  gl: string,
+  hl: string,
+  apiKey: string,
+  start: number,
+  num: number,
+): Promise<SerpRaw | null> {
+  const params = new URLSearchParams({
+    q: keyword,
+    gl,
+    hl,
+    num: String(num),
+    api_key: apiKey,
+  });
+  if (start > 0) params.set("start", String(start));
+  const url = `https://serpapi.com/search.json?${params.toString()}`;
+  const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+  if (!r.ok) return null;
+  const d = (await r.json()) as SerpRaw;
+  if (d.error) return null;
+  return d;
+}
+
 export async function fetchSerp(
   keyword: string,
   country: string,
@@ -118,25 +154,35 @@ export async function fetchSerp(
 ): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
   const gl = country === "uk" ? "gb" : country;
   const hl = ["us", "uk"].includes(country) ? "en" : country;
-  // num=100 : SerpAPI compte 1 search peu importe num jusqu'à 100. On en
-  // profite pour récupérer le top 100 et pouvoir détecter la position client
-  // au-delà du top 10.
-  const url = `https://serpapi.com/search.json?q=${encodeURIComponent(keyword)}&gl=${gl}&hl=${hl}&num=100&api_key=${apiKey}`;
-  const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
-  if (!r.ok) return { results: [], allResults: [], paa: [] };
-  const d = (await r.json()) as {
-    organic_results?: Array<{
-      position?: number;
-      title?: string;
-      link?: string;
-      snippet?: string;
-      displayed_link?: string;
-    }>;
-    related_questions?: Array<{ question?: string; snippet?: string; link?: string }>;
-    error?: string;
-  };
-  if (d.error) return { results: [], allResults: [], paa: [] };
-  const allResults = (d.organic_results ?? []).map((r, i) => ({
+
+  // Premier appel : num=100 pour récupérer le top 100 (utile pour
+  // findDomainPosition au-delà du top 10).
+  const first = await fetchSerpPage(keyword, gl, hl, apiKey, 0, 100);
+  if (!first) return { results: [], allResults: [], paa: [] };
+
+  let allRaw = first.organic_results ?? [];
+  const paa: Paa[] = (first.related_questions ?? []).map((q) => ({
+    question: q.question ?? "",
+    snippet: q.snippet ?? "",
+    link: q.link ?? "",
+  }));
+
+  // Si Google a inséré des blocs spéciaux (PAA, featured snippet, vidéos…)
+  // on peut se retrouver avec moins de 10 organic_results sur la page 1.
+  // On pagine alors la SERP pour combler jusqu'à 10.
+  let start = allRaw.length;
+  let attempts = 0;
+  while (allRaw.length < 10 && attempts < 2) {
+    attempts++;
+    const next = await fetchSerpPage(keyword, gl, hl, apiKey, start, 10);
+    if (!next) break;
+    const more = next.organic_results ?? [];
+    if (more.length === 0) break;
+    allRaw = [...allRaw, ...more];
+    start += more.length;
+  }
+
+  const allResults = allRaw.map((r, i) => ({
     position: r.position ?? i + 1,
     title: r.title ?? "",
     link: r.link ?? "",
@@ -145,11 +191,6 @@ export async function fetchSerp(
   }));
   // Top 10 utilisé pour le crawl + NLP. allResults sert à findDomainPosition.
   const results = allResults.slice(0, 10);
-  const paa = (d.related_questions ?? []).map((q) => ({
-    question: q.question ?? "",
-    snippet: q.snippet ?? "",
-    link: q.link ?? "",
-  }));
   return { results, allResults, paa };
 }
 
