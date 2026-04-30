@@ -414,6 +414,8 @@ export function BriefEditor(props: BriefEditorProps) {
                 ref={editorRef}
                 contentEditable
                 suppressContentEditableWarning
+                spellCheck
+                lang="fr-FR"
                 onInput={readEditor}
                 onKeyUp={updateCurrentTag}
                 onMouseUp={updateCurrentTag}
