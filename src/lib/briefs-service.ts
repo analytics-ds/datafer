@@ -182,7 +182,7 @@ export async function createBrief(
 
   const position = findDomainPosition(allResults, folderWebsite);
 
-  let finalPaa = paa;
+  const finalPaa = paa;
   if (haloscanKey && finalPaa.length < 5) {
     const extra = await fetchHaloscanQuestions(keyword, country, haloscanKey, 10);
     const seen = new Set(finalPaa.map((q) => q.question.toLowerCase()));
@@ -322,7 +322,10 @@ export async function createPendingBrief(
   return { ok: true, id };
 }
 
-const ANALYSIS_DEADLINE_MS = 90_000;
+// 180s : le crawler à 3 niveaux (fetch direct → Browser Rendering →
+// ScrapingBee) peut prendre 60-90s sur des SERP avec plusieurs sites
+// bloquants. On laisse de la marge avant de couper.
+const ANALYSIS_DEADLINE_MS = 180_000;
 
 export async function completeBriefAnalysis(
   briefId: string,
@@ -473,7 +476,7 @@ async function createBriefAnalysisPayload(userId: string, input: CreateBriefInpu
   }
   const position = findDomainPosition(allResults, folderWebsite);
 
-  let finalPaa = paa;
+  const finalPaa = paa;
   if (haloscanKey && finalPaa.length < 5) {
     const extra = await fetchHaloscanQuestions(keyword, country, haloscanKey, 10);
     const seen = new Set(finalPaa.map((q) => q.question.toLowerCase()));

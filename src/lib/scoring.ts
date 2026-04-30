@@ -167,7 +167,6 @@ export function computeDetailedScore(
 
   const lowerNorm = normalize(text);
   const ek = nlp.exactKeyword;
-  const kwNorm = normalize(ek.keyword);
   const variationsNorm = (ek.variations ?? []).map(normalize);
   // Regex tolérante aux flexions (genre/nombre/accents) du mot-clé.
   const rx = buildKeywordRegex(ek.keyword);
@@ -176,7 +175,7 @@ export function computeDetailedScore(
   const m = lowerNorm.match(rx);
   const count = m ? m.length : 0;
   const density = wc > 0 ? ((count * ek.keyword.split(/\s+/).length) / wc) * 100 : 0;
-  let dS =
+  const dS =
     density >= ek.idealDensityMin && density <= ek.idealDensityMax
       ? 9
       : density > 0 && density < ek.idealDensityMin
