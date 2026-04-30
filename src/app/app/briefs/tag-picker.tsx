@@ -110,13 +110,13 @@ export function TagPicker({
   const exact = available.find((t) => t.name.toLowerCase() === query.trim().toLowerCase());
   const canCreate = query.trim().length > 0 && !exact;
 
+  // Le `onCreate` du parent doit créer ET attacher le tag (et mettre à jour
+  // sa propre liste locale `attached`). Sinon, après création le composant
+  // parent ne saurait pas où trouver le tag fraîchement créé pour l'attacher.
   async function handleCreate() {
     if (!canCreate) return;
     const created = await onCreate(query.trim(), color);
-    if (created) {
-      await onAttach(created.id);
-      setQuery("");
-    }
+    if (created) setQuery("");
   }
 
   return (

@@ -122,7 +122,19 @@ export function BriefEditor(props: BriefEditorProps) {
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { tag?: TagDTO };
-    return data.tag ?? null;
+    const tag = data.tag;
+    if (!tag) return null;
+    setTags((curr) => (curr.some((x) => x.id === tag.id) ? curr : [...curr, tag]));
+    const attach = await fetch(tagsEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tagId: tag.id }),
+    });
+    if (!attach.ok) {
+      setTags((curr) => curr.filter((x) => x.id !== tag.id));
+      return null;
+    }
+    return tag;
   }
 
   const editorRef = useRef<HTMLDivElement>(null);

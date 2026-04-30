@@ -115,6 +115,13 @@ export function BriefCard({
   async function onCreateTag(name: string, color: string): Promise<TagDTO | null> {
     const res = await createTagAction(name, color);
     if (!res.ok) return null;
+    setTags((curr) => (curr.some((x) => x.id === res.tag.id) ? curr : [...curr, res.tag]));
+    const attach = await attachTagAction(brief.id, res.tag.id);
+    if (!attach.ok) {
+      setTags((curr) => curr.filter((x) => x.id !== res.tag.id));
+      return null;
+    }
+    router.refresh();
     return res.tag;
   }
 
