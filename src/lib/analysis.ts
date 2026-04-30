@@ -644,7 +644,7 @@ async function crawlWithScrapingBee(url: string): Promise<string | null> {
       block_resources: "false",
     });
     const r = await fetch(`https://app.scrapingbee.com/api/v1/?${params.toString()}`, {
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(30000),
     });
     if (!r.ok) {
       console.log("[scrapingbee] http error", { url, status: r.status });
@@ -717,15 +717,13 @@ async function crawlWithBrowser(url: string): Promise<string | null> {
         body: JSON.stringify({
           url,
           userAgent: GOOGLEBOT_UA,
-          // 12s : laisse le temps au challenge Cloudflare turnstile de
-          // s'auto-résoudre quand c'est faisable (sites mid-tier).
-          // Au-delà on n'arrive pas à passer même avec Browser Rendering
-          // (sites Akamai tier-1 type FAGUO/Nike), il faudrait un proxy
-          // résidentiel.
-          waitForTimeout: 12000,
-          gotoOptions: { waitUntil: "networkidle0", timeout: 30000 },
+          // 5s : on accepte de rater quelques challenges qui auraient
+          // pu se résoudre tout seuls. Compromis pour rester sous le
+          // wall time Cloudflare Workers (30s par invocation par défaut).
+          waitForTimeout: 5000,
+          gotoOptions: { waitUntil: "domcontentloaded", timeout: 15000 },
         }),
-        signal: AbortSignal.timeout(50000),
+        signal: AbortSignal.timeout(20000),
       },
     );
     if (!r.ok) {

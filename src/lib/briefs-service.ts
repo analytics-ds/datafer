@@ -325,10 +325,10 @@ export async function createPendingBrief(
   return { ok: true, id };
 }
 
-// 180s : le crawler à 3 niveaux (fetch direct → Browser Rendering →
-// ScrapingBee) peut prendre 60-90s sur des SERP avec plusieurs sites
-// bloquants. On laisse de la marge avant de couper.
-const ANALYSIS_DEADLINE_MS = 180_000;
+// 75s : compromis entre wall-time Workers (~30s par défaut, plus en
+// Standard plan) et le crawler 3 niveaux. On garde une marge pour
+// l'analyse NLP et les écritures DB après le crawl.
+const ANALYSIS_DEADLINE_MS = 75_000;
 
 export async function completeBriefAnalysis(
   briefId: string,
