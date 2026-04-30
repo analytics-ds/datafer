@@ -1409,8 +1409,9 @@ function KeywordStatsRow({
           : position <= 30
             ? "warn"
             : "bad";
-  const kgrTone =
-    kgr == null ? "muted" : kgr < 0.25 ? "good" : kgr < 1 ? "warn" : "bad";
+  // KGR : vert quand opportunité (< 0.25), neutre sinon. Pas de rouge :
+  // un KGR élevé est un signal informatif, pas une erreur.
+  const kgrTone = kgr != null && kgr < 0.25 ? "good" : "muted";
 
   return (
     <div className="grid grid-cols-3 gap-2 mb-5">

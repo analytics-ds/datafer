@@ -537,22 +537,26 @@ const GOOGLEBOT_UA =
  * on ne l'active que pour les pages réellement bloquées.
  */
 /**
- * Stratégie de crawl en 3 niveaux (option C hybride) :
+ * Stratégie de crawl : ScrapingBee en premier pour TOUS les sites
+ * (qualité maximale, IPs résidentielles), avec fetch direct en
+ * fallback si ScrapingBee échoue (quota épuisé, panne, etc).
  *
- *   1. fetch direct avec UA Googlebot (rapide, gratuit, ~80% des sites)
- *   2. Cloudflare Browser Rendering (~5-15s, gratuit 10min/jour, passe
- *      les sites SPA et certains WAF moyens)
- *   3. ScrapingBee avec IP résidentielle (payant, passe les sites
- *      tier-1 type FAGUO/Akamai où Cloudflare BR rend une page challenge)
- *
- * On ne descend dans les niveaux suivants que si nécessaire pour
- * économiser quota/coût.
+ * Coût : 1 crédit ScrapingBee par site. Pour 500 briefs/mois × 10
+ * sites = 5000 crédits/mois (~$2.50 sur Crawlbase pay-as-you-go,
+ * ou free trial ScrapingBee 1000 crédits = 100 briefs).
  */
 export async function crawlPage(url: string): Promise<PageContent | null> {
-  // 1. Tentative fetch direct
+  // 1. ScrapingBee en priorité
+  const sbHtml = await crawlWithScrapingBee(url);
+  if (sbHtml && !looksLikeChallengePage(sbHtml)) {
+    const parsed = parseHTML(sbHtml);
+    if (parsed.wordCount >= 100) return parsed;
+  }
+
+  // 2. Fallback fetch direct si ScrapingBee a planté
   try {
     const r = await fetch(url, {
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(10000),
       headers: {
         "User-Agent": GOOGLEBOT_UA,
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -561,56 +565,18 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
       },
       redirect: "follow",
     });
-    if (r.ok) {
-      const html = await r.text();
-      const truncated = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
-      const parsed = parseHTML(truncated);
-      // Si la page semble bonne, on s'arrête là (économie quotas).
-      if (parsed.wordCount >= 100 && !looksLikeChallengePage(truncated)) {
-        return parsed;
-      }
-      // Sinon on escalade au niveau 2 puis 3.
-      const upgraded = await escalateCrawl(url, parsed);
-      return upgraded ?? parsed;
-    }
-    if (r.status === 403 || r.status === 429 || r.status === 503) {
-      return (await escalateCrawl(url, null)) ?? null;
-    }
-    return null;
+    if (!r.ok) return null;
+    const html = await r.text();
+    const truncated = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
+    if (looksLikeChallengePage(truncated)) return null;
+    const parsed = parseHTML(truncated);
+    if (parsed.wordCount < 100) return null;
+    return parsed;
   } catch {
-    return (await escalateCrawl(url, null)) ?? null;
+    return null;
   }
 }
 
-/**
- * Tente ScrapingBee directement (IP résidentielles, ~2-3s) en priorité.
- * `baseline` = ce qu'on a déjà (peut être null) : on ne le remplace que
- * si on fait strictement mieux en wordCount.
- *
- * Cloudflare Browser Rendering reste appelable via crawlWithBrowser mais
- * n'est plus utilisé dans la cascade par défaut : le free tier (10 min/jour)
- * s'épuise vite et BR ne contourne pas les WAF que ScrapingBee passe
- * (Akamai, Cloudflare strict). On garde le code disponible pour usage
- * futur (genre quota ScrapingBee épuisé), mais la stratégie courante est
- * fetch direct → ScrapingBee.
- */
-async function escalateCrawl(
-  url: string,
-  baseline: PageContent | null,
-): Promise<PageContent | null> {
-  let best = baseline;
-
-  // Niveau 2 : ScrapingBee (proxy résidentiel, rapide, fiable, payant
-  // après 1000 crédits free)
-  const sbHtml = await crawlWithScrapingBee(url);
-  if (sbHtml && !looksLikeChallengePage(sbHtml)) {
-    const parsed = parseHTML(sbHtml);
-    if (parsed.wordCount >= 100 && (!best || parsed.wordCount > best.wordCount)) {
-      best = parsed;
-    }
-  }
-  return best;
-}
 
 /**
  * Niveau 3 : ScrapingBee REST API. Utilise des IPs résidentielles et

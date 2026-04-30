@@ -204,11 +204,9 @@ function SharedBriefCard({
             />
             <Pill
               label="KGR"
-              value={brief.kgr != null ? brief.kgr.toFixed(2) : "N/A"}
+              value={brief.kgr != null ? brief.kgr.toFixed(2) : "—"}
               tooltip="Keyword Golden Ratio."
-              tone={
-                brief.kgr == null ? "muted" : brief.kgr < 0.25 ? "good" : brief.kgr < 1 ? "warn" : "bad"
-              }
+              tone={brief.kgr != null && brief.kgr < 0.25 ? "good" : "muted"}
             />
             <Pill
               label="Pos"

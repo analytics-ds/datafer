@@ -13,12 +13,32 @@ const COUNTRIES = [
   { value: "it", label: "Italie" },
 ];
 
-const LOADING_STEPS = [
-  "Requête SERP",
-  "Crawl des pages",
-  "Analyse NLP / TF-IDF",
-  "Données Haloscan",
-  "Préparation du brief",
+const LOADING_STEPS: Array<{ label: string; sub: string; durationMs: number }> = [
+  {
+    label: "Récupération du top 10 Google",
+    sub: "Interrogation SERP via CrazySerp",
+    durationMs: 4000,
+  },
+  {
+    label: "Crawl des 10 sites concurrents",
+    sub: "Rendering JS via IPs résidentielles (ScrapingBee)",
+    durationMs: 25000,
+  },
+  {
+    label: "Extraction du champ sémantique",
+    sub: "TF-IDF + entités nommées",
+    durationMs: 4000,
+  },
+  {
+    label: "Calcul du score concurrentiel",
+    sub: "Scoring détaillé de chaque concurrent",
+    durationMs: 3000,
+  },
+  {
+    label: "Préparation du brief",
+    sub: "Sauvegarde et indexation",
+    durationMs: 2000,
+  },
 ];
 
 export function NewBriefForm({
@@ -43,9 +63,18 @@ export function NewBriefForm({
     setLoading(true);
     setStep(0);
 
-    const tick = setInterval(() => {
-      setStep((s) => (s < LOADING_STEPS.length - 1 ? s + 1 : s));
-    }, 3000);
+    // Avance les étapes selon les durées estimées de chacune. C'est un
+    // visuel basé sur des moyennes observées, pas un retour temps réel
+    // du backend (à terme : polling sur un champ analysis_step en BDD).
+    const stepTimers: ReturnType<typeof setTimeout>[] = [];
+    let cumulative = 0;
+    LOADING_STEPS.forEach((s, i) => {
+      cumulative += s.durationMs;
+      if (i < LOADING_STEPS.length - 1) {
+        stepTimers.push(setTimeout(() => setStep(i + 1), cumulative));
+      }
+    });
+    const clearTimers = () => stepTimers.forEach(clearTimeout);
 
     try {
       const res = await fetch("/api/briefs", {
@@ -58,7 +87,7 @@ export function NewBriefForm({
           myUrl: myUrl.trim() || null,
         }),
       });
-      clearInterval(tick);
+      clearTimers();
 
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
@@ -69,7 +98,7 @@ export function NewBriefForm({
       const j = (await res.json()) as { redirect: string };
       router.push(j.redirect);
     } catch (err) {
-      clearInterval(tick);
+      clearTimers();
       setError(err instanceof Error ? err.message : "Erreur inconnue");
       setLoading(false);
     }
@@ -153,42 +182,56 @@ export function NewBriefForm({
         </button>
 
         <p className="text-[11px] text-[var(--text-muted)] mt-5 text-center">
-          L&apos;analyse prend environ 15-30 secondes (SERP, crawl, NLP, Haloscan).
+          L&apos;analyse prend environ 30-45 secondes (SERP + crawl résidentiel + NLP).
         </p>
       </fieldset>
 
       {loading && (
-        <div className="absolute inset-0 bg-[var(--bg-card)]/95 backdrop-blur-sm rounded-[var(--radius)] flex flex-col items-center justify-center gap-5 z-10">
+        <div className="absolute inset-0 bg-[var(--bg-card)]/95 backdrop-blur-sm rounded-[var(--radius)] flex flex-col items-center justify-center gap-5 z-10 p-6">
           <div className="w-10 h-10 border-[3px] border-[var(--border)] border-t-[var(--bg-black)] rounded-full animate-spin" />
-          <div className="font-[family-name:var(--font-display)] text-[20px] tracking-[-0.3px]">
+          <div className="font-[family-name:var(--font-display)] text-[22px] tracking-[-0.3px]">
             Analyse en cours…
           </div>
-          <ul className="flex flex-col gap-[6px]">
-            {LOADING_STEPS.map((label, i) => (
-              <li
-                key={label}
-                className={`text-[13px] flex items-center gap-[9px] ${
-                  i === step
-                    ? "text-[var(--text)] font-semibold"
-                    : i < step
-                      ? "text-[var(--green)]"
-                      : "text-[var(--text-muted)]"
-                }`}
-              >
-                <span
-                  className={`w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center text-[9px] ${
-                    i < step
-                      ? "border-[var(--green)] bg-[var(--green)] text-white"
-                      : i === step
-                        ? "border-[var(--bg-black)]"
-                        : "border-[var(--border)]"
+          <ul className="flex flex-col gap-[10px] max-w-[340px]">
+            {LOADING_STEPS.map((s, i) => {
+              const state = i === step ? "current" : i < step ? "done" : "pending";
+              return (
+                <li
+                  key={s.label}
+                  className={`flex items-start gap-[10px] ${
+                    state === "current"
+                      ? "text-[var(--text)]"
+                      : state === "done"
+                        ? "text-[var(--text-secondary)]"
+                        : "text-[var(--text-muted)]"
                   }`}
                 >
-                  {i < step ? "✓" : i + 1}
-                </span>
-                {label}
-              </li>
-            ))}
+                  <span
+                    className={`w-[20px] h-[20px] rounded-full border-2 flex items-center justify-center text-[10px] shrink-0 mt-[1px] ${
+                      state === "done"
+                        ? "border-[var(--green)] bg-[var(--green)] text-white"
+                        : state === "current"
+                          ? "border-[var(--bg-black)] bg-[var(--bg-black)] text-white"
+                          : "border-[var(--border)]"
+                    }`}
+                  >
+                    {state === "done" ? "✓" : state === "current" ? (
+                      <span className="w-[6px] h-[6px] rounded-full bg-white animate-pulse" />
+                    ) : (
+                      i + 1
+                    )}
+                  </span>
+                  <div className="flex flex-col">
+                    <span
+                      className={`text-[13px] ${state === "current" ? "font-semibold" : ""}`}
+                    >
+                      {s.label}
+                    </span>
+                    <span className="text-[11px] text-[var(--text-muted)]">{s.sub}</span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
