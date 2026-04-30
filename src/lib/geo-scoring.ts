@@ -107,8 +107,12 @@ export function extractGeoSignals(editorRoot: HTMLElement): GeoSignals {
   // 5. Statistiques chiffrées : on cherche les patterns « <nombre> <unité> »
   //    et « <nombre>% ». 3 occurrences distinctes au minimum pour qu'on
   //    valide le critère.
+  //
+  //    Note : pas de `\b` final car \b en JS regex est défini sur les
+  //    word chars ASCII, donc il ne matche pas après €/$/%. On utilise un
+  //    lookahead négatif pour ne pas découper au milieu d'un mot.
   const text = editorRoot.textContent ?? "";
-  const numericRegex = /\b\d+(?:[.,]\d+)?\s*(?:%|€|\$|km|kg|cm|mm|ms|m²|m2|ans?|jours?|paires?|fois|mots?|heures?|minutes?)\b/gi;
+  const numericRegex = /\b\d+(?:[.,]\d+)?\s*(?:%|€|\$|km|kg|cm|mm|m²|m2|ans?|jours?|paires?|fois|mots?|heures?|minutes?)(?![a-zA-Zé])/gi;
   const numericMentionsCount = (text.match(numericRegex) ?? []).length;
 
   return {
