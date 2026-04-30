@@ -4,11 +4,8 @@ import { eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
-import {
-  renderDocDocument,
-  renderHtmlDocument,
-  safeFilename,
-} from "@/lib/export-content";
+import { renderHtmlDocument, safeFilename } from "@/lib/export-content";
+import { renderDocx } from "@/lib/export-docx";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +16,8 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 
   const url = new URL(req.url);
   const format = url.searchParams.get("format");
-  if (format !== "html" && format !== "doc")
-    return NextResponse.json({ error: "format must be html or doc" }, { status: 400 });
+  if (format !== "html" && format !== "docx")
+    return NextResponse.json({ error: "format must be html or docx" }, { status: 400 });
 
   const db = getDb();
   const [row] = await db
@@ -33,7 +30,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   return buildResponse(row.keyword, row.editorHtml ?? "", format);
 }
 
-function buildResponse(keyword: string, html: string, format: "html" | "doc") {
+function buildResponse(keyword: string, html: string, format: "html" | "docx") {
   const slug = safeFilename(keyword);
   if (format === "html") {
     return new Response(renderHtmlDocument(keyword, html), {
@@ -43,10 +40,14 @@ function buildResponse(keyword: string, html: string, format: "html" | "doc") {
       },
     });
   }
-  return new Response(renderDocDocument(keyword, html), {
+  const buf = renderDocx(keyword, html);
+  // TS strict pinaille sur Uint8Array<ArrayBufferLike> vs BodyInit ; en
+  // pratique tous les runtimes acceptent un Uint8Array directement.
+  return new Response(buf as unknown as BodyInit, {
     headers: {
-      "Content-Type": "application/msword; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${slug}.doc"`,
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "Content-Disposition": `attachment; filename="${slug}.docx"`,
     },
   });
 }

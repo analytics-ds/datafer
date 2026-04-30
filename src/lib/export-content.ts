@@ -52,38 +52,6 @@ ${body}
 }
 
 /**
- * Document Word (.doc) : c'est en fait un fichier HTML enveloppé d'en-têtes
- * `xmlns:office`/`xmlns:word`, que Word/Pages reconnaissent en double-cliquant
- * sur le fichier `.doc`. Aucune dépendance npm, marche sur Cloudflare Workers.
- */
-export function renderDocDocument(keyword: string, bodyHtml: string): string {
-  const title = escapeHtml(keyword);
-  const body = bodyHtml || "<p><em>Contenu vide.</em></p>";
-  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="utf-8">
-<title>${title}</title>
-<!--[if gte mso 9]><xml>
-<w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument>
-</xml><![endif]-->
-<style>
-  @page { margin: 2cm; }
-  body { font-family: Calibri, "Segoe UI", sans-serif; font-size: 11pt; line-height: 1.6; }
-  h1 { font-size: 22pt; margin-top: 18pt; }
-  h2 { font-size: 16pt; margin-top: 16pt; }
-  h3 { font-size: 13pt; margin-top: 12pt; }
-  p { margin: 0 0 8pt; }
-  table { border-collapse: collapse; width: 100%; margin: 10pt 0; }
-  th, td { border: 1px solid #999; padding: 6pt 9pt; text-align: left; }
-</style>
-</head>
-<body>
-${body}
-</body>
-</html>`;
-}
-
-/**
  * Page imprimable (PDF via window.print()). Auto-déclenche le dialog
  * d'impression au chargement, et propose un bouton « Imprimer » pour
  * relancer manuellement.

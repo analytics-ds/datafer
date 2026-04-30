@@ -20,11 +20,10 @@ export function ExportMenu({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  function download(format: "html" | "doc") {
+  function download(format: "html" | "docx") {
     const url = `${exportEndpoint}?format=${format}`;
     // download attribute permet au navigateur d'utiliser le filename donné
-    // par Content-Disposition côté serveur. On ouvre dans un iframe caché
-    // pour ne pas naviguer hors de la page.
+    // par Content-Disposition côté serveur.
     const a = document.createElement("a");
     a.href = url;
     a.rel = "noopener";
@@ -66,9 +65,9 @@ export function ExportMenu({
             secondary=".html prêt à publier"
           />
           <ExportItem
-            onClick={() => download("doc")}
+            onClick={() => download("docx")}
             primary="Word"
-            secondary=".doc lisible Word & Pages"
+            secondary=".docx Office Open XML"
           />
           <ExportItem
             onClick={openPrint}
