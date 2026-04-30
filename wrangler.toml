@@ -20,8 +20,13 @@ binding = "BROWSER"
 
 [vars]
 BETTER_AUTH_URL = "https://datafer.analytics-e0d.workers.dev"
+# Provider SERP : "crazyserp" (par défaut, ~$0.50/1k FR) ou "serpapi"
+# (~$10/1k). Peut être basculé sans redeploy via `wrangler secret put` ou
+# en éditant cette ligne et `npm run deploy`.
+SERP_PROVIDER = "crazyserp"
 
 # Secrets set via `wrangler secret put`:
 # - BETTER_AUTH_SECRET       (openssl rand -base64 32)
-# - SERPAPI_KEY              (serpapi.com)
+# - CRAZYSERP_KEY            (crazyserp.com, provider par défaut)
+# - SERPAPI_KEY              (serpapi.com, provider de fallback)
 # - HALOSCAN_KEY             (haloscan JWT)

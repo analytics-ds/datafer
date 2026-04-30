@@ -113,9 +113,138 @@ export type NlpResult = {
   maxWordCount: number;
 };
 
-// ─── SERPAPI ─────────────────────────────────────────────────────────────────
+// ─── SERP providers (CrazySerp + SerpAPI) ────────────────────────────────────
+//
+// On supporte deux providers pour pouvoir basculer entre les essais gratuits.
+// Le choix se fait via la variable d'env `SERP_PROVIDER` :
+//   - "crazyserp" (par défaut) : utilise CRAZYSERP_KEY
+//   - "serpapi"                : utilise SERPAPI_KEY
+//
+// CrazySerp est ~150× moins cher mais limité aux crédits dispo. SerpAPI
+// reste utile pour les jours où on dépasse le quota CrazySerp.
 
-type SerpRaw = {
+export type SerpProvider = "crazyserp" | "serpapi";
+
+export async function fetchSerp(
+  keyword: string,
+  country: string,
+  apiKey: string,
+  provider: SerpProvider = "crazyserp",
+): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
+  if (provider === "serpapi") {
+    return fetchSerpFromSerpapi(keyword, country, apiKey);
+  }
+  return fetchSerpFromCrazyserp(keyword, country, apiKey);
+}
+
+// ─── CrazySerp ───────────────────────────────────────────────────────────────
+// GET https://crazyserp.com/api/search?q=...&page=1&location=France
+// Header : `Authorization: Bearer <CRAZYSERP_KEY>`
+// 1 page = 1 crédit. -50% sur les requêtes France.
+
+type CrazySerpOrganic = {
+  position?: number;
+  url?: string;
+  title?: string;
+  description?: string;
+  url_title?: string;
+  is_video?: boolean;
+};
+
+type CrazySerpResponse = {
+  success?: boolean;
+  parsed_data?: {
+    organic?: CrazySerpOrganic[];
+    people_also_ask?: Array<{ question?: string; answer?: string }>;
+  };
+  error?: string;
+};
+
+const COUNTRY_TO_LOCATION: Record<string, string> = {
+  fr: "France",
+  us: "United States",
+  uk: "United Kingdom",
+  gb: "United Kingdom",
+  de: "Germany",
+  es: "Spain",
+  it: "Italy",
+};
+
+async function fetchCrazyserpPage(
+  keyword: string,
+  country: string,
+  apiKey: string,
+  page: number,
+): Promise<CrazySerpResponse | null> {
+  const location = COUNTRY_TO_LOCATION[country.toLowerCase()] ?? "France";
+  const params = new URLSearchParams({
+    q: keyword,
+    page: String(page),
+    pageOffset: "0",
+    location,
+  });
+  const url = `https://crazyserp.com/api/search?${params.toString()}`;
+  const r = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    signal: AbortSignal.timeout(25000),
+  });
+  if (!r.ok) return null;
+  const d = (await r.json()) as CrazySerpResponse;
+  if (!d.success) return null;
+  return d;
+}
+
+async function fetchSerpFromCrazyserp(
+  keyword: string,
+  country: string,
+  apiKey: string,
+): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
+  // Page 1 = 1 crédit. Renvoie ~10 résultats organiques (parfois 8-9 si
+  // Google a inséré des blocs spéciaux).
+  const first = await fetchCrazyserpPage(keyword, country, apiKey, 1);
+  if (!first) return { results: [], allResults: [], paa: [] };
+
+  const pd = first.parsed_data ?? {};
+  let allOrganic = pd.organic ?? [];
+
+  const paa: Paa[] = (pd.people_also_ask ?? []).map((q) => ({
+    question: q.question ?? "",
+    snippet: q.answer ?? "",
+    link: "",
+  }));
+
+  // Si moins de 10 résultats sur la page 1, on pagine pour atteindre 10.
+  // Au-delà on s'arrête : économie de crédits, et le top 10 suffit à la
+  // NLP et au crawl.
+  let page = 2;
+  let attempts = 0;
+  while (allOrganic.length < 10 && attempts < 2) {
+    attempts++;
+    const next = await fetchCrazyserpPage(keyword, country, apiKey, page);
+    if (!next) break;
+    const more = next.parsed_data?.organic ?? [];
+    if (more.length === 0) break;
+    allOrganic = [...allOrganic, ...more];
+    page++;
+  }
+
+  const allResults: SerpResult[] = allOrganic.map((r, i) => ({
+    position: r.position ?? i + 1,
+    title: r.title ?? "",
+    link: r.url ?? "",
+    snippet: r.description ?? "",
+    displayed_link: r.url_title ?? r.url ?? "",
+  }));
+  const results = allResults.slice(0, 10);
+  return { results, allResults, paa };
+}
+
+// ─── SerpAPI (fallback) ──────────────────────────────────────────────────────
+
+type SerpApiRaw = {
   organic_results?: Array<{
     position?: number;
     title?: string;
@@ -127,14 +256,14 @@ type SerpRaw = {
   error?: string;
 };
 
-async function fetchSerpPage(
+async function fetchSerpapiPage(
   keyword: string,
   gl: string,
   hl: string,
   apiKey: string,
   start: number,
   num: number,
-): Promise<SerpRaw | null> {
+): Promise<SerpApiRaw | null> {
   const params = new URLSearchParams({
     q: keyword,
     gl,
@@ -146,12 +275,12 @@ async function fetchSerpPage(
   const url = `https://serpapi.com/search.json?${params.toString()}`;
   const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
   if (!r.ok) return null;
-  const d = (await r.json()) as SerpRaw;
+  const d = (await r.json()) as SerpApiRaw;
   if (d.error) return null;
   return d;
 }
 
-export async function fetchSerp(
+async function fetchSerpFromSerpapi(
   keyword: string,
   country: string,
   apiKey: string,
@@ -159,9 +288,7 @@ export async function fetchSerp(
   const gl = country === "uk" ? "gb" : country;
   const hl = ["us", "uk"].includes(country) ? "en" : country;
 
-  // Premier appel : num=100 pour récupérer le top 100 (utile pour
-  // findDomainPosition au-delà du top 10).
-  const first = await fetchSerpPage(keyword, gl, hl, apiKey, 0, 100);
+  const first = await fetchSerpapiPage(keyword, gl, hl, apiKey, 0, 100);
   if (!first) return { results: [], allResults: [], paa: [] };
 
   let allRaw = first.organic_results ?? [];
@@ -171,14 +298,11 @@ export async function fetchSerp(
     link: q.link ?? "",
   }));
 
-  // Si Google a inséré des blocs spéciaux (PAA, featured snippet, vidéos…)
-  // on peut se retrouver avec moins de 10 organic_results sur la page 1.
-  // On pagine alors la SERP pour combler jusqu'à 10.
   let start = allRaw.length;
   let attempts = 0;
   while (allRaw.length < 10 && attempts < 2) {
     attempts++;
-    const next = await fetchSerpPage(keyword, gl, hl, apiKey, start, 10);
+    const next = await fetchSerpapiPage(keyword, gl, hl, apiKey, start, 10);
     if (!next) break;
     const more = next.organic_results ?? [];
     if (more.length === 0) break;
@@ -186,14 +310,13 @@ export async function fetchSerp(
     start += more.length;
   }
 
-  const allResults = allRaw.map((r, i) => ({
+  const allResults: SerpResult[] = allRaw.map((r, i) => ({
     position: r.position ?? i + 1,
     title: r.title ?? "",
     link: r.link ?? "",
     snippet: r.snippet ?? "",
     displayed_link: r.displayed_link ?? r.link ?? "",
   }));
-  // Top 10 utilisé pour le crawl + NLP. allResults sert à findDomainPosition.
   const results = allResults.slice(0, 10);
   return { results, allResults, paa };
 }

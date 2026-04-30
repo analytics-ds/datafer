@@ -116,11 +116,19 @@ export async function createBrief(
 
   const { env } = getCloudflareContext();
   const e = env as unknown as Record<string, string | undefined>;
-  const serpKey = e.SERPAPI_KEY;
+  const provider = (e.SERP_PROVIDER === "serpapi" ? "serpapi" : "crazyserp") as
+    | "crazyserp"
+    | "serpapi";
+  const serpKey = provider === "serpapi" ? e.SERPAPI_KEY : e.CRAZYSERP_KEY;
   const haloscanKey = e.HALOSCAN_KEY;
-  if (!serpKey) return { ok: false, status: 500, error: "SERPAPI_KEY missing on server" };
+  if (!serpKey)
+    return {
+      ok: false,
+      status: 500,
+      error: `${provider === "serpapi" ? "SERPAPI_KEY" : "CRAZYSERP_KEY"} missing on server`,
+    };
 
-  const { results, allResults, paa } = await fetchSerp(keyword, country, serpKey);
+  const { results, allResults, paa } = await fetchSerp(keyword, country, serpKey, provider);
   if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
 
   const settled = await Promise.allSettled(results.map((r) => crawlPage(r.link)));
@@ -402,11 +410,19 @@ async function createBriefAnalysisPayload(userId: string, input: CreateBriefInpu
 
   const { env } = getCloudflareContext();
   const e = env as unknown as Record<string, string | undefined>;
-  const serpKey = e.SERPAPI_KEY;
+  const provider = (e.SERP_PROVIDER === "serpapi" ? "serpapi" : "crazyserp") as
+    | "crazyserp"
+    | "serpapi";
+  const serpKey = provider === "serpapi" ? e.SERPAPI_KEY : e.CRAZYSERP_KEY;
   const haloscanKey = e.HALOSCAN_KEY;
-  if (!serpKey) return { ok: false, status: 500, error: "SERPAPI_KEY missing on server" };
+  if (!serpKey)
+    return {
+      ok: false,
+      status: 500,
+      error: `${provider === "serpapi" ? "SERPAPI_KEY" : "CRAZYSERP_KEY"} missing on server`,
+    };
 
-  const { results, allResults, paa } = await fetchSerp(keyword, country, serpKey);
+  const { results, allResults, paa } = await fetchSerp(keyword, country, serpKey, provider);
   if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
 
   const settled = await Promise.allSettled(results.map((r) => crawlPage(r.link)));
