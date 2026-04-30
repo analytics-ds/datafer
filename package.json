@@ -16,6 +16,7 @@
     "create-user": "tsx scripts/create-user.ts"
   },
   "dependencies": {
+    "@cloudflare/puppeteer": "^1.1.0",
     "better-auth": "^1.6.3",
     "drizzle-orm": "^0.45.2",
     "fflate": "^0.8.2",

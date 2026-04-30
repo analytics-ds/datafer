@@ -11,6 +11,13 @@ database_name = "datafer"
 database_id = "52061f81-b4f5-4b32-9685-a015b0981a29"
 migrations_dir = "drizzle"
 
+# Browser Rendering pour fallback de crawl quand le fetch HTTP est bloqué
+# (sites avec WAF anti-bot type Akamai/Cloudflare strict).
+# Free tier : 10 min/jour, 3 browsers concurrents. Workers Paid plan
+# requis pour le binding (~5$/mois).
+[browser]
+binding = "BROWSER"
+
 [vars]
 BETTER_AUTH_URL = "https://datafer.analytics-e0d.workers.dev"
 

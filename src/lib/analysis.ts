@@ -400,7 +400,18 @@ function normalizeDomain(input: string | null | undefined): string | null {
 const GOOGLEBOT_UA =
   "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.7258.156 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 
+/**
+ * Tente de récupérer le HTML d'une page :
+ *  1. fetch direct avec UA Googlebot — rapide, gratuit
+ *  2. fallback Cloudflare Browser Rendering si le fetch échoue ou que le
+ *     site renvoie 403/Cloudflare-block (Akamai et co. font du reverse-DNS
+ *     sur l'IP, le UA seul ne suffit pas)
+ *
+ * Le browser rendering coûte du temps de quota (10 min/jour en free tier),
+ * on ne l'active que pour les pages réellement bloquées.
+ */
 export async function crawlPage(url: string): Promise<PageContent | null> {
+  // 1. Tentative fetch direct
   try {
     const r = await fetch(url, {
       signal: AbortSignal.timeout(12000),
@@ -412,10 +423,54 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
       },
       redirect: "follow",
     });
-    if (!r.ok) return null;
-    const html = await r.text();
-    const truncated = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
-    return parseHTML(truncated);
+    if (r.ok) {
+      const html = await r.text();
+      const truncated = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
+      return parseHTML(truncated);
+    }
+    // Status 403/429/503 = WAF anti-bot probable, on tente le fallback browser.
+    if (r.status === 403 || r.status === 429 || r.status === 503) {
+      const html = await crawlWithBrowser(url);
+      if (html) return parseHTML(html);
+    }
+    return null;
+  } catch {
+    // Timeout / TLS error / DNS : on tente quand même le browser
+    const html = await crawlWithBrowser(url);
+    if (html) return parseHTML(html);
+    return null;
+  }
+}
+
+/**
+ * Fallback via Cloudflare Browser Rendering : lance un Chromium headless
+ * et récupère le HTML rendu. Plus lent (~3-5s) et limité par le quota
+ * (10 min/jour en free, illimité en Workers Paid).
+ *
+ * Retourne null si le binding n'est pas disponible (dev local sans
+ * `wrangler dev --remote`) ou si le navigateur échoue.
+ */
+async function crawlWithBrowser(url: string): Promise<string | null> {
+  try {
+    // Imports dynamiques : on ne charge la lib que si on en a besoin,
+    // et on évite de péter le build local sans le binding configuré.
+    const [{ getCloudflareContext }, puppeteerModule] = await Promise.all([
+      import("@opennextjs/cloudflare"),
+      import("@cloudflare/puppeteer"),
+    ]);
+    const env = getCloudflareContext().env as { BROWSER?: unknown };
+    if (!env.BROWSER) return null;
+    const puppeteer = puppeteerModule.default;
+    const browser = await puppeteer.launch(env.BROWSER as never);
+    try {
+      const page = await browser.newPage();
+      await page.setUserAgent(GOOGLEBOT_UA);
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
+      const html = await page.content();
+      return html;
+    } finally {
+      await browser.close().catch(() => {});
+    }
   } catch {
     return null;
   }
