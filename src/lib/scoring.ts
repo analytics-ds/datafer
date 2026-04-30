@@ -8,8 +8,10 @@
 import type { NlpResult } from "./analysis";
 import { computeGeoScore, EMPTY_GEO_SIGNALS, type GeoScore, type GeoSignals } from "./geo-scoring";
 
-const SEO_WEIGHT = 0.8;
-const GEO_WEIGHT = 0.2;
+// GEO = simple checklist d'optimisation pour les LLMs, pèse 10 points sur 100.
+// Le SEO classique reste l'essentiel (90 pts).
+const SEO_WEIGHT = 0.9;
+const GEO_WEIGHT = 0.1;
 
 /**
  * Normalisation lowercase + suppression des diacritiques (accents).
