@@ -76,10 +76,11 @@ export function buildKeywordRegex(keyword: string): RegExp {
   // 5 lettres de tolérance pour absorber les suffixes longs ("iques",
   // "ements"…) tout en limitant les faux positifs.
   const patterns = words.map((w) => `${escapeRegex(frenchStem(w))}[a-z]{0,5}`);
-  // Entre les termes du keyword on autorise jusqu'à 3 mots interposés :
-  // « meilleur transport » matche aussi « meilleure entreprise de transport ».
-  // Au-delà de 3 mots la corrélation sémantique devient trop faible.
-  const between = `(?:\\s+[a-z'-]+){0,3}\\s+`;
+  // Entre les termes du keyword on autorise jusqu'à 2 mots interposés :
+  // « meilleur transport » matche aussi « meilleure entreprise transport »
+  // ou « meilleurs trains de transport ». Au-delà la corrélation
+  // sémantique devient trop faible.
+  const between = `(?:\\s+[a-z'-]+){0,2}\\s+`;
   return new RegExp(`\\b${patterns.join(between)}\\b`, "gi");
 }
 
