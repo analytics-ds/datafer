@@ -537,23 +537,22 @@ const GOOGLEBOT_UA =
  * on ne l'active que pour les pages réellement bloquées.
  */
 /**
- * Stratégie de crawl : ScrapingBee en premier pour TOUS les sites
- * (qualité maximale, IPs résidentielles), avec fetch direct en
- * fallback si ScrapingBee échoue (quota épuisé, panne, etc).
+ * Cascade de crawl optimisée pour le coût ScrapingBee :
  *
- * Coût : 1 crédit ScrapingBee par site. Pour 500 briefs/mois × 10
- * sites = 5000 crédits/mois (~$2.50 sur Crawlbase pay-as-you-go,
- * ou free trial ScrapingBee 1000 crédits = 100 briefs).
+ *   1. fetch direct UA Googlebot (gratuit) — passe ~70% des sites
+ *   2. ScrapingBee render_js seul (5 crédits) — passe les SPA simples
+ *   3. ScrapingBee render_js + premium_proxy (25 crédits) — passe les
+ *      WAF stricts type Akamai/Cloudflare
+ *
+ * Coût moyen attendu pour 10 sites SERP :
+ *   - ~7 sites en fetch direct = 0 crédit
+ *   - ~2 sites en ScrapingBee léger = 10 crédits
+ *   - ~1 site en ScrapingBee full = 25 crédits
+ *   - Total : ~35 crédits/brief (au lieu de 250 avant), donc 1000 crédits
+ *     free = ~28 briefs gratuits.
  */
 export async function crawlPage(url: string): Promise<PageContent | null> {
-  // 1. ScrapingBee en priorité
-  const sbHtml = await crawlWithScrapingBee(url);
-  if (sbHtml && !looksLikeChallengePage(sbHtml)) {
-    const parsed = parseHTML(sbHtml);
-    if (parsed.wordCount >= 100) return parsed;
-  }
-
-  // 2. Fallback fetch direct si ScrapingBee a planté
+  // 1. Fetch direct (gratuit)
   try {
     const r = await fetch(url, {
       signal: AbortSignal.timeout(10000),
@@ -565,16 +564,44 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
       },
       redirect: "follow",
     });
-    if (!r.ok) return null;
-    const html = await r.text();
-    const truncated = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
-    if (looksLikeChallengePage(truncated)) return null;
-    const parsed = parseHTML(truncated);
-    if (parsed.wordCount < 100) return null;
-    return parsed;
+    if (r.ok) {
+      const html = await r.text();
+      const truncated = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
+      if (!looksLikeChallengePage(truncated)) {
+        const parsed = parseHTML(truncated);
+        // Seuil 200 mots : sous ce seuil on suppose que le contenu est
+    // partiel ou tronqué (page non hydratée, contenu lazy-loaded, WAF
+    // qui sert une version dégradée). Dans ce cas on tente le niveau
+    // suivant pour voir si on récupère plus.
+    if (parsed.wordCount >= 200) return parsed;
+      }
+    }
   } catch {
-    return null;
+    // Timeout / TLS / DNS : on bascule sur ScrapingBee
   }
+
+  // 2. ScrapingBee léger (render_js seul, 5 crédits)
+  const lightHtml = await crawlWithScrapingBee(url, { renderJs: true, premiumProxy: false });
+  if (lightHtml && !looksLikeChallengePage(lightHtml)) {
+    const parsed = parseHTML(lightHtml);
+    // Seuil 200 mots : sous ce seuil on suppose que le contenu est
+    // partiel ou tronqué (page non hydratée, contenu lazy-loaded, WAF
+    // qui sert une version dégradée). Dans ce cas on tente le niveau
+    // suivant pour voir si on récupère plus.
+    if (parsed.wordCount >= 200) return parsed;
+  }
+
+  // 3. ScrapingBee full (premium_proxy + render_js, 25 crédits) en dernier
+  // recours pour les sites tier-1 protégés (Akamai etc.)
+  const fullHtml = await crawlWithScrapingBee(url, { renderJs: true, premiumProxy: true });
+  if (fullHtml && !looksLikeChallengePage(fullHtml)) {
+    const parsed = parseHTML(fullHtml);
+    // Niveau 3 = dernier recours : on accepte un seuil plus bas (100)
+    // pour ne pas tout perdre sur les pages courtes mais légitimes.
+    if (parsed.wordCount >= 100) return parsed;
+  }
+
+  return null;
 }
 
 
@@ -587,7 +614,10 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
  *
  * Retourne null si la clé n'est pas configurée ou si la requête échoue.
  */
-async function crawlWithScrapingBee(url: string): Promise<string | null> {
+async function crawlWithScrapingBee(
+  url: string,
+  opts: { renderJs: boolean; premiumProxy: boolean },
+): Promise<string | null> {
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const env = getCloudflareContext().env as unknown as Record<
@@ -600,23 +630,33 @@ async function crawlWithScrapingBee(url: string): Promise<string | null> {
     const params = new URLSearchParams({
       api_key: apiKey,
       url,
-      render_js: "true",
-      premium_proxy: "true",
-      country_code: "fr",
-      // wait_browser : attend que le DOM soit stable (équivalent
-      // networkidle0). Important pour les SPA.
-      wait_browser: "domcontentloaded",
-      block_resources: "false",
+      render_js: opts.renderJs ? "true" : "false",
+      premium_proxy: opts.premiumProxy ? "true" : "false",
     });
+    // country_code (FR) n'est appliqué qu'avec premium_proxy ; ScrapingBee
+    // refuse le param si on n'est pas en proxy résidentiel.
+    if (opts.premiumProxy) params.set("country_code", "fr");
+    if (opts.renderJs) {
+      params.set("wait_browser", "domcontentloaded");
+      params.set("block_resources", "false");
+    }
     const r = await fetch(`https://app.scrapingbee.com/api/v1/?${params.toString()}`, {
       signal: AbortSignal.timeout(30000),
     });
     if (!r.ok) {
-      console.log("[scrapingbee] http error", { url, status: r.status });
+      console.log("[scrapingbee] http error", {
+        url,
+        status: r.status,
+        opts,
+      });
       return null;
     }
     const html = await r.text();
-    console.log("[scrapingbee] ok", { url, htmlLength: html.length });
+    console.log("[scrapingbee] ok", {
+      url,
+      htmlLength: html.length,
+      cost: opts.premiumProxy && opts.renderJs ? 25 : opts.premiumProxy ? 10 : opts.renderJs ? 5 : 1,
+    });
     return html;
   } catch (e) {
     console.log("[scrapingbee] exception", { url, err: String(e) });
