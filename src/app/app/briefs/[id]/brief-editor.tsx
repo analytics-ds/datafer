@@ -415,7 +415,7 @@ export function BriefEditor(props: BriefEditorProps) {
                 contentEditable
                 suppressContentEditableWarning
                 spellCheck
-                lang="fr-FR"
+                lang={spellcheckLang(country)}
                 onInput={readEditor}
                 onKeyUp={updateCurrentTag}
                 onMouseUp={updateCurrentTag}
@@ -1745,4 +1745,22 @@ function HeadingLine({ level, text }: { level: "h1" | "h2" | "h3"; text: string 
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+/**
+ * Mapping country → BCP 47 pour `lang` du correcteur navigateur. Le brief
+ * stocke un code pays (fr, us, uk, de, it, es) qui sert aussi à scoper la
+ * SERP. On le réutilise pour aiguiller le spellcheck vers le bon dico.
+ */
+function spellcheckLang(country: string): string {
+  switch (country.toLowerCase()) {
+    case "us": return "en-US";
+    case "uk":
+    case "gb": return "en-GB";
+    case "de": return "de-DE";
+    case "it": return "it-IT";
+    case "es": return "es-ES";
+    case "fr":
+    default: return "fr-FR";
+  }
 }
