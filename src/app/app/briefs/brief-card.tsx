@@ -5,7 +5,16 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { faviconUrl } from "@/lib/favicon";
 import { relativeDate } from "@/lib/relative-date";
-import { deleteBriefAction } from "./actions";
+import {
+  attachTagAction,
+  createTagAction,
+  deleteBriefAction,
+  detachTagAction,
+  updateWorkflowStatusAction,
+} from "./actions";
+import type { WorkflowStatus } from "./workflow-status";
+import { StatusPicker } from "./status-picker";
+import { TagPicker, type TagDTO } from "./tag-picker";
 
 export type BriefCardData = {
   id: string;
@@ -17,6 +26,8 @@ export type BriefCardData = {
   competition: number | null;
   kgr: number | null;
   position: number | null;
+  workflowStatus: WorkflowStatus;
+  tags: TagDTO[];
   author: { id: string; name: string | null; image: string | null } | null;
   folder: { id: string; name: string; website: string | null } | null;
 };
@@ -39,12 +50,16 @@ const COUNTRY_LABELS: Record<string, string> = {
 export function BriefCard({
   brief,
   folders,
+  availableTags,
 }: {
   brief: BriefCardData;
   folders: FolderOption[];
+  availableTags: TagDTO[];
 }) {
   const router = useRouter();
   const [currentFolder, setCurrentFolder] = useState(brief.folder);
+  const [status, setStatus] = useState<WorkflowStatus>(brief.workflowStatus);
+  const [tags, setTags] = useState<TagDTO[]>(brief.tags);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const [deleting, startDelete] = useTransition();
@@ -70,6 +85,37 @@ export function BriefCard({
       router.refresh();
       setConfirmOpen(false);
     });
+  }
+
+  async function onStatusChange(next: WorkflowStatus) {
+    const prev = status;
+    setStatus(next);
+    const res = await updateWorkflowStatusAction(brief.id, next);
+    if (!res.ok) setStatus(prev);
+    else router.refresh();
+  }
+
+  async function onAttachTag(tagId: string) {
+    const tag = availableTags.find((t) => t.id === tagId);
+    if (!tag) return;
+    setTags((t) => (t.some((x) => x.id === tagId) ? t : [...t, tag]));
+    const res = await attachTagAction(brief.id, tagId);
+    if (!res.ok) setTags((t) => t.filter((x) => x.id !== tagId));
+    else router.refresh();
+  }
+
+  async function onDetachTag(tagId: string) {
+    const removed = tags.find((t) => t.id === tagId);
+    setTags((t) => t.filter((x) => x.id !== tagId));
+    const res = await detachTagAction(brief.id, tagId);
+    if (!res.ok && removed) setTags((t) => [...t, removed]);
+    else router.refresh();
+  }
+
+  async function onCreateTag(name: string, color: string): Promise<TagDTO | null> {
+    const res = await createTagAction(name, color);
+    if (!res.ok) return null;
+    return res.tag;
   }
 
   return (
@@ -123,11 +169,20 @@ export function BriefCard({
             tone={positionTone(brief.position)}
           />
         </div>
-        <div className="flex items-center gap-2 mt-[6px]">
+        <div className="flex items-center gap-[6px] flex-wrap mt-[6px]">
           <FolderPickerInline
             current={currentFolder}
             folders={folders}
             onChange={onFolderChange}
+          />
+          <StatusPicker status={status} onChange={onStatusChange} size="sm" />
+          <TagPicker
+            attached={tags}
+            available={availableTags}
+            onAttach={onAttachTag}
+            onDetach={onDetachTag}
+            onCreate={onCreateTag}
+            size="sm"
           />
         </div>
       </div>

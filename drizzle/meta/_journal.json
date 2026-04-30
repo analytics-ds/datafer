@@ -57,6 +57,13 @@
       "when": 1808920000000,
       "tag": "0007_brief_status",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1777543003995,
+      "tag": "0008_stiff_centennial",
+      "breakpoints": true
     }
   ]
 }

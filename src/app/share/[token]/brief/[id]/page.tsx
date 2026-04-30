@@ -6,6 +6,8 @@ import { brief, client } from "@/db/schema";
 import { faviconUrl } from "@/lib/favicon";
 import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
 import { BriefEditor } from "@/app/app/briefs/[id]/brief-editor";
+import { listAllTags, listTagsForBrief } from "@/lib/tags-service";
+import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +34,11 @@ export default async function SharedBriefPage({
   const serp = b.serpJson ? (JSON.parse(b.serpJson) as SerpResult[]) : [];
   const paa = b.paaJson ? (JSON.parse(b.paaJson) as Paa[]) : [];
   const haloscan = b.haloscanJson ? (JSON.parse(b.haloscanJson) as HaloscanOverview) : null;
+
+  const [initialTags, availableTags] = await Promise.all([
+    listTagsForBrief(b.id),
+    listAllTags(),
+  ]);
 
   return (
     <div className="min-h-screen bg-[var(--bg)] flex flex-col">
@@ -92,7 +99,14 @@ export default async function SharedBriefPage({
           paa={paa}
           haloscan={haloscan}
           position={b.position ?? null}
+          workflowStatus={b.workflowStatus as WorkflowStatus}
+          initialTags={initialTags}
+          availableTags={availableTags}
           saveEndpoint={`/api/share/${token}/briefs/${b.id}`}
+          tagsEndpoint={`/api/share/${token}/briefs/${b.id}/tags`}
+          tagsCreateEndpoint={`/api/share/${token}/tags`}
+          exportEndpoint={`/api/share/${token}/briefs/${b.id}/export`}
+          printUrl={`/api/share/${token}/briefs/${b.id}/print`}
           hideNewAnalysis
         />
       </div>

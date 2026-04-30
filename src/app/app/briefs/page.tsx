@@ -6,6 +6,8 @@ import { brief, client, user } from "@/db/schema";
 import { asc, desc, eq } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../_ui";
 import { SearchableBriefList } from "./searchable-brief-list";
+import { listAllTags, listTagsForBriefs } from "@/lib/tags-service";
+import type { WorkflowStatus } from "./workflow-status";
 
 export default async function BriefsPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -13,7 +15,7 @@ export default async function BriefsPage() {
 
   const db = getDb();
 
-  const [rows, folders] = await Promise.all([
+  const [rows, folders, availableTags] = await Promise.all([
     db
       .select({
         id: brief.id,
@@ -31,6 +33,7 @@ export default async function BriefsPage() {
         competition: brief.competition,
         kgr: brief.kgr,
         position: brief.position,
+        workflowStatus: brief.workflowStatus,
       })
       .from(brief)
       .leftJoin(client, eq(client.id, brief.clientId))
@@ -40,7 +43,10 @@ export default async function BriefsPage() {
       .select({ id: client.id, name: client.name, website: client.website })
       .from(client)
       .orderBy(asc(client.name)),
+    listAllTags(),
   ]);
+
+  const tagsByBrief = await listTagsForBriefs(rows.map((r) => r.id));
 
   return (
     <div className="px-10 py-10 max-w-[1100px]">
@@ -67,6 +73,7 @@ export default async function BriefsPage() {
       ) : (
         <SearchableBriefList
           folders={folders}
+          availableTags={availableTags}
           briefs={rows.map((b) => ({
             id: b.id,
             keyword: b.keyword,
@@ -77,6 +84,8 @@ export default async function BriefsPage() {
             competition: b.competition,
             kgr: b.kgr,
             position: b.position,
+            workflowStatus: b.workflowStatus as WorkflowStatus,
+            tags: tagsByBrief.get(b.id) ?? [],
             folder: b.clientId
               ? { id: b.clientId, name: b.folderName ?? "", website: b.folderWebsite }
               : null,

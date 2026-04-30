@@ -127,6 +127,36 @@ export const brief = sqliteTable("brief", {
   // 'failed'  = l'analyse SERP/crawl a planté
   status: text("status", { enum: ["pending", "ready", "failed"] }).notNull().default("ready"),
   errorMessage: text("error_message"),
+  // Statut éditorial du brief, distinct du `status` technique ci-dessus.
+  // 'in_progress' = en cours de rédaction
+  // 'drafted'     = rédigé (relecture / validation)
+  // 'published'   = publié en ligne
+  workflowStatus: text("workflow_status", { enum: ["in_progress", "drafted", "published"] })
+    .notNull()
+    .default("in_progress"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
+
+// Tags globaux au workspace (datashake). Visibles par tous les users
+// authentifiés et par les clients via leur lien de partage.
+export const tag = sqliteTable("tag", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  color: text("color").notNull(),
+  // Trace l'origine : 'agency' (créé en backoffice) ou 'client' (créé via
+  // un lien /share/<token>). Permet de distinguer dans l'UI si besoin.
+  source: text("source", { enum: ["agency", "client"] }).notNull().default("agency"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+// M2M brief ↔ tag.
+export const briefTag = sqliteTable(
+  "brief_tag",
+  {
+    briefId: text("brief_id").notNull().references(() => brief.id, { onDelete: "cascade" }),
+    tagId: text("tag_id").notNull().references(() => tag.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (t) => [primaryKey({ columns: [t.briefId, t.tagId] })],
+);

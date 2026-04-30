@@ -15,6 +15,10 @@ import { computeDetailedScore, type DetailedScore } from "@/lib/scoring";
 import { faviconUrl } from "@/lib/favicon";
 import { EditorToolbar } from "./toolbar";
 import { ShareBriefPanel } from "../share-brief-panel";
+import { StatusPicker } from "../status-picker";
+import { TagPicker, type TagDTO } from "../tag-picker";
+import type { WorkflowStatus } from "../workflow-status";
+import { ExportMenu } from "./export-menu";
 
 type Folder = { id: string; name: string; website: string | null; scope: "personal" | "agency" };
 
@@ -31,12 +35,33 @@ type BriefEditorProps = {
   // Position du domaine du dossier dans la SERP (top 100), null si hors top 100
   // ou si pas de site rattaché.
   position: number | null;
+  /** Statut éditorial initial. */
+  workflowStatus: WorkflowStatus;
+  /** Tags initialement attachés. */
+  initialTags: TagDTO[];
+  /** Catalogue des tags disponibles à attacher. */
+  availableTags: TagDTO[];
   /**
    * Endpoint PATCH utilisé pour la sauvegarde débouncée du contenu.
    * - `/api/briefs/<id>` pour les users authentifiés
    * - `/api/share/<token>/briefs/<id>` pour les accès publics via partage
    */
   saveEndpoint?: string;
+  /**
+   * Endpoint POST/DELETE pour attacher/détacher un tag à ce brief.
+   * - `/api/briefs/<id>/tags` (auth) ou `/api/share/<token>/briefs/<id>/tags`
+   */
+  tagsEndpoint?: string;
+  /** Endpoint POST pour créer un nouveau tag : `/api/tags` ou `/api/share/<token>/tags`. */
+  tagsCreateEndpoint?: string;
+  /**
+   * URL de base où servir l'export et la version imprimable.
+   * - `/api/briefs/<id>/export` côté backoffice
+   * - `/api/share/<token>/briefs/<id>/export` côté client
+   */
+  exportEndpoint?: string;
+  /** URL de la page imprimable (PDF via window.print). */
+  printUrl?: string;
   /** Masquer le bouton "Nouvelle analyse" (ex. en mode partage). */
   hideNewAnalysis?: boolean;
   /** Token de partage déjà actif sur le brief (mode consultant uniquement). */
@@ -48,7 +73,57 @@ type Tab = "editor" | "serp" | "insights";
 export function BriefEditor(props: BriefEditorProps) {
   const { id, keyword, country, folder, initialHtml, nlp, serp, paa, haloscan, position } = props;
   const saveEndpoint = props.saveEndpoint ?? `/api/briefs/${id}`;
+  const tagsEndpoint = props.tagsEndpoint ?? `/api/briefs/${id}/tags`;
+  const tagsCreateEndpoint = props.tagsCreateEndpoint ?? `/api/tags`;
+  const exportEndpoint = props.exportEndpoint ?? `/api/briefs/${id}/export`;
+  const printUrl = props.printUrl ?? `/api/briefs/${id}/print`;
   const hideNewAnalysis = props.hideNewAnalysis ?? false;
+
+  const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus>(props.workflowStatus);
+  const [tags, setTags] = useState<TagDTO[]>(props.initialTags);
+
+  async function changeWorkflowStatus(next: WorkflowStatus) {
+    const prev = workflowStatus;
+    setWorkflowStatus(next);
+    const res = await fetch(saveEndpoint, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workflowStatus: next }),
+    });
+    if (!res.ok) setWorkflowStatus(prev);
+  }
+
+  async function attachTagToThisBrief(tagId: string) {
+    const tag = props.availableTags.find((t) => t.id === tagId) ?? tags.find((t) => t.id === tagId);
+    if (!tag) return;
+    setTags((curr) => (curr.some((x) => x.id === tagId) ? curr : [...curr, tag]));
+    const res = await fetch(tagsEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tagId }),
+    });
+    if (!res.ok) setTags((curr) => curr.filter((x) => x.id !== tagId));
+  }
+
+  async function detachTagFromThisBrief(tagId: string) {
+    const removed = tags.find((t) => t.id === tagId);
+    setTags((curr) => curr.filter((x) => x.id !== tagId));
+    const res = await fetch(`${tagsEndpoint}?tagId=${encodeURIComponent(tagId)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok && removed) setTags((curr) => [...curr, removed]);
+  }
+
+  async function createTagInline(name: string, color: string): Promise<TagDTO | null> {
+    const res = await fetch(tagsCreateEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, color }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { tag?: TagDTO };
+    return data.tag ?? null;
+  }
 
   const editorRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("editor");
@@ -234,10 +309,20 @@ export function BriefEditor(props: BriefEditorProps) {
           <span className="px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase bg-[var(--green-bg)] text-[var(--green)]">
             {crawledCount}/{serp.length} pages crawlées
           </span>
+          <StatusPicker status={workflowStatus} onChange={changeWorkflowStatus} size="sm" />
+          <TagPicker
+            attached={tags}
+            available={props.availableTags}
+            onAttach={attachTagToThisBrief}
+            onDetach={detachTagFromThisBrief}
+            onCreate={createTagInline}
+            size="sm"
+          />
         </div>
         <div className="flex items-center gap-2">
           {saveStatus === "saving" && <span className="text-[11px] text-[var(--text-muted)]">Enregistrement…</span>}
           {saveStatus === "saved" && <span className="text-[11px] text-[var(--green)] font-semibold">✓ Enregistré</span>}
+          <ExportMenu exportEndpoint={exportEndpoint} printUrl={printUrl} />
           {!hideNewAnalysis && (
             <ShareBriefPanel briefId={id} initialToken={props.shareToken ?? null} />
           )}

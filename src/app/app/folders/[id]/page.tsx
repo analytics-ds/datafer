@@ -11,6 +11,8 @@ import { FavoriteButton } from "../favorite-button";
 import { SharePanel } from "../share-panel";
 import { DeleteFolderButton } from "../delete-folder";
 import { BriefCard } from "../../briefs/brief-card";
+import { listAllTags, listTagsForBriefs } from "@/lib/tags-service";
+import type { WorkflowStatus } from "../../briefs/workflow-status";
 
 export default async function FolderDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,7 +35,7 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
     .where(and(eq(folderFavorite.userId, session.user.id), eq(folderFavorite.folderId, folder.id)))
     .limit(1);
 
-  const [briefs, folders] = await Promise.all([
+  const [briefs, folders, availableTags] = await Promise.all([
     db
       .select({
         id: brief.id,
@@ -51,6 +53,7 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
         competition: brief.competition,
         kgr: brief.kgr,
         position: brief.position,
+        workflowStatus: brief.workflowStatus,
       })
       .from(brief)
       .leftJoin(client, eq(client.id, brief.clientId))
@@ -61,7 +64,10 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
       .select({ id: client.id, name: client.name, website: client.website })
       .from(client)
       .orderBy(asc(client.name)),
+    listAllTags(),
   ]);
+
+  const tagsByBrief = await listTagsForBriefs(briefs.map((b) => b.id));
 
   return (
     <div className="px-10 py-10 max-w-[1100px]">
@@ -107,6 +113,7 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
             <BriefCard
               key={b.id}
               folders={folders}
+              availableTags={availableTags}
               brief={{
                 id: b.id,
                 keyword: b.keyword,
@@ -117,6 +124,8 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
                 competition: b.competition,
                 kgr: b.kgr,
                 position: b.position,
+                workflowStatus: b.workflowStatus as WorkflowStatus,
+                tags: tagsByBrief.get(b.id) ?? [],
                 folder: b.clientId
                   ? { id: b.clientId, name: b.folderName ?? "", website: b.folderWebsite }
                   : null,

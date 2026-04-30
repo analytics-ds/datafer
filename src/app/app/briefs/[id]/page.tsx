@@ -6,6 +6,8 @@ import { brief, client } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
 import { BriefEditor } from "./brief-editor";
+import { listAllTags, listTagsForBrief } from "@/lib/tags-service";
+import type { WorkflowStatus } from "../workflow-status";
 
 export default async function BriefDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,6 +29,11 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
   const serp = b.serpJson ? (JSON.parse(b.serpJson) as SerpResult[]) : [];
   const paa = b.paaJson ? (JSON.parse(b.paaJson) as Paa[]) : [];
   const haloscan = b.haloscanJson ? (JSON.parse(b.haloscanJson) as HaloscanOverview) : null;
+
+  const [initialTags, availableTags] = await Promise.all([
+    listTagsForBrief(b.id),
+    listAllTags(),
+  ]);
 
   return (
     <BriefEditor
@@ -50,6 +57,9 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
       haloscan={haloscan}
       position={b.position ?? null}
       shareToken={b.shareToken ?? null}
+      workflowStatus={b.workflowStatus as WorkflowStatus}
+      initialTags={initialTags}
+      availableTags={availableTags}
     />
   );
 }

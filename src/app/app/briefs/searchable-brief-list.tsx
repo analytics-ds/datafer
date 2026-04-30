@@ -2,43 +2,68 @@
 
 import { useMemo, useState } from "react";
 import { BriefCard, type BriefCardData, type FolderOption } from "./brief-card";
+import { FilterBar, EMPTY_FILTERS, type FilterState } from "./filter-bar";
+import type { TagDTO } from "./tag-picker";
 
 export function SearchableBriefList({
   briefs,
   folders,
+  availableTags,
 }: {
   briefs: BriefCardData[];
   folders: FolderOption[];
+  availableTags: TagDTO[];
 }) {
-  const [query, setQuery] = useState("");
-  const q = query.trim().toLowerCase();
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
 
   const filtered = useMemo(() => {
-    if (!q) return briefs;
+    const q = filters.query.trim().toLowerCase();
+    const fromTs = filters.dateFrom ? new Date(filters.dateFrom).getTime() : null;
+    // dateTo inclus jusqu'à la fin de la journée locale.
+    const toTs = filters.dateTo
+      ? new Date(filters.dateTo).getTime() + 24 * 60 * 60 * 1000 - 1
+      : null;
+
     return briefs.filter((b) => {
-      if (b.keyword.toLowerCase().includes(q)) return true;
-      if (b.folder?.name?.toLowerCase().includes(q)) return true;
-      if (b.folder?.website?.toLowerCase().includes(q)) return true;
-      if (b.author?.name?.toLowerCase().includes(q)) return true;
-      return false;
+      if (q) {
+        const hit =
+          b.keyword.toLowerCase().includes(q) ||
+          (b.folder?.name?.toLowerCase().includes(q) ?? false) ||
+          (b.folder?.website?.toLowerCase().includes(q) ?? false) ||
+          (b.author?.name?.toLowerCase().includes(q) ?? false) ||
+          b.tags.some((t) => t.name.toLowerCase().includes(q));
+        if (!hit) return false;
+      }
+      if (filters.statuses.length > 0 && !filters.statuses.includes(b.workflowStatus))
+        return false;
+      if (filters.tagIds.length > 0) {
+        const briefTagIds = new Set(b.tags.map((t) => t.id));
+        const allMatch = filters.tagIds.every((id) => briefTagIds.has(id));
+        if (!allMatch) return false;
+      }
+      const ts = toTimestamp(b.createdAt);
+      if (fromTs != null && (ts == null || ts < fromTs)) return false;
+      if (toTs != null && (ts == null || ts > toTs)) return false;
+      return true;
     });
-  }, [briefs, q]);
+  }, [briefs, filters]);
 
   return (
     <>
-      <SearchInput
-        value={query}
-        onChange={setQuery}
-        placeholder="Rechercher par mot-clé, client, auteur…"
-      />
+      <FilterBar state={filters} onChange={setFilters} availableTags={availableTags} />
       {filtered.length === 0 ? (
         <div className="text-center py-10 text-[13px] text-[var(--text-muted)]">
-          Aucun brief ne correspond à « {query} ».
+          Aucun brief ne correspond aux filtres.
         </div>
       ) : (
         <div className="grid gap-2">
           {filtered.map((b) => (
-            <BriefCard key={b.id} brief={b} folders={folders} />
+            <BriefCard
+              key={b.id}
+              brief={b}
+              folders={folders}
+              availableTags={availableTags}
+            />
           ))}
         </div>
       )}
@@ -46,40 +71,9 @@ export function SearchableBriefList({
   );
 }
 
-function SearchInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  return (
-    <div className="relative mb-4">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none">
-        <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-          <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M14 14l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
-      </span>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full pl-9 pr-9 py-[9px] text-[13px] bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] outline-none focus:border-[var(--bg-black)] transition-colors"
-      />
-      {value && (
-        <button
-          type="button"
-          onClick={() => onChange("")}
-          aria-label="Effacer la recherche"
-          className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)]"
-        >
-          ×
-        </button>
-      )}
-    </div>
-  );
+function toTimestamp(value: Date | number | null): number | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value.getTime();
+  // Drizzle renvoie parfois un nombre en secondes (unixepoch) ou ms selon le mode.
+  return value > 1e12 ? value : value * 1000;
 }
