@@ -564,13 +564,13 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
     // Status 403/429/503 = WAF anti-bot probable, on tente le fallback browser.
     if (r.status === 403 || r.status === 429 || r.status === 503) {
       const html = await crawlWithBrowser(url);
-      if (html) return parseHTML(html);
+      if (html && !looksLikeChallengePage(html)) return parseHTML(html);
     }
     return null;
   } catch {
     // Timeout / TLS error / DNS : on tente quand même le browser
     const html = await crawlWithBrowser(url);
-    if (html) return parseHTML(html);
+    if (html && !looksLikeChallengePage(html)) return parseHTML(html);
     return null;
   }
 }
@@ -633,13 +633,15 @@ async function crawlWithBrowser(url: string): Promise<string | null> {
         body: JSON.stringify({
           url,
           userAgent: GOOGLEBOT_UA,
-          // 8s pour laisser le JS d'un SPA hydrater et rendre le contenu.
-          waitForTimeout: 8000,
-          // networkidle0 : attend que TOUS les XHR/scripts soient finis.
-          // Plus lent mais nécessaire pour Vue/React/Next côté client.
+          // 12s : laisse le temps au challenge Cloudflare turnstile de
+          // s'auto-résoudre quand c'est faisable (sites mid-tier).
+          // Au-delà on n'arrive pas à passer même avec Browser Rendering
+          // (sites Akamai tier-1 type FAGUO/Nike), il faudrait un proxy
+          // résidentiel.
+          waitForTimeout: 12000,
           gotoOptions: { waitUntil: "networkidle0", timeout: 30000 },
         }),
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(50000),
       },
     );
     if (!r.ok) {
