@@ -116,6 +116,7 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
         <SearchableBriefList
           folders={folders}
           availableTags={scopedAvailableTags}
+          searchPlaceholder="Filtrer…"
           briefs={briefs.map((b) => ({
             id: b.id,
             keyword: b.keyword,

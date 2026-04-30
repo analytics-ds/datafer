@@ -73,7 +73,7 @@ export function SharedBriefList({
         state={filters}
         onChange={setFilters}
         availableTags={availableTags}
-        searchPlaceholder="Rechercher par mot-clé ou tag…"
+        searchPlaceholder="Filtrer…"
       />
       {filtered.length === 0 ? (
         <div className="bg-[var(--bg-card)] border border-dashed border-[var(--border-strong)] rounded-[var(--radius)] px-7 py-12 text-center">

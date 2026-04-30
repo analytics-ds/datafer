@@ -11,12 +11,14 @@ export function SearchableBriefList({
   briefs,
   folders,
   availableTags,
+  searchPlaceholder = "Rechercher par mot-clé, client, auteur…",
 }: {
   briefs: BriefCardData[];
   folders: FolderOption[];
   /** Tous les tags du workspace, scopés. Filtrés par client au moment du
    *  rendu de chaque card. */
   availableTags: ScopedTag[];
+  searchPlaceholder?: string;
 }) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
 
@@ -75,7 +77,12 @@ export function SearchableBriefList({
 
   return (
     <>
-      <FilterBar state={filters} onChange={setFilters} availableTags={flatTags} />
+      <FilterBar
+        state={filters}
+        onChange={setFilters}
+        availableTags={flatTags}
+        searchPlaceholder={searchPlaceholder}
+      />
       {filtered.length === 0 ? (
         <div className="text-center py-10 text-[13px] text-[var(--text-muted)]">
           Aucun brief ne correspond aux filtres.
