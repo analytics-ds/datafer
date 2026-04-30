@@ -394,14 +394,21 @@ function normalizeDomain(input: string | null | undefined): string | null {
 
 // ─── Crawl + parse HTML ──────────────────────────────────────────────────────
 
+// User-Agent Googlebot smartphone : la plupart des sites e-commerce et media
+// laissent passer Googlebot (raisons SEO) là où ils blockent les bots custom.
+// Référence : https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers
+const GOOGLEBOT_UA =
+  "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.92 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
+
 export async function crawlPage(url: string): Promise<PageContent | null> {
   try {
     const r = await fetch(url, {
       signal: AbortSignal.timeout(12000),
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; DatashakeDataferBot/1.0; +https://datashake.fr)",
-        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": GOOGLEBOT_UA,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+        From: "googlebot(at)googlebot.com",
       },
       redirect: "follow",
     });
