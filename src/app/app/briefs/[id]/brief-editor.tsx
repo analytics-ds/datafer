@@ -11,7 +11,7 @@ import type {
   Section as NlpSection,
   Entity,
 } from "@/lib/analysis";
-import { computeDetailedScore, type DetailedScore } from "@/lib/scoring";
+import { buildKeywordRegex, computeDetailedScore, type DetailedScore } from "@/lib/scoring";
 import {
   extractGeoSignals,
   EMPTY_GEO_SIGNALS,
@@ -438,7 +438,13 @@ export function BriefEditor(props: BriefEditorProps) {
             folderWebsite={folder?.website ?? null}
             editorText={editorData.text}
             editorH1Count={editorData.h1s.length}
-            editorH1HasKw={editorData.h1s.some((h) => nlp ? h.toLowerCase().includes(nlp.exactKeyword.keyword) : false)}
+            editorH1HasKw={
+              nlp
+                ? editorData.h1s.some((h) =>
+                    buildKeywordRegex(nlp.exactKeyword.keyword).test(h),
+                  )
+                : false
+            }
             editorH2s={editorData.h2s}
             editorH3s={editorData.h3s}
             insertTermAtCursor={insertTermAtCursor}
@@ -595,10 +601,12 @@ function EditorSidebar({
   let density = 0;
   let inIntro = false;
   if (ek) {
-    const rx = new RegExp(ek.keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-    kwCount = (lower.match(rx) ?? []).length;
+    // Regex tolérante aux flexions (genre/nombre/accents) : « meilleurs
+    // transports » matche aussi un keyword « meilleur transport ».
+    kwCount = (lower.match(buildKeywordRegex(ek.keyword)) ?? []).length;
     density = wc > 0 ? Math.round(((kwCount * ek.keyword.split(/\s+/).length) / wc) * 10000) / 100 : 0;
-    inIntro = editorText.trim().split(/\s+/).slice(0, 100).join(" ").toLowerCase().includes(ek.keyword);
+    const intro = editorText.trim().split(/\s+/).slice(0, 100).join(" ");
+    inIntro = buildKeywordRegex(ek.keyword).test(intro);
   }
 
   const ringCirc = 2 * Math.PI * 44;

@@ -23,6 +23,62 @@ function normalize(s: string): string {
     .replace(/[̀-ͯ]/g, "");
 }
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Stemmer FR léger : enlève les suffixes flexionnels les plus fréquents
+ * (pluriel, féminin, conjugaisons régulières). On garde au moins 3 lettres
+ * de racine pour éviter de tout tronquer sur les mots courts. Liste triée
+ * du plus long au plus court : « meilleures » → strip « es », pas « s ».
+ */
+function frenchStem(word: string): string {
+  // Ordre important : suffixes les plus longs d'abord pour éviter qu'un
+  // suffixe court (ex. "s") ne soit retiré avant un plus long ("ures").
+  const suffixes = [
+    "ements",
+    "ations", "ation",
+    "ables", "able", "ibles", "ible",
+    "ifs", "ives", "if", "ive",
+    "iques", "ique",
+    "ales", "ale", "aux",
+    "euses", "euse", "eurs", "eur",
+    "ieres", "iere", "iers", "ier",
+    "elles", "elle",
+    "ees", "ee",
+    "ers", "er",
+    "es", "ez",
+    "e", "s",
+  ];
+  for (const sfx of suffixes) {
+    if (word.length - sfx.length >= 3 && word.endsWith(sfx)) {
+      return word.slice(0, -sfx.length);
+    }
+  }
+  return word;
+}
+
+/**
+ * Construit une regex qui matche le keyword avec tolérance aux flexions :
+ * masculin/féminin (« meilleur » ↔ « meilleure »), singulier/pluriel
+ * (« transport » ↔ « transports »), accents (déjà aplatis par `normalize`).
+ *
+ * Pour chaque mot du keyword on extrait sa racine et on autorise jusqu'à
+ * 3 lettres de suffixe. Suffisant pour les flexions FR courantes sans
+ * trop de faux positifs.
+ *
+ * Le texte testé doit avoir été passé par `normalize` au préalable.
+ */
+export function buildKeywordRegex(keyword: string): RegExp {
+  const words = normalize(keyword).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return /(?!.*)/g;
+  // 5 lettres de tolérance pour absorber les suffixes longs ("iques",
+  // "ements"…) tout en limitant les faux positifs.
+  const patterns = words.map((w) => `${escapeRegex(frenchStem(w))}[a-z]{0,5}`);
+  return new RegExp(`\\b${patterns.join("\\s+")}\\b`, "gi");
+}
+
 export type EditorData = {
   text: string;
   h1s: string[];
@@ -99,9 +155,10 @@ export function computeDetailedScore(
   const ek = nlp.exactKeyword;
   const kwNorm = normalize(ek.keyword);
   const variationsNorm = (ek.variations ?? []).map(normalize);
+  // Regex tolérante aux flexions (genre/nombre/accents) du mot-clé.
+  const rx = buildKeywordRegex(ek.keyword);
 
   // 1. KEYWORD /15
-  const rx = new RegExp(kwNorm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
   const m = lowerNorm.match(rx);
   const count = m ? m.length : 0;
   const density = wc > 0 ? ((count * ek.keyword.split(/\s+/).length) / wc) * 100 : 0;
@@ -162,9 +219,12 @@ export function computeDetailedScore(
     let s = 0;
     const h1sNorm = ed.h1s.map(normalize);
     const h2sNorm = ed.h2s.map(normalize);
+    // `rx` est en mode global → on le clone par test pour éviter que
+    // lastIndex ne pollue les itérations suivantes.
+    const matchesKw = (h: string) => buildKeywordRegex(ek.keyword).test(h);
     if (ed.h1s.length === 1) s += 6;
     else if (ed.h1s.length > 1) s += 2;
-    if (h1sNorm.some((h) => h.includes(kwNorm))) s += 5;
+    if (h1sNorm.some(matchesKw)) s += 5;
     else if (h1sNorm.some((h) => variationsNorm.some((v) => h.includes(v)))) s += 2;
     const h2T = Math.max(2, Math.round(nlp.avgHeadings * 0.6));
     if (ed.h2s.length >= h2T) s += 4;
@@ -173,7 +233,7 @@ export function computeDetailedScore(
     if (
       h2sNorm.some(
         (h) =>
-          h.includes(kwNorm) ||
+          buildKeywordRegex(ek.keyword).test(h) ||
           variationsNorm.some((v) => h.includes(v)),
       )
     )
@@ -184,24 +244,23 @@ export function computeDetailedScore(
       h1: ed.h1s.length,
       h2: ed.h2s.length,
       h3: ed.h3s.length,
-      h1HasKw: h1sNorm.some((h) => h.includes(kwNorm)),
+      h1HasKw: h1sNorm.some(matchesKw),
     };
   }
 
   // 5. PLACEMENT /15
   {
     let s = 0;
+    const matchesKw = (segment: string) => buildKeywordRegex(ek.keyword).test(segment);
     const f100 = normalize(words.slice(0, 100).join(" "));
-    if (f100.includes(kwNorm)) s += 5;
+    if (matchesKw(f100)) s += 5;
     else if (variationsNorm.some((v) => f100.includes(v))) s += 2;
-    if (normalize(text.split(/[.!?]\s/)[0]).includes(kwNorm)) s += 3;
-    if (normalize(words.slice(-100).join(" ")).includes(kwNorm)) s += 2;
+    if (matchesKw(normalize(text.split(/[.!?]\s/)[0]))) s += 3;
+    if (matchesKw(normalize(words.slice(-100).join(" ")))) s += 2;
     const qL = Math.floor(words.length / 4);
     let qK = 0;
     for (let q = 0; q < 4; q++) {
-      if (
-        normalize(words.slice(q * qL, (q + 1) * qL).join(" ")).includes(kwNorm)
-      )
+      if (matchesKw(normalize(words.slice(q * qL, (q + 1) * qL).join(" "))))
         qK++;
     }
     if (qK >= 4) s += 5;
@@ -235,8 +294,9 @@ export function computeDetailedScore(
     const aS = sents.length > 0 ? wc / sents.length : wc;
     if (aS >= 10 && aS <= 25) s += 3;
     else if (aS > 5 && aS < 35) s += 1;
-    const kwD = ((lowerNorm.match(rx) ?? []).length * ek.keyword.split(/\s+/).length) / wc * 100;
-    if (kwD <= 3) s += 2;
+    // density est déjà calculé en section keyword ; on le réutilise pour
+    // pénaliser le keyword stuffing.
+    if (density <= 3) s += 2;
     const uniq = new Set(words.map((w) => w.toLowerCase()));
     const div = uniq.size / words.length;
     if (div >= 0.4) s += 3;
