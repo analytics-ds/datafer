@@ -1,10 +1,14 @@
 /**
  * Analyse complète d'un mot-clé : SERPAPI → crawl top 10 → TF-IDF + benchmarks → Haloscan.
  *
- * Portée depuis le HTML original (seo-forge-v4.html) avec deux différences :
- *   - `parseHTML` utilise des regex au lieu de DOMParser (non dispo sur Workers)
- *   - Les appels HTTP sont directs (pas de proxy CORS, on est server-side)
+ * Portée depuis le HTML original (seo-forge-v4.html) avec quelques diffs :
+ *   - `parseHTML` utilise htmlparser2 (SAX) au lieu de DOMParser, et filtre
+ *     les zones non-éditoriales (nav/aside/sidebar/cookie/etc.) pour ne
+ *     garder que le contenu utile à la NLP.
+ *   - Les appels HTTP sont directs (pas de proxy CORS, on est server-side).
  */
+
+import { Parser } from "htmlparser2";
 
 export type Heading = { level: 1 | 2 | 3; text: string };
 
@@ -410,42 +414,174 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
   }
 }
 
+/**
+ * Tags qui ne contiennent jamais de contenu éditorial : navigation, scripts,
+ * formulaires, boutons, dialogs… On ignore complètement leur sous-arbre.
+ */
+const NOISE_TAGS = new Set([
+  "nav",
+  "footer",
+  "header",
+  "aside",
+  "script",
+  "style",
+  "noscript",
+  "svg",
+  "form",
+  "iframe",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "menu",
+  "dialog",
+  "template",
+]);
+
+/**
+ * Class / id qui signalent une zone non-éditoriale (sidebar, breadcrumb,
+ * filtre produit, popup cookie, social share…). On match large mais avec
+ * des word boundaries pour ne pas attraper « narrative » via "nav".
+ */
+const NOISE_CLASS_RE =
+  /\b(?:menu|navbar|navigation|sidebar|breadcrumb|cookie|newsletter|share|socials?|related|comments?|advert|ads?|popup|modal|search-form|filter[s_-]|sponsor|widget|dropdown|tooltip|skip-link|skip-to|cart|wishlist|recently[-_]viewed)\b/i;
+
 function parseHTML(html: string): PageContent {
-  const cleaned = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
-    .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
-    .replace(/<header[\s\S]*?<\/header>/gi, " ")
-    .replace(/<aside[\s\S]*?<\/aside>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
-    .replace(/<form[\s\S]*?<\/form>/gi, " ")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    // Blocs XML islands Microsoft Office (bleeds when HTML is exported from Word)
-    .replace(/<xml[\s\S]*?<\/xml>/gi, " ")
-    // Conditional comments IE/Office : <!--[if gte mso 9]>...<![endif]-->
-    .replace(/<!\[if[\s\S]*?<!\[endif\]-->/gi, " ")
-    .replace(/<!\[endif\][\s\S]*?>/gi, " ")
-    // Tags XML Office/Word avec namespaces (o:p, w:WordDocument, v:shape, etc.)
-    .replace(/<\/?[ovw]:[^>]+>/gi, " ");
+  // Si la page contient un <main>/<article> (ou attribut équivalent), on
+  // restreint l'extraction à ce sous-arbre. Sinon on parse tout en filtrant
+  // les zones noise.
+  const hasMainRegion =
+    /<main\b|<article\b|role=["']main["']|itemprop=["']articleBody["']/i.test(html);
 
-  const outline = extractOutline(cleaned);
-  const h1 = outline.filter((h) => h.level === 1).map((h) => h.text);
-  const h2 = outline.filter((h) => h.level === 2).map((h) => h.text);
-  const h3 = outline.filter((h) => h.level === 3).map((h) => h.text);
+  const headings: Heading[] = [];
+  const paragraphs: string[] = []; // textes extraits par paragraphe
+  let currentHeading: { level: 1 | 2 | 3; text: string } | null = null;
+  let currentParagraph = "";
+  let pCount = 0;
 
-  const bodyMatch = cleaned.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  const bodyHtml = bodyMatch ? bodyMatch[1] : cleaned;
+  // Stack des profondeurs où l'on est entré en zone noise : on sort dès
+  // qu'on referme la balise correspondante.
+  const noiseStack: number[] = [];
+  const isInNoise = () => noiseStack.length > 0;
 
-  const text = bodyHtml
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&[a-z]+;|&#\d+;/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  // Profondeur du <main>/<article> où l'on a commencé à collecter
+  // (-1 = on n'est pas encore dedans, ≥0 = on est dedans). Ignoré si
+  // hasMainRegion est false.
+  let mainStartDepth = -1;
+  let depth = 0;
 
-  const paragraphs = (bodyHtml.match(/<p[\s>]/gi) ?? []).length;
+  // Si hasMainRegion : on collecte uniquement à partir du moment où on
+  // entre dans le main/article. Sinon on collecte dès le départ.
+  let collecting = !hasMainRegion;
+
+  const flushParagraph = () => {
+    const t = currentParagraph.replace(/\s+/g, " ").trim();
+    if (t) paragraphs.push(t);
+    currentParagraph = "";
+  };
+
+  const parser = new Parser(
+    {
+      onopentag(name, attrs) {
+        depth++;
+        const lower = name.toLowerCase();
+
+        // Détection main/article : on commence à collecter ici.
+        if (
+          !collecting &&
+          (lower === "main" ||
+            lower === "article" ||
+            attrs.role === "main" ||
+            attrs.itemprop === "articleBody")
+        ) {
+          collecting = true;
+          mainStartDepth = depth;
+        }
+
+        // Tag noise → on entre dans une zone à ignorer.
+        if (NOISE_TAGS.has(lower)) {
+          noiseStack.push(depth);
+          return;
+        }
+
+        // Class/id noise → idem.
+        const cls = `${attrs.class ?? ""} ${attrs.id ?? ""}`;
+        if (cls.trim() && NOISE_CLASS_RE.test(cls)) {
+          noiseStack.push(depth);
+          return;
+        }
+
+        if (!collecting || isInNoise()) return;
+
+        if (lower === "h1" || lower === "h2" || lower === "h3") {
+          flushParagraph();
+          const lvl = parseInt(lower.slice(1), 10) as 1 | 2 | 3;
+          currentHeading = { level: lvl, text: "" };
+          return;
+        }
+        if (lower === "p") {
+          flushParagraph();
+          pCount++;
+        }
+      },
+
+      ontext(text) {
+        if (!collecting || isInNoise()) return;
+        if (currentHeading) {
+          currentHeading.text += text;
+        } else {
+          currentParagraph += text;
+        }
+      },
+
+      onclosetag(name) {
+        const lower = name.toLowerCase();
+
+        // Sortie d'une zone noise : pop si on est exactement à la même
+        // profondeur que celle où on est rentré.
+        if (noiseStack.length > 0 && noiseStack[noiseStack.length - 1] === depth) {
+          noiseStack.pop();
+          depth--;
+          return;
+        }
+
+        if (currentHeading && (lower === "h1" || lower === "h2" || lower === "h3")) {
+          const t = currentHeading.text.replace(/\s+/g, " ").trim();
+          if (t) {
+            headings.push({ level: currentHeading.level, text: t });
+            // Le texte du heading nourrit aussi le corpus global
+            // (utile pour la NLP / TF-IDF).
+            paragraphs.push(t);
+          }
+          currentHeading = null;
+        }
+
+        if (lower === "p") {
+          flushParagraph();
+        }
+
+        // Sortie du <main>/<article> qu'on suivait : on arrête de collecter
+        // (un site peut avoir un footer après le main, on l'ignore).
+        if (mainStartDepth > 0 && depth === mainStartDepth) {
+          collecting = false;
+          mainStartDepth = -1;
+        }
+
+        depth--;
+      },
+    },
+    { decodeEntities: true },
+  );
+
+  parser.write(html);
+  parser.end();
+  flushParagraph();
+
+  const h1 = headings.filter((h) => h.level === 1).map((h) => h.text);
+  const h2 = headings.filter((h) => h.level === 2).map((h) => h.text);
+  const h3 = headings.filter((h) => h.level === 3).map((h) => h.text);
+
+  const text = paragraphs.join(" ").replace(/\s+/g, " ").trim();
   const wordCount = text.split(/\s+/).filter(Boolean).length;
 
   return {
@@ -453,29 +589,11 @@ function parseHTML(html: string): PageContent {
     h1,
     h2,
     h3,
-    outline,
-    headings: outline.length,
-    paragraphs,
+    outline: headings,
+    headings: headings.length,
+    paragraphs: pCount || paragraphs.length,
     wordCount,
   };
-}
-
-// Extrait tous les H1/H2/H3 dans l'ordre où ils apparaissent dans le document
-// pour pouvoir reconstituer la hiérarchie réelle du plan.
-function extractOutline(html: string): Heading[] {
-  const re = /<(h[1-3])\b[^>]*>([\s\S]*?)<\/\1>/gi;
-  const out: Heading[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    const level = parseInt(m[1].slice(1), 10) as 1 | 2 | 3;
-    const text = m[2]
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&[a-z]+;|&#\d+;/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (text) out.push({ level, text });
-  }
-  return out;
 }
 
 function extractTag(html: string, tag: string): string[] {
