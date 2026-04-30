@@ -80,6 +80,7 @@ export function TagPicker({
   onAttach,
   onDetach,
   onCreate,
+  onDeleteTag,
   size = "md",
   buttonLabel = "+ Tag",
   disabledReason = null,
@@ -89,6 +90,9 @@ export function TagPicker({
   onAttach: (tagId: string) => void | Promise<void>;
   onDetach: (tagId: string) => void | Promise<void>;
   onCreate: (name: string, color: string) => Promise<TagDTO | null>;
+  /** Suppression définitive d'un tag (cascade des liens). Optionnel : si
+   *  absent, l'icône poubelle ne s'affiche pas (mode lecture / share). */
+  onDeleteTag?: (tagId: string) => void | Promise<void>;
   size?: "sm" | "md";
   buttonLabel?: string;
   disabledReason?: string | null;
@@ -178,21 +182,50 @@ export function TagPicker({
 
             <div className="max-h-[180px] overflow-y-auto">
               {filtered.map((t) => (
-                <button
+                <div
                   key={t.id}
-                  type="button"
-                  onClick={() => {
-                    void onAttach(t.id);
-                    setQuery("");
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-[6px] text-[12px] text-left hover:bg-[var(--bg-warm)] transition-colors"
+                  className="group flex items-center gap-2 px-3 py-[6px] text-[12px] hover:bg-[var(--bg-warm)] transition-colors"
                 >
-                  <span
-                    className="w-[8px] h-[8px] rounded-full shrink-0"
-                    style={{ background: t.color }}
-                  />
-                  <span className="flex-1 truncate">{t.name}</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void onAttach(t.id);
+                      setQuery("");
+                    }}
+                    className="flex-1 flex items-center gap-2 text-left cursor-pointer"
+                  >
+                    <span
+                      className="w-[8px] h-[8px] rounded-full shrink-0"
+                      style={{ background: t.color }}
+                    />
+                    <span className="flex-1 truncate">{t.name}</span>
+                  </button>
+                  {onDeleteTag && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (confirm(`Supprimer définitivement le tag « ${t.name} » ?`)) {
+                          void onDeleteTag(t.id);
+                        }
+                      }}
+                      title="Supprimer le tag"
+                      aria-label={`Supprimer le tag ${t.name}`}
+                      className="w-5 h-5 inline-flex items-center justify-center rounded-[var(--radius-xs)] text-[var(--text-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition-all"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 20 20" fill="none">
+                        <path
+                          d="M4 6h12M8 6V4a1 1 0 011-1h2a1 1 0 011 1v2m1 0v10a1 1 0 01-1 1H7a1 1 0 01-1-1V6"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               ))}
               {filtered.length === 0 && !canCreate && (
                 <div className="px-3 py-[8px] text-[12px] text-[var(--text-muted)] italic">

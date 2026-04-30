@@ -226,6 +226,7 @@ export async function createBrief(
     kgr,
     allintitleCount,
     position,
+    workflowStatus: "pending",
   });
 
   return { ok: true, id, crawled: pageContents.length, total: results.length, score: initialScore };
@@ -308,6 +309,7 @@ export async function createPendingBrief(
     country,
     status: "pending",
     score: 0,
+    workflowStatus: "pending",
   });
   return { ok: true, id };
 }

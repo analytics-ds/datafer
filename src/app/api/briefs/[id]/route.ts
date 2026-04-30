@@ -17,7 +17,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     editorHtml?: string;
     score?: number;
     clientId?: string | null;
-    workflowStatus?: "in_progress" | "drafted" | "published";
+    workflowStatus?: "pending" | "in_progress" | "drafted" | "published";
   } | null;
   if (!body) return NextResponse.json({ error: "bad body" }, { status: 400 });
 
@@ -36,7 +36,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     editorHtml?: string;
     score?: number | null;
     clientId?: string | null;
-    workflowStatus?: "in_progress" | "drafted" | "published";
+    workflowStatus?: "pending" | "in_progress" | "drafted" | "published";
     updatedAt: Date;
   } = { updatedAt: new Date() };
 
@@ -44,7 +44,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   if (body.score !== undefined) patch.score = body.score;
   if (body.clientId !== undefined) patch.clientId = body.clientId;
   if (body.workflowStatus !== undefined) {
-    if (!["in_progress", "drafted", "published"].includes(body.workflowStatus))
+    if (!["pending", "in_progress", "drafted", "published"].includes(body.workflowStatus))
       return NextResponse.json({ error: "bad workflowStatus" }, { status: 400 });
     patch.workflowStatus = body.workflowStatus;
   }

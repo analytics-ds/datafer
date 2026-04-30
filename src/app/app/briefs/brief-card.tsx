@@ -9,6 +9,7 @@ import {
   attachTagAction,
   createTagAction,
   deleteBriefAction,
+  deleteTagAction,
   detachTagAction,
   updateWorkflowStatusAction,
 } from "./actions";
@@ -189,6 +190,11 @@ export function BriefCard({
             onAttach={onAttachTag}
             onDetach={onDetachTag}
             onCreate={onCreateTag}
+            onDeleteTag={async (tagId) => {
+              await deleteTagAction(tagId);
+              setTags((curr) => curr.filter((t) => t.id !== tagId));
+              router.refresh();
+            }}
             size="sm"
             disabledReason={
               brief.folder

@@ -13,7 +13,6 @@ import { DeleteFolderButton } from "../delete-folder";
 import { BriefCard } from "../../briefs/brief-card";
 import { listTagsForBriefs, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "../../briefs/workflow-status";
-import { TagsPanel } from "./tags-panel";
 
 export default async function FolderDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -102,12 +101,6 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
             </Link>
           </div>
         }
-      />
-
-      <TagsPanel
-        folderId={folder.id}
-        folderName={folder.name}
-        initialTags={availableTags}
       />
 
       {briefs.length === 0 ? (

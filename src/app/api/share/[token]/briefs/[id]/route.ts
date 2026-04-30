@@ -21,7 +21,7 @@ export async function PATCH(
   const body = (await req.json().catch(() => null)) as {
     editorHtml?: string;
     score?: number;
-    workflowStatus?: "in_progress" | "drafted" | "published";
+    workflowStatus?: "pending" | "in_progress" | "drafted" | "published";
   } | null;
   if (!body) return NextResponse.json({ error: "bad body" }, { status: 400 });
 
@@ -38,13 +38,13 @@ export async function PATCH(
   const patch: {
     editorHtml?: string;
     score?: number | null;
-    workflowStatus?: "in_progress" | "drafted" | "published";
+    workflowStatus?: "pending" | "in_progress" | "drafted" | "published";
     updatedAt: Date;
   } = { updatedAt: new Date() };
   if (body.editorHtml !== undefined) patch.editorHtml = body.editorHtml;
   if (body.score !== undefined) patch.score = body.score;
   if (body.workflowStatus !== undefined) {
-    if (!["in_progress", "drafted", "published"].includes(body.workflowStatus))
+    if (!["pending", "in_progress", "drafted", "published"].includes(body.workflowStatus))
       return NextResponse.json({ error: "bad workflowStatus" }, { status: 400 });
     patch.workflowStatus = body.workflowStatus;
   }

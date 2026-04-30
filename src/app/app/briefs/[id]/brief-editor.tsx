@@ -339,6 +339,17 @@ export function BriefEditor(props: BriefEditorProps) {
             onAttach={attachTagToThisBrief}
             onDetach={detachTagFromThisBrief}
             onCreate={createTagInline}
+            onDeleteTag={
+              // Suppression seulement côté backoffice authentifié (pas exposée
+              // aux vues partagées /share : le client ne supprime que ses
+              // propres détachements).
+              props.tagsCreateEndpoint && !props.tagsCreateEndpoint.includes("/share")
+                ? async (tagId) => {
+                    const r = await fetch(`/api/tags/${tagId}`, { method: "DELETE" });
+                    if (r.ok) setTags((curr) => curr.filter((t) => t.id !== tagId));
+                  }
+                : undefined
+            }
             size="sm"
             disabledReason={
               folder

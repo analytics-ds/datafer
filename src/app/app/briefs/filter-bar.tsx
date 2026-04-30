@@ -14,6 +14,8 @@ export type FilterState = {
   tagIds: string[];
   dateFrom: string | null; // YYYY-MM-DD
   dateTo: string | null;
+  scoreMin: number | null;
+  scoreMax: number | null;
 };
 
 export const EMPTY_FILTERS: FilterState = {
@@ -22,6 +24,8 @@ export const EMPTY_FILTERS: FilterState = {
   tagIds: [],
   dateFrom: null,
   dateTo: null,
+  scoreMin: null,
+  scoreMax: null,
 };
 
 export function FilterBar({
@@ -42,7 +46,9 @@ export function FilterBar({
     state.statuses.length +
     state.tagIds.length +
     (state.dateFrom ? 1 : 0) +
-    (state.dateTo ? 1 : 0);
+    (state.dateTo ? 1 : 0) +
+    (state.scoreMin != null ? 1 : 0) +
+    (state.scoreMax != null ? 1 : 0);
 
   return (
     <div className="mb-4 space-y-2">
@@ -66,6 +72,13 @@ export function FilterBar({
           to={state.dateTo}
           onChange={(from, to) =>
             onChange({ ...state, dateFrom: from, dateTo: to })
+          }
+        />
+        <ScoreRangeFilter
+          min={state.scoreMin}
+          max={state.scoreMax}
+          onChange={(min, max) =>
+            onChange({ ...state, scoreMin: min, scoreMax: max })
           }
         />
         {activeCount > 0 && (
@@ -283,6 +296,65 @@ function DateRangeFilter({
             />
           </label>
           {(from || to) && (
+            <button
+              type="button"
+              onClick={() => onChange(null, null)}
+              className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text)] underline"
+            >
+              Effacer
+            </button>
+          )}
+        </div>
+      )}
+    </FilterDropdown>
+  );
+}
+
+function ScoreRangeFilter({
+  min,
+  max,
+  onChange,
+}: {
+  min: number | null;
+  max: number | null;
+  onChange: (min: number | null, max: number | null) => void;
+}) {
+  const count = (min != null ? 1 : 0) + (max != null ? 1 : 0);
+  const parse = (s: string): number | null => {
+    if (s === "") return null;
+    const n = Number(s);
+    if (Number.isNaN(n)) return null;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  };
+  return (
+    <FilterDropdown label="Score" count={count}>
+      {() => (
+        <div className="px-3 py-2 space-y-2 w-[230px]">
+          <label className="block text-[11px] uppercase tracking-[0.4px] text-[var(--text-muted)]">
+            Min
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={min ?? ""}
+              onChange={(e) => onChange(parse(e.target.value), max)}
+              placeholder="0"
+              className="block w-full mt-1 px-2 py-[6px] text-[12px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)]"
+            />
+          </label>
+          <label className="block text-[11px] uppercase tracking-[0.4px] text-[var(--text-muted)]">
+            Max
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={max ?? ""}
+              onChange={(e) => onChange(min, parse(e.target.value))}
+              placeholder="100"
+              className="block w-full mt-1 px-2 py-[6px] text-[12px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)]"
+            />
+          </label>
+          {(min != null || max != null) && (
             <button
               type="button"
               onClick={() => onChange(null, null)}

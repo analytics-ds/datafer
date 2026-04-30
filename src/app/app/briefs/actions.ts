@@ -15,7 +15,7 @@ import {
   TAG_COLORS,
 } from "@/lib/tags-service";
 
-const WORKFLOW_STATUSES = ["in_progress", "drafted", "published"] as const;
+const WORKFLOW_STATUSES = ["pending", "in_progress", "drafted", "published"] as const;
 type WorkflowStatus = (typeof WORKFLOW_STATUSES)[number];
 
 // Workspace partagé : tout user authentifié peut voir et modifier

@@ -66,6 +66,9 @@ export function SearchableBriefList({
       const ts = toTimestamp(b.createdAt);
       if (fromTs != null && (ts == null || ts < fromTs)) return false;
       if (toTs != null && (ts == null || ts > toTs)) return false;
+      const sc = b.score ?? 0;
+      if (filters.scoreMin != null && sc < filters.scoreMin) return false;
+      if (filters.scoreMax != null && sc > filters.scoreMax) return false;
       return true;
     });
   }, [briefs, filters]);

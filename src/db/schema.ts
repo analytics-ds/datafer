@@ -128,12 +128,15 @@ export const brief = sqliteTable("brief", {
   status: text("status", { enum: ["pending", "ready", "failed"] }).notNull().default("ready"),
   errorMessage: text("error_message"),
   // Statut éditorial du brief, distinct du `status` technique ci-dessus.
+  // 'pending'     = en attente (créé, pas encore commencé)
   // 'in_progress' = en cours de rédaction
   // 'drafted'     = rédigé (relecture / validation)
   // 'published'   = publié en ligne
-  workflowStatus: text("workflow_status", { enum: ["in_progress", "drafted", "published"] })
+  workflowStatus: text("workflow_status", {
+    enum: ["pending", "in_progress", "drafted", "published"],
+  })
     .notNull()
-    .default("in_progress"),
+    .default("pending"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
