@@ -1188,6 +1188,36 @@ function frenchStem(w: string): string {
   return word;
 }
 
+/**
+ * Liaison words qu'on ignore quand on calcule un "fingerprint sémantique"
+ * d'un terme. Sert à considérer "sneakers homme" et "sneakers pour homme"
+ * comme équivalents (même intent SEO, juste une préposition différente).
+ */
+const FINGERPRINT_FILLERS = new Set([
+  "pour", "de", "du", "des", "à", "au", "aux", "en", "avec", "sans",
+  "sur", "sous", "vers", "chez", "dans", "par", "entre", "selon",
+  "le", "la", "les", "un", "une", "et", "ou",
+]);
+
+/**
+ * Fingerprint canonique d'un terme = ensemble trié des stems des mots
+ * significatifs. Permet la déduplication sémantique :
+ *   "sneakers homme"        → "homm sneaker"
+ *   "sneakers pour homme"   → "homm sneaker"  (pour ignoré)
+ *   "homme sneakers"        → "homm sneaker"  (ordre indifférent)
+ *
+ * Renvoie chaîne vide si aucun mot significatif (ne déduplique pas dans ce cas).
+ */
+function semanticFingerprint(term: string): string {
+  const tokens = term
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !FINGERPRINT_FILLERS.has(w))
+    .map((w) => frenchStem(w));
+  if (tokens.length === 0) return "";
+  return Array.from(new Set(tokens)).sort().join(" ");
+}
+
 export function runNLP(contents: PageContent[], keyword: string): NlpResult {
   const n = contents.length;
   const valid = contents.filter((c) => c && c.wordCount > 50);
@@ -1465,6 +1495,25 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
   const entities = detectNamedEntities(valid);
   const baseKeywordTerms = computeKeywordTerms(valid, kwLower, kwParts);
   const keywordTerms = mergeKeywordExtensions(baseKeywordTerms, nlpTerms, kwParts);
+
+  // Déduplication sémantique : on calcule un fingerprint canonique pour
+  // chaque terme (ensemble des stems significatifs, ignorant les
+  // function words "pour", "de", "à"...) et on rejette les nlpTerms qui :
+  //   1. ont le même fingerprint qu'un keywordTerm (déjà affiché en tête)
+  //   2. ont le même fingerprint qu'un autre nlpTerm de meilleur score
+  // Évite "sneakers homme" + "sneakers pour homme" + "sneakers" comme 3
+  // entrées distinctes alors que c'est sémantiquement la même chose.
+  const kwFingerprints = new Set(keywordTerms.map((k) => semanticFingerprint(k.term)));
+  const nlpFingerprintsSeen = new Set<string>();
+  const dedupedNlpTerms = nlpTerms.filter((t) => {
+    const fp = semanticFingerprint(t.term);
+    if (!fp) return true;
+    if (kwFingerprints.has(fp)) return false;
+    if (nlpFingerprintsSeen.has(fp)) return false;
+    nlpFingerprintsSeen.add(fp);
+    return true;
+  });
+
   return {
     exactKeyword: {
       keyword: kwLower,
@@ -1478,7 +1527,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
       inFirst100Pct: valid.length ? Math.round((kwInFirst100 / valid.length) * 100) : 0,
     },
     keywordTerms,
-    nlpTerms,
+    nlpTerms: dedupedNlpTerms,
     sections,
     entities,
     avgWordCount: avgWC,

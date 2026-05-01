@@ -735,12 +735,6 @@ function EditorSidebar({
         })}
       </Section>
 
-      {nlp?.keywordTerms && nlp.keywordTerms.length > 0 && (
-        <Section title="Mot-clé principal — à placer" dotColor="var(--accent)">
-          <KeywordTermsList terms={nlp.keywordTerms} lower={lower} onInsert={insertTermAtCursor} />
-        </Section>
-      )}
-
       {ek && (
         <Section title="Mot-clé exact (densité)" dotColor="var(--accent)" collapsible defaultOpen={false}>
           <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold px-3 py-[7px] bg-[var(--bg-warm)] rounded-[var(--radius-xs)] mb-[10px] text-center">
@@ -755,9 +749,23 @@ function EditorSidebar({
         </Section>
       )}
 
-      {nlp && (essential.length || important.length || opportunity.length) > 0 && (
-        <Section title="Champ sémantique NLP" dotColor="var(--purple)">
-          <TierTags label="Essentiels" color="var(--red)" bg="#FFF0F0" border="#E8BCBC" terms={essential} lower={lower} onInsert={insertTermAtCursor} />
+      {nlp && (((nlp.keywordTerms?.length ?? 0) + essential.length + important.length + opportunity.length) > 0) && (
+        <Section title="Champ sémantique" dotColor="var(--purple)">
+          {(nlp.keywordTerms?.length ?? 0) > 0 && (
+            <div className="mb-[10px]">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.5px] mb-[6px]" style={{ color: "var(--red)" }}>
+                Essentiels — mot-clé principal
+              </div>
+              <KeywordTermsList terms={nlp.keywordTerms!} lower={lower} onInsert={insertTermAtCursor} />
+            </div>
+          )}
+          {essential.length > 0 && (
+            <TierTags
+              label={(nlp.keywordTerms?.length ?? 0) > 0 ? "Essentiels — autres" : "Essentiels"}
+              color="var(--red)" bg="#FFF0F0" border="#E8BCBC"
+              terms={essential} lower={lower} onInsert={insertTermAtCursor}
+            />
+          )}
           <TierTags label="Importants" color="var(--orange)" bg="var(--orange-bg)" border="#E8D6A0" terms={important} lower={lower} onInsert={insertTermAtCursor} />
           <TierTags label="Opportunité" color="var(--blue)" bg="var(--blue-bg)" border="#B8D0E8" terms={opportunity} lower={lower} onInsert={insertTermAtCursor} />
         </Section>
@@ -843,20 +851,56 @@ function EditorSidebar({
           <BenchRow label="Moyenne" value={String(nlp.avgWordCount)} />
           <BenchRow label="Titres" value={String(nlp.avgHeadings)} />
           <BenchRow label="Paragraphes" value={String(nlp.avgParagraphs)} last />
-        </Section>
-      )}
-
-      {nlp && (
-        <Section title="Structure conseillée" dotColor="var(--orange)" collapsible defaultOpen={false}>
-          <StructCard>
-            <strong>H1 :</strong> 1 seul H1, avec le mot-clé. {nlp.exactKeyword.inH1Pct}% des concurrents le font.
-          </StructCard>
-          <StructCard>
-            <strong>H2 :</strong> ~{Math.max(2, Math.round(nlp.avgHeadings * 0.6))} sous-titres H2.
-          </StructCard>
-          <StructCard>
-            <strong>Longueur :</strong> {nlp.minWordCount} à {nlp.maxWordCount} mots.
-          </StructCard>
+          {serp.length > 0 && (
+            <div className="mt-[10px] pt-[10px] border-t border-[var(--border)]">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[6px]">
+                Concurrents top {serp.length}
+              </div>
+              <div className="flex flex-col gap-[2px]">
+                {serp.map((r) => {
+                  const wc = r.wordCount ?? 0;
+                  const wcLabel = wc > 0 ? `${wc.toLocaleString("fr-FR")} mots` : "—";
+                  let host = "";
+                  try { host = new URL(r.link).hostname.replace(/^www\./, ""); } catch {}
+                  const fav = host ? faviconUrl(host) : null;
+                  return (
+                    <a
+                      key={r.position}
+                      href={r.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 py-[3px] text-[11px] hover:bg-[var(--bg-warm)] rounded-[var(--radius-xs)] px-1 -mx-1"
+                      title={r.link}
+                    >
+                      <span className="text-[10px] font-[family-name:var(--font-mono)] text-[var(--text-muted)] w-[18px] shrink-0">
+                        {r.position}.
+                      </span>
+                      {fav && (
+                        <img
+                          src={fav}
+                          alt=""
+                          width={14}
+                          height={14}
+                          className="shrink-0 rounded-[2px]"
+                          loading="lazy"
+                        />
+                      )}
+                      <span className="flex-1 truncate text-[var(--text-secondary)]">
+                        {host || r.link}
+                      </span>
+                      <span
+                        className={`shrink-0 font-[family-name:var(--font-mono)] text-[10px] ${
+                          wc === 0 ? "text-[var(--red)]" : "text-[var(--text-muted)]"
+                        }`}
+                      >
+                        {wcLabel}
+                      </span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </Section>
       )}
 
@@ -1327,14 +1371,6 @@ function GeoChecklistItem({
         )}
       </span>
       <span className="flex-1" style={{ color: ok ? "var(--text)" : "var(--text-secondary)" }}>{label}</span>
-    </div>
-  );
-}
-
-function StructCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] px-[14px] py-3 mb-[7px] text-[12px] leading-[1.5] text-[var(--text-secondary)]">
-      {children}
     </div>
   );
 }
