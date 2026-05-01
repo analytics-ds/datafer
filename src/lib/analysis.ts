@@ -612,19 +612,23 @@ const GOOGLEBOT_UA =
  * on ne l'active que pour les pages réellement bloquées.
  */
 /**
- * Cascade de crawl optimisée pour le coût ScrapingBee :
+ * Cascade de crawl simplifiée :
  *
  *   1. fetch direct UA Googlebot (gratuit) — passe ~70% des sites
- *   2. ScrapingBee render_js seul (5 crédits) — passe les SPA simples
- *   3. ScrapingBee render_js + premium_proxy (25 crédits) — passe les
- *      WAF stricts type Akamai/Cloudflare
+ *   2. ScrapingBee render_js + premium_proxy (25 crédits) — IP résidentielle
+ *      + JS rendering, passe la quasi-totalité des sites bloquants.
+ *
+ * Le niveau intermédiaire "render_js sans premium_proxy" (5 crédits) a été
+ * supprimé : empiriquement, les sites qui ont besoin de JS rendering ont
+ * aussi besoin d'IP résidentielles (sinon ils auraient pas besoin de SPA
+ * pour bloquer les bots). Le niveau 2 retournait souvent du HTML "200 OK"
+ * mais avec contenu pas hydraté → faux positifs (pages acceptées avec un
+ * wordCount artificiel sur du marketing/footer, vrai contenu produit raté).
  *
  * Coût moyen attendu pour 10 sites SERP :
  *   - ~7 sites en fetch direct = 0 crédit
- *   - ~2 sites en ScrapingBee léger = 10 crédits
- *   - ~1 site en ScrapingBee full = 25 crédits
- *   - Total : ~35 crédits/brief (au lieu de 250 avant), donc 1000 crédits
- *     free = ~28 briefs gratuits.
+ *   - ~3 sites en ScrapingBee niveau 2 = 75 crédits
+ *   - Total : ~75 crédits/brief, soit 1000 crédits free = ~13 briefs gratuits.
  */
 export async function crawlPage(url: string): Promise<PageContent | null> {
   // 1. Fetch direct (gratuit)
@@ -645,34 +649,24 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
       if (!looksLikeChallengePage(truncated)) {
         const parsed = parseHTML(truncated);
         // Seuil 200 mots : sous ce seuil on suppose que le contenu est
-    // partiel ou tronqué (page non hydratée, contenu lazy-loaded, WAF
-    // qui sert une version dégradée). Dans ce cas on tente le niveau
-    // suivant pour voir si on récupère plus.
-    if (parsed.wordCount >= 200) return parsed;
+        // partiel ou tronqué (page non hydratée, contenu lazy-loaded, WAF
+        // qui sert une version dégradée). Dans ce cas on bascule
+        // directement sur ScrapingBee premium pour récupérer le vrai
+        // contenu.
+        if (parsed.wordCount >= 200) return parsed;
       }
     }
   } catch {
     // Timeout / TLS / DNS : on bascule sur ScrapingBee
   }
 
-  // 2. ScrapingBee léger (render_js seul, 5 crédits)
-  const lightHtml = await crawlWithScrapingBee(url, { renderJs: true, premiumProxy: false });
-  if (lightHtml && !looksLikeChallengePage(lightHtml)) {
-    const parsed = parseHTML(lightHtml);
-    // Seuil 200 mots : sous ce seuil on suppose que le contenu est
-    // partiel ou tronqué (page non hydratée, contenu lazy-loaded, WAF
-    // qui sert une version dégradée). Dans ce cas on tente le niveau
-    // suivant pour voir si on récupère plus.
-    if (parsed.wordCount >= 200) return parsed;
-  }
-
-  // 3. ScrapingBee full (premium_proxy + render_js, 25 crédits) en dernier
-  // recours pour les sites tier-1 protégés (Akamai etc.)
+  // 2. ScrapingBee premium (premium_proxy + render_js, 25 crédits)
   const fullHtml = await crawlWithScrapingBee(url, { renderJs: true, premiumProxy: true });
   if (fullHtml && !looksLikeChallengePage(fullHtml)) {
     const parsed = parseHTML(fullHtml);
-    // Niveau 3 = dernier recours : on accepte un seuil plus bas (100)
-    // pour ne pas tout perdre sur les pages courtes mais légitimes.
+    // Seuil 100 mots : on accepte un seuil plus bas qu'au niveau fetch
+    // direct car ScrapingBee est notre dernier recours, pas la peine de
+    // jeter une page à 150 mots de contenu utile.
     if (parsed.wordCount >= 100) return parsed;
   }
 
