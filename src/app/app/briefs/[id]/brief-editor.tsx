@@ -841,7 +841,7 @@ function EditorSidebar({
 
       {paa.length > 0 && (
         <Section title="People Also Ask" dotColor="var(--blue)" collapsible defaultOpen={false}>
-          <PaaCoverageList paa={paa} editorText={editorText} onInsert={insertPaaAsH2} />
+          <PaaCoverageList paa={paa} editorText={editorText} keyword={ek?.keyword ?? ""} onInsert={insertPaaAsH2} />
         </Section>
       )}
 
@@ -1099,10 +1099,12 @@ function EntityList({
 function PaaCoverageList({
   paa,
   editorText,
+  keyword,
   onInsert,
 }: {
   paa: Paa[];
   editorText: string;
+  keyword: string;
   onInsert: (q: string) => void;
 }) {
   const QUESTION_WORDS = new Set([
@@ -1110,6 +1112,21 @@ function PaaCoverageList({
     "comment", "pourquoi", "combien", "quel", "quelle", "quels", "quelles",
     "peut", "peuvent", "fait", "faire", "sont",
   ]);
+  // Mots du keyword à exclure des tokens distinctifs : ils sont quasi
+  // toujours présents dans tout texte du brief, sinon TOUTE PAA partageant
+  // un mot avec le keyword serait marquée 'traitée' à tort. On ajoute aussi
+  // les variantes singulier/pluriel.
+  const kwTokens = new Set<string>();
+  keyword
+    .toLowerCase()
+    .replace(/[^a-zà-ÿ0-9\s'-]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2)
+    .forEach((w) => {
+      kwTokens.add(w);
+      if (w.endsWith("s")) kwTokens.add(w.slice(0, -1));
+      else kwTokens.add(w + "s");
+    });
   const lower = editorText.toLowerCase();
   const rows = paa.slice(0, 5).map((q) => {
     const tokens = q.question
@@ -1117,12 +1134,19 @@ function PaaCoverageList({
       .replace(/[^a-zà-ÿ0-9\s'-]/g, " ")
       .split(/\s+/)
       .filter(
-        (w) => w.length > 2 && !QUESTION_WORDS.has(w) && !/^\d+$/.test(w),
+        (w) =>
+          w.length > 2 &&
+          !QUESTION_WORDS.has(w) &&
+          !/^\d+$/.test(w) &&
+          !kwTokens.has(w),
       );
     if (tokens.length === 0) return { q, covered: false };
     const hits = tokens.filter((t) => lower.includes(t)).length;
-    // Couverte : au moins la moitié (min 2) des tokens significatifs sont dans le contenu
-    const threshold = Math.max(2, Math.ceil(tokens.length * 0.5));
+    // Couverte : au moins 70% des tokens DISTINCTIFS (hors keyword) sont
+    // présents (min 2). 50% était trop laxiste : "Quelle est la basket
+    // homme la plus vendue ?" sortait déjà 'couvert' parce que "basket"
+    // et "homme" sont partout dans le brief.
+    const threshold = Math.max(2, Math.ceil(tokens.length * 0.7));
     return { q, covered: hits >= threshold };
   });
   const coveredCount = rows.filter((r) => r.covered).length;
