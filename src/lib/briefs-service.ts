@@ -484,8 +484,27 @@ async function createBriefAnalysisPayload(
   // des concurrents pour ne pas additionner les latences ScrapingBee.
   // Sans ça, un crawl ScrapingBee niveau 3 (25 crédits) sur myUrl peut
   // ajouter 20-30s au total et faire dépasser le deadline analysis 75s.
+  // Retry une fois en cas d'erreur transitoire ScrapingBee (500/429), car
+  // myUrl est critique : sans elle l'éditeur démarre vide. Pour les
+  // concurrents, on s'en fiche d'en perdre 1 sur 10 dans le NLP.
+  const crawlMyUrlOnce = async (): Promise<PageContent | null> => {
+    try {
+      const r = await crawlPage(myUrl!);
+      if (r && r.wordCount > 50) return r;
+      return null;
+    } catch {
+      return null;
+    }
+  };
   const myCrawlPromise: Promise<PageContent | null> = myUrl
-    ? crawlPage(myUrl).catch(() => null)
+    ? (async () => {
+        const first = await crawlMyUrlOnce();
+        if (first) return first;
+        // 1 retry pour gérer les 500/429 ScrapingBee transitoires
+        console.log("[brief] myUrl first crawl failed, retrying...", { myUrl });
+        await new Promise((res) => setTimeout(res, 1000));
+        return crawlMyUrlOnce();
+      })()
     : Promise.resolve(null);
   const settled = await Promise.allSettled(
     results.map(async (r) => {
@@ -577,6 +596,11 @@ async function createBriefAnalysisPayload(
     // myCrawlPromise a été lancé en parallèle du crawl des concurrents
     // (cf. plus haut). On récupère ici son résultat sans re-crawler.
     const myPage = await myCrawlPromise;
+    console.log("[brief] myUrl crawl result", {
+      myUrl,
+      ok: !!myPage,
+      wordCount: myPage?.wordCount ?? 0,
+    });
     if (myPage && myPage.wordCount > 50) {
       const blocks: string[] = [];
       for (const h of myPage.outline) {
