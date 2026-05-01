@@ -614,6 +614,10 @@ function EditorSidebar({
       tip: score.structure.score < 6 ? "↑ Découpez en paragraphes plus courts" : "✓ Bonne structure" },
     { label: "Qualité rédac.", s: score.quality, color: "var(--text-secondary)",
       tip: score.quality.score < 6 ? "↑ Variez le vocabulaire et la longueur des phrases" : "✓ Bonne qualité rédactionnelle" },
+    { label: "GEO (LLMs)", s: { score: score.geo.total, max: 100, details: {} }, color: "var(--purple)",
+      tip: score.geo.total < 60
+        ? "↑ Ajoutez tableau / FAQ / liste / résumé / chiffre pour citation IA"
+        : "✓ Bons signaux GEO" },
   ];
 
   const essential: NlpTerm[] = [];

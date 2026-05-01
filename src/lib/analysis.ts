@@ -1692,6 +1692,10 @@ function mergeKeywordExtensions(
     return false;
   };
   const existing = new Set(base.map((b) => b.term));
+  // Dédup sémantique : "basket homme" (part) et "baskets homme" (extension)
+  // ont le même fingerprint (basket/baskets stems pareil), on en garde un
+  // seul. Évite les doublons triviaux singulier/pluriel dans l'UI.
+  const existingFingerprints = new Set(base.map((b) => semanticFingerprint(b.term)).filter(Boolean));
   const extensions: KeywordTerm[] = [];
   for (const t of nlp.slice(0, 30)) {
     // Seuil 40% : permissif pour rattraper les vraies extensions ("améliorer
@@ -1700,6 +1704,8 @@ function mergeKeywordExtensions(
     // seuil bas ne crée pas de faux positifs.
     if (t.presence < 40) continue;
     if (existing.has(t.term)) continue;
+    const fp = semanticFingerprint(t.term);
+    if (fp && existingFingerprints.has(fp)) continue;
     const tokens = t.term.split(/\s+/);
     if (!tokens.some(matchesKwToken)) continue;
     extensions.push({
@@ -1712,6 +1718,7 @@ function mergeKeywordExtensions(
       avgCount: t.avgCount,
     });
     existing.add(t.term);
+    if (fp) existingFingerprints.add(fp);
   }
   // Trie : exact en premier, parts ensuite, extensions en dernier. Ordre
   // stable pour un affichage cohérent.
