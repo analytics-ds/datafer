@@ -220,13 +220,18 @@ export async function createBrief(
   if (myUrl) {
     const myPage = await crawlPage(myUrl);
     if (myPage && myPage.wordCount > 50) {
-      const blocks: string[] = [];
-      for (const h of myPage.outline) {
-        const tag = `h${h.level}`;
-        blocks.push(`<${tag}>${escapeHtml(h.text)}</${tag}>`);
+      // structuredHtml préserve la hiérarchie H1/H2/H3/P du doc.
+      if (myPage.structuredHtml && myPage.structuredHtml.length > 0) {
+        initialEditorHtml = myPage.structuredHtml;
+      } else {
+        const blocks: string[] = [];
+        for (const h of myPage.outline) {
+          const tag = `h${h.level}`;
+          blocks.push(`<${tag}>${escapeHtml(h.text)}</${tag}>`);
+        }
+        blocks.push(`<p>${escapeHtml(myPage.text)}</p>`);
+        initialEditorHtml = blocks.join("\n");
       }
-      blocks.push(`<p>${escapeHtml(myPage.text)}</p>`);
-      initialEditorHtml = blocks.join("\n");
       const breakdown = computeDetailedScore(
         { text: myPage.text, h1s: myPage.h1, h2s: myPage.h2, h3s: myPage.h3 },
         nlp,
@@ -602,13 +607,22 @@ async function createBriefAnalysisPayload(
       wordCount: myPage?.wordCount ?? 0,
     });
     if (myPage && myPage.wordCount > 50) {
-      const blocks: string[] = [];
-      for (const h of myPage.outline) {
-        const tag = `h${h.level}`;
-        blocks.push(`<${tag}>${escapeHtml(h.text)}</${tag}>`);
+      // structuredHtml contient les blocs H1/H2/H3/P dans l'ordre du
+      // document, déjà escape-html. Préserve la hiérarchie de la page
+      // originale au lieu de tout aplatir en un gros <p>. Fallback sur
+      // l'ancienne construction si structuredHtml est vide (briefs créés
+      // avant le rajout de ce champ dans parseHTML).
+      if (myPage.structuredHtml && myPage.structuredHtml.length > 0) {
+        initialEditorHtml = myPage.structuredHtml;
+      } else {
+        const blocks: string[] = [];
+        for (const h of myPage.outline) {
+          const tag = `h${h.level}`;
+          blocks.push(`<${tag}>${escapeHtml(h.text)}</${tag}>`);
+        }
+        blocks.push(`<p>${escapeHtml(myPage.text)}</p>`);
+        initialEditorHtml = blocks.join("\n");
       }
-      blocks.push(`<p>${escapeHtml(myPage.text)}</p>`);
-      initialEditorHtml = blocks.join("\n");
       const breakdown = computeDetailedScore(
         { text: myPage.text, h1s: myPage.h1, h2s: myPage.h2, h3s: myPage.h3 },
         nlp,
