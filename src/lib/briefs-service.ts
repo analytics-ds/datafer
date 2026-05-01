@@ -11,6 +11,9 @@ import {
   findDomainPosition,
   crawlPage,
   runNLP,
+  detectIntent,
+  detectOpportunities,
+  enrichWithSemantic,
   type PageContent,
   type SerpResult,
   type NlpResult,
@@ -155,7 +158,15 @@ export async function createBrief(
     });
   }
 
-  const nlp = runNLP(pageContents, keyword);
+  let nlp = runNLP(pageContents, keyword);
+  // Intent : signal d'angle (transactional, informational, etc.) pour aider
+  // le rédacteur à choisir le ton. Calculé sur le keyword + domaines top 10.
+  nlp.intent = detectIntent(keyword, results);
+  // Embeddings sémantiques bge-m3 : score de similarité keyword↔term + clusters
+  // thématiques + re-rank des nlpTerms par mix presence + sem. Mode dégradé
+  // si le binding AI n'est pas dispo (rien ne casse).
+  const aiBinding = (env as unknown as { AI?: Ai }).AI;
+  nlp = await enrichWithSemantic(nlp, keyword, aiBinding);
 
   for (let i = 0; i < enrichedResults.length; i++) {
     const c = crawled[i];
@@ -194,6 +205,14 @@ export async function createBrief(
       if (!seen.has(k)) { finalPaa.push(q); seen.add(k); }
       if (finalPaa.length >= 8) break;
     }
+  }
+
+  // Détecte les questions PAA peu couvertes par les concurrents : opportunités
+  // de différentiation pour le rédacteur. Utilise les pageContents qui ont du
+  // vrai contenu (pas les fallbacks SerpAPI snippets) pour ne pas être trompé.
+  const realPages = pageContents.filter((p) => p.wordCount > 100 && p.paragraphs > 1);
+  if (realPages.length >= 3) {
+    nlp.opportunities = detectOpportunities(finalPaa, realPages);
   }
 
   let initialEditorHtml = "";
@@ -494,7 +513,12 @@ async function createBriefAnalysisPayload(
   }
 
   await setStep("analyzing_nlp");
-  const nlp = runNLP(pageContents, keyword);
+  let nlp = runNLP(pageContents, keyword);
+  // Intent + embeddings sémantiques (cf. createBrief). Mode dégradé si AI
+  // binding absent.
+  nlp.intent = detectIntent(keyword, results);
+  const aiBinding = (env as unknown as { AI?: Ai }).AI;
+  nlp = await enrichWithSemantic(nlp, keyword, aiBinding);
   for (let i = 0; i < enrichedResults.length; i++) {
     const c = crawled[i];
     if (!c || c.wordCount < 50) continue;
@@ -531,6 +555,13 @@ async function createBriefAnalysisPayload(
       if (!seen.has(k)) { finalPaa.push(q); seen.add(k); }
       if (finalPaa.length >= 8) break;
     }
+  }
+
+  // Détecte les questions PAA peu couvertes par les concurrents : opportunités
+  // pour le rédacteur. Utilise les pageContents qui ont du vrai contenu.
+  const realPages = pageContents.filter((p) => p.wordCount > 100 && p.paragraphs > 1);
+  if (realPages.length >= 3) {
+    nlp.opportunities = detectOpportunities(finalPaa, realPages);
   }
 
   let initialEditorHtml = "";

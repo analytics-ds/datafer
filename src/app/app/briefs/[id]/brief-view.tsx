@@ -55,10 +55,19 @@ export function BriefView({
     <div className="px-10 py-10 max-w-[1200px]">
       {/* En-tête */}
       <header className="mb-10">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase">
             {country}
           </span>
+          {nlp?.intent && (
+            <span
+              className="px-[10px] py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase"
+              style={getIntentStyle(nlp.intent)}
+              title={getIntentDescription(nlp.intent)}
+            >
+              {getIntentLabel(nlp.intent)}
+            </span>
+          )}
           {folder && (
             <Link
               href={folder.scope === "agency" ? `/app/agency/${folder.id}` : `/app/folders/${folder.id}`}
@@ -118,6 +127,90 @@ export function BriefView({
         </section>
       )}
 
+      {/* Mot-clé principal et sous-parties à placer */}
+      {nlp?.keywordTerms && nlp.keywordTerms.length > 0 && (
+        <section className="mb-10">
+          <SectionTitle>Mot-clé principal — à placer absolument</SectionTitle>
+          <p className="text-[12px] text-[var(--text-muted)] mb-3 -mt-2">
+            Le keyword exact, ses mots constitutifs et ses bigrammes, avec la
+            fourchette d&apos;occurrences observée chez les concurrents qui les
+            emploient.
+          </p>
+          <div className="flex flex-wrap gap-[5px]">
+            {nlp.keywordTerms.map((t) => {
+              const style =
+                t.kind === "exact"
+                  ? { background: "var(--bg-black)", borderColor: "var(--bg-black)", color: "var(--text-inverse)" }
+                  : t.kind === "extension"
+                    ? { background: "var(--blue-bg)", borderColor: "var(--blue)", color: "var(--blue)" }
+                    : { background: "var(--bg-olive-light)", borderColor: "var(--accent-dark)", color: "var(--accent-dark)" };
+              return (
+                <span
+                  key={t.term}
+                  className="inline-flex items-center gap-[6px] px-[10px] py-[5px] rounded-full text-[12px] font-medium border"
+                  style={style}
+                  title={
+                    t.kind === "extension"
+                      ? `Extension du keyword détectée chez ${t.presence}% des concurrents`
+                      : t.kind === "exact"
+                        ? "Keyword exact"
+                        : "Sous-partie du keyword"
+                  }
+                >
+                  {t.term}
+                  {t.maxCount > 0 && (
+                    <span
+                      className="text-[9px] opacity-80 font-[family-name:var(--font-mono)]"
+                      title={`Présent chez ${t.presence}% des concurrents (moyenne ${t.avgCount})`}
+                    >
+                      {t.minCount === t.maxCount
+                        ? `×${t.maxCount}`
+                        : `${t.minCount}-${t.maxCount}`}
+                    </span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Clusters thématiques (embeddings) */}
+      {nlp?.semanticClusters && nlp.semanticClusters.length > 0 && (
+        <section className="mb-10">
+          <SectionTitle>Clusters thématiques (IA)</SectionTitle>
+          <p className="text-[12px] text-[var(--text-muted)] mb-3 -mt-2">
+            Termes regroupés par champ lexical, détectés via embeddings
+            sémantiques (Cloudflare bge-m3).
+          </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {nlp.semanticClusters.map((c) => (
+              <div
+                key={c.label}
+                className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] p-3"
+              >
+                <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-2">
+                  {c.label}
+                  <span className="ml-2 font-[family-name:var(--font-mono)] font-normal opacity-70">
+                    {c.terms.length}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-[4px]">
+                  {c.terms.map((t) => (
+                    <span
+                      key={t}
+                      className="inline-flex items-center px-[8px] py-[2px] rounded-full text-[11px] bg-[var(--bg-warm)] border border-[var(--border)]"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Champ sémantique NLP */}
       {nlp && (
         <section className="mb-10">
@@ -136,6 +229,32 @@ export function BriefView({
               Pas de termes détectés (contenu SERP insuffisant).
             </p>
           )}
+        </section>
+      )}
+
+      {/* Opportunités de différentiation */}
+      {nlp?.opportunities && nlp.opportunities.length > 0 && (
+        <section className="mb-10">
+          <SectionTitle>Opportunités de différentiation</SectionTitle>
+          <p className="text-[12px] text-[var(--text-muted)] mb-3 -mt-2">
+            Questions PAA peu couvertes par les concurrents — angles d&apos;attaque
+            uniques pour ton article.
+          </p>
+          <div className="grid gap-2">
+            {nlp.opportunities.map((o, i) => (
+              <div
+                key={i}
+                className="bg-[var(--green-bg)] border border-[var(--green)] rounded-[var(--radius-sm)] px-4 py-3 text-[13px] flex items-start gap-3"
+                title={`Couvert par seulement ${o.competitorCoverage}% des concurrents`}
+              >
+                <span className="text-[var(--green)] font-bold shrink-0">+</span>
+                <span className="flex-1">{o.text}</span>
+                <span className="text-[10px] font-semibold text-[var(--green)] font-[family-name:var(--font-mono)] shrink-0">
+                  {o.competitorCoverage}%
+                </span>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 
@@ -300,4 +419,37 @@ function KwTier({
 
 function fmtNum(n: number): string {
   return n.toLocaleString("fr-FR");
+}
+
+function getIntentLabel(intent: string): string {
+  switch (intent) {
+    case "transactional": return "Transactionnel";
+    case "informational": return "Informationnel";
+    case "commercial":    return "Comparatif";
+    case "navigational":  return "Marque/Produit";
+    case "local":         return "Local";
+    default:              return intent;
+  }
+}
+
+function getIntentDescription(intent: string): string {
+  switch (intent) {
+    case "transactional": return "Intention d'achat — fiche produit, e-commerce, prix, promo";
+    case "informational": return "Intention d'apprendre — guide, tutoriel, définition, explication";
+    case "commercial":    return "Comparaison avant achat — top, meilleur, vs, avis, test";
+    case "navigational":  return "Recherche d'une marque ou produit spécifique";
+    case "local":         return "Intent géolocalisé — ville, région, près de";
+    default:              return "";
+  }
+}
+
+function getIntentStyle(intent: string): React.CSSProperties {
+  switch (intent) {
+    case "transactional": return { background: "var(--orange-bg)", color: "var(--orange)" };
+    case "informational": return { background: "var(--blue-bg)", color: "var(--blue)" };
+    case "commercial":    return { background: "var(--bg-olive-light)", color: "var(--accent-dark)" };
+    case "navigational":  return { background: "#FFF0F0", color: "var(--red)" };
+    case "local":         return { background: "var(--green-bg)", color: "var(--green)" };
+    default:              return {};
+  }
 }

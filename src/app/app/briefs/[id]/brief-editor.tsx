@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   NlpResult,
   NlpTerm,
+  KeywordTerm,
   SerpResult,
   Paa,
   HaloscanOverview,
@@ -674,6 +675,28 @@ function EditorSidebar({
         <div className="flex flex-col gap-[4px] min-w-0">
           <span className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">Score SEO</span>
           <span className="text-[13px] font-semibold leading-tight">{scoreHint}</span>
+          {nlp?.intent && (
+            <span
+              className="self-start mt-1 px-[8px] py-[2px] rounded-[var(--radius-pill)] text-[9px] font-semibold uppercase tracking-[0.5px]"
+              style={(() => {
+                switch (nlp.intent) {
+                  case "transactional": return { background: "var(--orange-bg)", color: "var(--orange)" };
+                  case "informational": return { background: "var(--blue-bg)", color: "var(--blue)" };
+                  case "commercial":    return { background: "var(--bg-olive-light)", color: "var(--accent-dark)" };
+                  case "navigational":  return { background: "#FFF0F0", color: "var(--red)" };
+                  case "local":         return { background: "var(--green-bg)", color: "var(--green)" };
+                  default:              return {};
+                }
+              })()}
+              title="Intent de recherche détecté pour ce keyword"
+            >
+              {nlp.intent === "transactional" ? "Transactionnel"
+                : nlp.intent === "informational" ? "Informationnel"
+                : nlp.intent === "commercial" ? "Comparatif"
+                : nlp.intent === "navigational" ? "Marque/Produit"
+                : "Local"}
+            </span>
+          )}
         </div>
       </div>
 
@@ -712,8 +735,14 @@ function EditorSidebar({
         })}
       </Section>
 
+      {nlp?.keywordTerms && nlp.keywordTerms.length > 0 && (
+        <Section title="Mot-clé principal — à placer" dotColor="var(--accent)">
+          <KeywordTermsList terms={nlp.keywordTerms} lower={lower} onInsert={insertTermAtCursor} />
+        </Section>
+      )}
+
       {ek && (
-        <Section title="Mot-clé exact" dotColor="var(--accent)" collapsible defaultOpen={false}>
+        <Section title="Mot-clé exact (densité)" dotColor="var(--accent)" collapsible defaultOpen={false}>
           <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold px-3 py-[7px] bg-[var(--bg-warm)] rounded-[var(--radius-xs)] mb-[10px] text-center">
             &quot;{ek.keyword}&quot;
           </div>
@@ -734,6 +763,32 @@ function EditorSidebar({
         </Section>
       )}
 
+      {nlp?.semanticClusters && nlp.semanticClusters.length > 0 && (
+        <Section title="Clusters thématiques (IA)" dotColor="var(--blue)" collapsible defaultOpen={false}>
+          <div className="text-[10px] text-[var(--text-muted)] mb-[8px] italic">
+            Termes regroupés par champ lexical via embeddings.
+          </div>
+          {nlp.semanticClusters.map((c) => (
+            <div key={c.label} className="mb-[10px]">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[var(--text-secondary)] mb-[4px]">
+                {c.label} <span className="opacity-60 font-normal">({c.terms.length})</span>
+              </div>
+              <div className="flex flex-wrap gap-[3px]">
+                {c.terms.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => insertTermAtCursor(t)}
+                    className="inline-flex items-center px-[7px] py-[2px] rounded-full text-[10px] bg-[var(--bg-warm)] border border-[var(--border)] hover:bg-[var(--bg-olive-light)]"
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </Section>
+      )}
+
       {nlp?.sections && nlp.sections.length > 0 && (
         <Section title="Sections concurrentes" dotColor="var(--orange)">
           <CompetitorSections
@@ -742,6 +797,31 @@ function EditorSidebar({
             editorH3s={editorH3s}
             onInsert={insertPaaAsH2}
           />
+        </Section>
+      )}
+
+      {nlp?.opportunities && nlp.opportunities.length > 0 && (
+        <Section title="Opportunités de différentiation" dotColor="var(--green)">
+          <div className="text-[10px] text-[var(--text-muted)] mb-[8px] italic">
+            Questions PAA non couvertes par les concurrents. Cliquer pour insérer comme H2.
+          </div>
+          <div className="flex flex-col gap-1">
+            {nlp.opportunities.map((o, i) => (
+              <button
+                key={i}
+                onClick={() => insertPaaAsH2(o.text)}
+                title={`Couvert par seulement ${o.competitorCoverage}% des concurrents — angle unique`}
+                className="flex items-center gap-2 px-[10px] py-[7px] bg-[var(--green-bg)] border border-[var(--green)] rounded-[var(--radius-xs)] text-left text-[12px] leading-[1.4] hover:opacity-80 transition-opacity"
+                style={{ color: "var(--green)" }}
+              >
+                <span className="font-bold text-[14px] shrink-0">+</span>
+                <span className="flex-1">{o.text}</span>
+                <span className="text-[9px] font-[family-name:var(--font-mono)] shrink-0 opacity-80">
+                  {o.competitorCoverage}%
+                </span>
+              </button>
+            ))}
+          </div>
         </Section>
       )}
 
@@ -1128,6 +1208,87 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function KeywordTermsList({
+  terms,
+  lower,
+  onInsert,
+}: {
+  terms: KeywordTerm[];
+  lower: string;
+  onInsert: (t: string) => void;
+}) {
+  if (!terms.length) return null;
+  return (
+    <div className="flex flex-wrap gap-[5px]">
+      {terms.map((k) => {
+        const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const rx = new RegExp(
+          `(?:^|[^a-zà-ÿ0-9])${escape(k.term)}(?=$|[^a-zà-ÿ0-9])`,
+          "gi",
+        );
+        const currentCount = (lower.match(rx) ?? []).length;
+        const hasRange = k.maxCount > 0;
+        const rangeLabel = hasRange
+          ? k.minCount === k.maxCount
+            ? String(k.maxCount)
+            : `${k.minCount}-${k.maxCount}`
+          : null;
+        const inRange =
+          hasRange && currentCount >= k.minCount && currentCount <= k.maxCount;
+        const overRange = hasRange && currentCount > k.maxCount;
+        const tone =
+          currentCount === 0
+            ? "missing"
+            : inRange
+              ? "good"
+              : overRange
+                ? "over"
+                : "low";
+        const baseStyle =
+          k.kind === "exact"
+            ? { background: "var(--bg-black)", borderColor: "var(--bg-black)", color: "var(--text-inverse)" }
+            : k.kind === "extension"
+              ? { background: "var(--blue-bg)", borderColor: "var(--blue)", color: "var(--blue)" }
+              : { background: "var(--bg-olive-light)", borderColor: "var(--accent-dark)", color: "var(--accent-dark)" };
+        const overlay =
+          tone === "good"
+            ? { background: "var(--green-bg)", borderColor: "var(--green)", color: "var(--green)" }
+            : tone === "over"
+              ? { background: "var(--orange-bg)", borderColor: "var(--orange)", color: "var(--orange)" }
+              : null;
+        const style = overlay ?? baseStyle;
+        return (
+          <button
+            key={k.term}
+            onClick={() => onInsert(k.term)}
+            title={
+              k.kind === "extension"
+                ? `Extension détectée chez ${k.presence}% des concurrents`
+                : k.kind === "exact"
+                  ? "Keyword exact"
+                  : "Sous-partie du keyword"
+            }
+            className="inline-flex items-center gap-[6px] px-[10px] py-[5px] rounded-full text-[12px] font-medium border transition-colors hover:opacity-90"
+            style={style}
+          >
+            {k.term}
+            {rangeLabel && (
+              <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+                {currentCount}/{rangeLabel}
+              </span>
+            )}
+            {!rangeLabel && currentCount > 0 && (
+              <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+                {currentCount}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

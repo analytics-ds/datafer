@@ -11,6 +11,13 @@ database_name = "datafer"
 database_id = "52061f81-b4f5-4b32-9685-a015b0981a29"
 migrations_dir = "drizzle"
 
+# Cloudflare Workers AI : utilisé pour générer les embeddings sémantiques
+# (modèle bge-m3 multilingue) qui permettent de calculer la similarité entre
+# le keyword et les nlpTerms et de clusteriser les termes par champ lexical.
+# Inclus gratuitement dans Workers Paid Plan (quota neurons large).
+[ai]
+binding = "AI"
+
 [vars]
 BETTER_AUTH_URL = "https://datafer.analytics-e0d.workers.dev"
 # Provider SERP : "crazyserp" (par défaut, ~$0.50/1k FR) ou "serpapi"

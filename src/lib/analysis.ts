@@ -64,7 +64,69 @@ export type NlpTerm = {
   minCount: number;
   maxCount: number;
   avgCount: number;
+  // Similarité cosinus avec le keyword principal (0-1), calculée via
+  // embeddings Workers AI bge-m3. Présent uniquement si enrichWithSemantic()
+  // a été exécuté (binding AI dispo). Permet de re-ranker les termes par
+  // pertinence sémantique réelle plutôt que juste par fréquence.
+  semanticScore?: number;
 };
+
+/**
+ * Cluster thématique de nlpTerms regroupés par similarité d'embedding. Aide
+ * l'utilisateur à voir d'un coup d'œil les "champs lexicaux" présents dans
+ * la SERP (couleurs, marques, prix, technique, etc.) au lieu d'une liste
+ * plate de 60 termes.
+ */
+export type SemanticCluster = {
+  // Label du cluster = le terme le plus représentatif (le seed du cluster).
+  label: string;
+  terms: string[];
+};
+
+/**
+ * Opportunité de différentiation : question PAA (People Also Ask) ou angle
+ * peu couvert par les concurrents. Donne au rédacteur des sujets à traiter
+ * qui ne sont PAS déjà saturés par la concurrence — vraie opportunité SEO.
+ */
+export type Opportunity = {
+  type: "paa";
+  // La question PAA elle-même (utilisable comme H2 dans le brief).
+  text: string;
+  // Pourcentage de concurrents qui couvrent cette question (faible = bon).
+  competitorCoverage: number;
+};
+
+/**
+ * Sous-partie du mot-clé principal à placer dans la rédaction. Calculé en plus
+ * de `nlpTerms` pour garantir que l'utilisateur voit explicitement les
+ * occurrences attendues du keyword exact, de chacun de ses mots constitutifs
+ * et de ses bigrammes consécutifs (ex. pour "chaussure pas cher" : exact +
+ * "chaussure" + "cher" + "pas cher").
+ */
+export type KeywordTerm = {
+  term: string;
+  // "exact"     = keyword complet
+  // "part"      = sous-partie du keyword (mot ou bigramme)
+  // "extension" = forme étendue détectée auto dans la SERP (ex: "asics
+  //               gel-kayano" pour le keyword "kayano 14")
+  kind: "exact" | "part" | "extension";
+  presence: number;
+  inHeadings: boolean;
+  minCount: number;
+  maxCount: number;
+  avgCount: number;
+};
+
+/**
+ * Intent de recherche détecté pour le keyword. Permet au rédacteur de savoir
+ * dans quel mode rédiger (article informatif, fiche produit, comparatif...).
+ */
+export type Intent =
+  | "transactional"
+  | "informational"
+  | "commercial"
+  | "navigational"
+  | "local";
 
 /**
  * Sous-thème détecté dans la SERP : dérivé du clustering des H2/H3 des
@@ -107,7 +169,20 @@ export type NlpResult = {
     inH2Pct: number;
     inFirst100Pct: number;
   };
+  // Intent de recherche détecté (transactional, informational, commercial,
+  // navigational, local). Permet au rédacteur d'adapter le ton et l'angle.
+  intent?: Intent;
+  // Mot-clé principal éclaté en sous-parties à placer absolument dans la
+  // rédaction (ne fait pas doublon avec nlpTerms, qui exclut les variantes du
+  // keyword pour ne pas polluer les suggestions sémantiques).
+  keywordTerms?: KeywordTerm[];
   nlpTerms: NlpTerm[];
+  // Groupes thématiques détectés via embeddings Workers AI. Présent
+  // uniquement si enrichWithSemantic() a été exécuté avec un binding AI.
+  semanticClusters?: SemanticCluster[];
+  // Questions PAA peu couvertes par les concurrents : opportunités d'angles
+  // de différentiation pour le rédacteur.
+  opportunities?: Opportunity[];
   sections?: Section[];
   entities?: Entity[];
   avgWordCount: number;
@@ -1024,6 +1099,31 @@ const WEB_NOISE = new Set(
 );
 
 /**
+ * Function words (stopwords) qu'on conserve quand on génère les bigrammes /
+ * trigrammes : ils portent du sens dans une expression métier ("pas cher",
+ * "sans frais", "à petit prix", "sur internet"...). Sans cette whitelist, le
+ * filtre stopwords appliqué au tokenizer empêchait toute requête commerciale
+ * type "pas cher" de remonter, même si tous les concurrents l'employaient.
+ *
+ * Règle complémentaire : le DERNIER mot d'un n-gramme doit être non-stopword,
+ * pour éviter "chaussure pas" ou "petit prix de" qui sont sémantiquement vides.
+ */
+const NGRAM_KEEP_STOPWORDS = new Set([
+  "pas", "sans", "avec", "pour", "sur", "sous", "contre", "vers",
+  "chez", "dans", "par", "entre", "selon",
+  "à", "au", "aux", "en", "de", "du", "des",
+]);
+
+/**
+ * Déterminants articles à exclure quand ils commencent un n-gramme : ils
+ * créent des bigrammes sémantiquement vides ("de asics", "des produits",
+ * "au homme") observés dans les SERP e-commerce. NE PAS y inclure "à",
+ * "en", "pour", "pas", "sans", "avec" qui forment des expressions utiles
+ * en début de n-gramme.
+ */
+const NGRAM_BAD_START = new Set(["de", "du", "des", "au", "aux"]);
+
+/**
  * Mots à exclure de la détection des "sections concurrentes" : ce sont des
  * amorces de H2/H3 (interrogatifs, possessifs, verbes génériques) qui ne
  * représentent pas un sous-thème en soi.
@@ -1045,14 +1145,30 @@ const SECTION_NOISE = new Set(
 );
 
 /**
- * Stemmer français simplifié (inspiré Snowball, sans les règles avancées de
- * mutations consonantiques). Réduit les mots à leur radical pour regrouper
- * les familles morphologiques (travaux / travail / travaille / travaillé).
- * Suffixes testés dans l'ordre du plus long au plus court.
+ * Stemmer français simplifié (inspiré Snowball). Réduit les mots à leur
+ * radical pour regrouper les familles morphologiques (travaux / travail /
+ * travaille / travaillé). Suffixes testés dans l'ordre du plus long au plus
+ * court.
+ *
+ * Mutations consonantiques gérées :
+ * - Pluriels en "aux" → "al" (chevaux/cheval, journaux/journal, travaux/travail)
+ * - Pluriels en "eaux" → "eau" (chapeaux/chapeau, bateaux/bateau)
+ *
+ * Limites : pas de gestion des genres (beau/belle), pas des verbes
+ * irréguliers (être, avoir) — déjà filtrés via STOPWORDS.
  */
 function frenchStem(w: string): string {
-  const word = w.toLowerCase();
+  let word = w.toLowerCase();
   if (word.length <= 4) return word;
+
+  // Pré-traitement : mutations consonantiques pluriels en "aux"/"eaux"
+  // (avant les suffixes pour matcher correctement la forme singulier).
+  if (word.length > 5 && word.endsWith("eaux")) {
+    word = word.slice(0, -4) + "eau";
+  } else if (word.length > 4 && word.endsWith("aux") && !word.endsWith("eaux")) {
+    word = word.slice(0, -3) + "al";
+  }
+
   const suffixes = [
     "issements", "issement", "issantes", "issants", "issante", "issant",
     "ations", "ateurs", "atrices", "ation", "ateur", "atrice",
@@ -1130,20 +1246,40 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
 
   contents.forEach((c) => {
     if (!c || !c.text) return;
-    // Tokens des titres : stemmés, pour le boost en scoring
+    // Tokens des titres : stemmés, pour le boost en scoring.
+    // Apostrophes remplacées par espace AVANT le strip non-alphanum, sinon
+    // "d'un" devient "dun" (idem rawWords/ngramWords ci-dessous).
     [...(c.h1 ?? []), ...(c.h2 ?? [])].forEach((h) => {
       h.toLowerCase()
+        .replace(/[''`]/g, " ")
         .replace(/[^a-zà-ÿ0-9\s-]/g, "")
         .split(/\s+/)
         .filter((w) => w.length > 2 && !STOPWORDS.has(w))
         .forEach((w) => headingStems.add(frenchStem(w)));
     });
+    // rawWords : filtre strict (sans stopwords) pour les unigrammes BM25.
     const rawWords = c.text
       .toLowerCase()
+      .replace(/[''`]/g, " ")
       .replace(/[^a-zà-ÿ0-9\s-]/g, "")
       .split(/\s+/)
       .filter((w) => w.length > 2 && !STOPWORDS.has(w) && !WEB_NOISE.has(w));
-    // Séquence stemmée pour générer les n-grammes
+    // ngramWords : filtre permissif qui conserve les function words à valeur
+    // sémantique (NGRAM_KEEP_STOPWORDS) pour pouvoir reconstituer "pas cher",
+    // "à petit prix" etc. Min 2 lettres, pas de digits seuls.
+    const ngramWords = c.text
+      .toLowerCase()
+      .replace(/[''`]/g, " ")
+      .replace(/[^a-zà-ÿ0-9\s-]/g, "")
+      .split(/\s+/)
+      .filter(
+        (w) =>
+          w.length > 1 &&
+          !/^\d+$/.test(w) &&
+          (!STOPWORDS.has(w) || NGRAM_KEEP_STOPWORDS.has(w)) &&
+          !WEB_NOISE.has(w),
+      );
+    // Séquence stemmée pour les unigrammes (BM25 sur stems).
     const stems = rawWords.map(frenchStem);
 
     const tf: Record<string, number> = {};
@@ -1162,9 +1298,14 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
       surfaceForms[s][surface] = (surfaceForms[s][surface] ?? 0) + 1;
     });
 
-    // Bigrammes (non stemmés, pour lisibilité)
-    for (let i = 0; i < rawWords.length - 1; i++) {
-      const bg = rawWords[i] + " " + rawWords[i + 1];
+    // Bigrammes (non stemmés, pour lisibilité). Construits depuis ngramWords
+    // pour permettre les expressions avec function words ("pas cher", "à
+    // emporter"). Le dernier mot doit être non-stopword pour éviter
+    // "chaussure pas", "petit prix de", etc.
+    for (let i = 0; i < ngramWords.length - 1; i++) {
+      const w2 = ngramWords[i + 1];
+      if (STOPWORDS.has(w2)) continue;
+      const bg = ngramWords[i] + " " + w2;
       tf[bg] = (tf[bg] ?? 0) + 1;
       if (!seen.has(bg)) {
         docFreq[bg] = (docFreq[bg] ?? 0) + 1;
@@ -1173,9 +1314,11 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     }
 
     // Trigrammes (non stemmés) : capture des expressions métier type
-    // "crédit impôt transition", "agence nationale habitat".
-    for (let i = 0; i < rawWords.length - 2; i++) {
-      const tg = rawWords[i] + " " + rawWords[i + 1] + " " + rawWords[i + 2];
+    // "crédit impôt transition", "agence nationale habitat", "chaussure pas cher".
+    for (let i = 0; i < ngramWords.length - 2; i++) {
+      const w3 = ngramWords[i + 2];
+      if (STOPWORDS.has(w3)) continue;
+      const tg = ngramWords[i] + " " + ngramWords[i + 1] + " " + w3;
       tf[tg] = (tf[tg] ?? 0) + 1;
       if (!seen.has(tg)) {
         docFreq[tg] = (docFreq[tg] ?? 0) + 1;
@@ -1300,8 +1443,19 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
       if (surface.includes(" ")) {
         const parts = surface.split(/\s+/);
         if (parts.every((p) => WEB_NOISE.has(p))) return false;
-        // Évite les n-grams qui répètent le même mot (artefact)
-        if (new Set(parts).size === 1) return false;
+        // Évite les n-grams qui répètent un mot ("café emporter café"),
+        // artefact courant quand le keyword inclut une préposition très
+        // fréquente. Forme `parts.length !== Set(parts).size` pour catcher
+        // aussi "X Y X" (le simple `Set.size === 1` ratait ce cas).
+        if (parts.length !== new Set(parts).size) return false;
+        // Rejette les n-grammes qui commencent par un déterminant article
+        // (de, du, des, au, aux) : sémantiquement vides en isolation. On
+        // garde les prépositions à valeur (à, en, pas, sans, avec) qui
+        // forment des expressions utiles.
+        if (NGRAM_BAD_START.has(parts[0])) return false;
+        // Skip si le bigramme commence par un chiffre seul ("15 prix" pour
+        // "iphone 15 prix" → inutile en isolation).
+        if (/^\d+$/.test(parts[0])) return false;
       }
       return true;
     })
@@ -1315,6 +1469,8 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
   const avgWC = avg(valid, (c) => c.wordCount) || 1500;
   const sections = detectCompetitorSections(valid, kwStems);
   const entities = detectNamedEntities(valid);
+  const baseKeywordTerms = computeKeywordTerms(valid, kwLower, kwParts);
+  const keywordTerms = mergeKeywordExtensions(baseKeywordTerms, nlpTerms, kwParts);
   return {
     exactKeyword: {
       keyword: kwLower,
@@ -1327,6 +1483,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
       inH2Pct: valid.length ? Math.round((kwInH2 / valid.length) * 100) : 0,
       inFirst100Pct: valid.length ? Math.round((kwInFirst100 / valid.length) * 100) : 0,
     },
+    keywordTerms,
     nlpTerms,
     sections,
     entities,
@@ -1336,6 +1493,192 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     minWordCount: Math.round(avgWC * 0.7),
     maxWordCount: Math.round(avgWC * 1.3),
   };
+}
+
+// ─── Sous-parties du mot-clé principal à placer ──────────────────────────────
+
+/**
+ * Pour le mot-clé saisi par l'utilisateur, calcule la fourchette d'occurrences
+ * chez les concurrents pour :
+ *   1. Le keyword exact ("chaussure pas cher")
+ *   2. Chacun des mots constitutifs sémantiques ("chaussure", "cher" ;
+ *      les stopwords purs comme "pas" sont sautés en isolation car sans valeur)
+ *   3. Les bigrammes consécutifs valides du keyword ("pas cher")
+ *
+ * Le filtre nlpTerms exclut volontairement ces termes (ils sont marqués comme
+ * variantes du keyword), donc l'utilisateur ne les verrait pas autrement. On
+ * les fournit dans un champ séparé pour les afficher en tête de l'éditeur avec
+ * un statut "à placer absolument".
+ */
+function computeKeywordTerms(
+  pages: PageContent[],
+  keyword: string,
+  kwParts: string[],
+): KeywordTerm[] {
+  if (pages.length === 0 || !keyword) return [];
+
+  const candidates: Array<{ term: string; kind: "exact" | "part" }> = [];
+  const seen = new Set<string>();
+  const push = (term: string, kind: "exact" | "part") => {
+    if (!term || seen.has(term)) return;
+    seen.add(term);
+    candidates.push({ term, kind });
+  };
+
+  // Mots qui n'ont pas de valeur en isolation pour l'auteur (interrogatifs,
+  // possessifs, déterminants vagues). On les garde dans les bigrammes
+  // ("comment choisir", "son assurance") mais on ne les promeut pas seuls.
+  const NON_SEMANTIC_PARTS = new Set([
+    "comment", "pourquoi", "quand", "où", "quoi",
+    "quel", "quelle", "quels", "quelles",
+    "votre", "notre", "mon", "ma", "mes", "tes", "ton", "ta", "sa",
+    "leurs", "vos", "nos",
+    "tout", "tous", "toute", "toutes", "chaque",
+  ]);
+
+  push(keyword, "exact");
+  for (const w of kwParts) {
+    if (w.length < 3) continue;
+    if (STOPWORDS.has(w)) continue;
+    if (NON_SEMANTIC_PARTS.has(w)) continue;
+    push(w, "part");
+  }
+  if (kwParts.length >= 3) {
+    for (let i = 0; i < kwParts.length - 1; i++) {
+      const w1 = kwParts[i];
+      const w2 = kwParts[i + 1];
+      if (STOPWORDS.has(w2)) continue;
+      // Skip si le bigramme commence par un chiffre seul ("15 prix" pour le
+      // keyword "iphone 15 prix" → inutile en isolation).
+      if (/^\d+$/.test(w1)) continue;
+      push(`${w1} ${w2}`, "part");
+    }
+  }
+
+  return candidates.map(({ term, kind }) => {
+    // Pour chaque mot du term, on autorise un 's' final optionnel afin de
+    // matcher singulier/pluriel ("chaussure pas cher" matche "chaussures pas
+    // chers" et toutes les combinaisons). Sans ça, un keyword au singulier
+    // raterait toutes les pages qui l'écrivent au pluriel (très fréquent en
+    // e-commerce). Mots de 3 lettres ou moins : pas de variation.
+    const wordPatterns = term.split(/\s+/).map((w) => {
+      const esc = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (w.length <= 3) return esc;
+      if (w.endsWith("s")) return `${esc.slice(0, -1)}s?`;
+      return `${esc}s?`;
+    });
+    // Word boundaries pour ne pas matcher "cher" dans "chercher" ou "marché".
+    const pattern = `(?:^|[^a-zà-ÿ0-9])${wordPatterns.join(" ")}(?=$|[^a-zà-ÿ0-9])`;
+    const rx = new RegExp(pattern, "gi");
+    const rxHead = new RegExp(pattern, "i");
+
+    const counts: number[] = [];
+    let usedBy = 0;
+    let inH = false;
+    pages.forEach((p) => {
+      const m = p.text.toLowerCase().match(rx);
+      const cnt = m ? m.length : 0;
+      if (cnt > 0) {
+        counts.push(cnt);
+        usedBy++;
+      }
+      if ([...(p.h1 ?? []), ...(p.h2 ?? [])].some((h) => rxHead.test(h.toLowerCase()))) {
+        inH = true;
+      }
+    });
+
+    counts.sort((a, b) => a - b);
+    const sample = counts.length;
+    const avgRaw = sample ? counts.reduce((s, c) => s + c, 0) / sample : 0;
+    const avgCount = sample ? Math.max(1, Math.round(avgRaw)) : 0;
+    let minCount = 0;
+    let maxCount = 0;
+    if (sample >= 4) {
+      const p25 = counts[Math.floor(0.25 * (sample - 1))];
+      const p75 = counts[Math.ceil(0.75 * (sample - 1))];
+      minCount = Math.max(1, p25);
+      maxCount = Math.max(minCount, p75);
+    } else if (sample > 0) {
+      minCount = Math.max(1, counts[0]);
+      maxCount = Math.max(minCount, counts[sample - 1]);
+    }
+    if (avgCount > 0) {
+      if (avgCount < minCount) minCount = avgCount;
+      if (avgCount > maxCount) maxCount = avgCount;
+    }
+
+    return {
+      term,
+      kind,
+      presence: Math.round((usedBy / pages.length) * 100),
+      inHeadings: inH,
+      minCount,
+      maxCount,
+      avgCount,
+    };
+  });
+}
+
+/**
+ * Détecte les "extensions de keyword" : les nlpTerms top (présence ≥ 40%) qui
+ * contiennent un mot significatif du keyword principal. Utile sur les keywords
+ * courts type "kayano 14", "iphone 15", "tesla model y" où le marché utilise
+ * presque toujours une forme étendue (marque + modèle, ex: "asics gel-kayano").
+ *
+ * Retourne la liste keywordTerms enrichie : termes existants + extensions
+ * détectées (kind "extension"), sans doublonner avec ce qui est déjà présent.
+ */
+function mergeKeywordExtensions(
+  base: KeywordTerm[],
+  nlp: NlpTerm[],
+  kwParts: string[],
+): KeywordTerm[] {
+  const significantKwTokens = new Set(
+    kwParts.filter((p) => p.length >= 3 && !STOPWORDS.has(p)),
+  );
+  if (significantKwTokens.size === 0) return base;
+  const kwStems = new Set(
+    Array.from(significantKwTokens).map((w) => frenchStem(w)),
+  );
+  const matchesKwToken = (tok: string): boolean => {
+    if (significantKwTokens.has(tok)) return true;
+    const tokStem = frenchStem(tok);
+    if (kwStems.has(tokStem)) return true;
+    // Match substring tolérant : "gel-kayano" contient "kayano", "chaussures"
+    // contient "chaussure" via stem. Min 4 lettres pour éviter les faux
+    // positifs ("art" dans "marketing").
+    for (const kw of significantKwTokens) {
+      if (kw.length >= 4 && tok.includes(kw)) return true;
+      if (tok.length >= 4 && kw.includes(tok)) return true;
+    }
+    return false;
+  };
+  const existing = new Set(base.map((b) => b.term));
+  const extensions: KeywordTerm[] = [];
+  for (const t of nlp.slice(0, 30)) {
+    // Seuil 40% : permissif pour rattraper les vraies extensions ("améliorer
+    // seo" 44%, "chaussures femme" 43%, "tiramisu au citron"). Le filtrage
+    // par contenu de mot du keyword reste strict (matchesKwToken), donc le
+    // seuil bas ne crée pas de faux positifs.
+    if (t.presence < 40) continue;
+    if (existing.has(t.term)) continue;
+    const tokens = t.term.split(/\s+/);
+    if (!tokens.some(matchesKwToken)) continue;
+    extensions.push({
+      term: t.term,
+      kind: "extension",
+      presence: t.presence,
+      inHeadings: t.inHeadings,
+      minCount: t.minCount,
+      maxCount: t.maxCount,
+      avgCount: t.avgCount,
+    });
+    existing.add(t.term);
+  }
+  // Trie : exact en premier, parts ensuite, extensions en dernier. Ordre
+  // stable pour un affichage cohérent.
+  const order = { exact: 0, part: 1, extension: 2 };
+  return [...base, ...extensions].sort((a, b) => order[a.kind] - order[b.kind]);
 }
 
 // ─── Détection des sections obligatoires (H2/H3 du top 10) ───────────────────
@@ -1554,4 +1897,314 @@ function detectNamedEntities(pages: PageContent[]): Entity[] {
     .filter((e) => e.hits >= Math.max(3, Math.ceil(total * 0.3)))
     .sort((a, b) => b.hits - a.hits || b.totalOccurrences - a.totalOccurrences)
     .slice(0, 15);
+}
+
+// ─── Opportunités de différentiation ────────────────────────────────────────
+
+/**
+ * Détecte les questions PAA peu couvertes par les concurrents : opportunité
+ * pour le rédacteur de traiter un angle que la SERP ignore.
+ *
+ * Heuristique : pour chaque PAA, on extrait les mots significatifs (length
+ * ≥ 4, hors stopwords). Une page "couvre" la question si au moins la moitié
+ * des mots-clés significatifs apparaissent dans son texte. Si moins de 30%
+ * des concurrents couvrent → opportunité.
+ *
+ * Limite : matching lexical, pas sémantique. Une question reformulée
+ * différemment peut être ratée. Pour V2, utiliser embeddings bge-m3 sur
+ * les PAA vs headings concurrents pour matcher par similarité.
+ */
+export function detectOpportunities(
+  paa: Paa[],
+  pageContents: PageContent[],
+): Opportunity[] {
+  if (pageContents.length === 0 || paa.length === 0) return [];
+  const opps: Opportunity[] = [];
+  for (const q of paa) {
+    const qWords = q.question
+      .toLowerCase()
+      .replace(/[^\wà-ÿ\s]/gi, " ")
+      .split(/\s+/)
+      .filter((w) => w.length >= 4 && !STOPWORDS.has(w));
+    if (qWords.length < 2) continue;
+    let covered = 0;
+    for (const p of pageContents) {
+      const t = p.text.toLowerCase();
+      const matched = qWords.filter((w) => t.includes(w)).length;
+      if (matched >= Math.max(2, Math.ceil(qWords.length * 0.5))) covered++;
+    }
+    const pct = covered / pageContents.length;
+    if (pct < 0.3) {
+      opps.push({
+        type: "paa",
+        text: q.question,
+        competitorCoverage: Math.round(pct * 100),
+      });
+    }
+  }
+  // Tri par couverture croissante (les plus uniques en premier)
+  return opps.sort((a, b) => a.competitorCoverage - b.competitorCoverage).slice(0, 6);
+}
+
+// ─── Détection d'intent ──────────────────────────────────────────────────────
+
+/**
+ * Patterns linguistiques pour détecter l'intent depuis le keyword.
+ */
+const INTENT_PATTERNS: Record<string, string[]> = {
+  transactional: [
+    "acheter", "achat", "prix", "pas cher", "moins cher", "promo",
+    "soldes", "vente", "discount", "promotion", "remise", "à vendre",
+    "code promo", "boutique", "commander", "livraison", "tarif", "coût",
+  ],
+  informational: [
+    "comment", "pourquoi", "quand", "où", "qu est-ce", "quoi",
+    "définition", "guide", "tutoriel", "explication", "signification",
+    "principe", "histoire", "origine", "exemple", "explique",
+  ],
+  commercial: [
+    "meilleur", "meilleure", "meilleurs", "meilleures",
+    "top", "comparatif", "comparaison", "comparer",
+    "avis", "test", "review", "alternative", "vs",
+  ],
+};
+
+/**
+ * Domaines connus par catégorie pour analyser la SERP.
+ */
+const COMMERCE_DOMAINS = new Set([
+  "amazon.fr", "amazon.com", "cdiscount.com", "fnac.com", "darty.com",
+  "boulanger.com", "leclerc.com", "carrefour.fr", "auchan.fr",
+  "zalando.fr", "sarenza.com", "spartoo.com", "asics.com", "courir.com",
+  "decathlon.fr", "go-sport.com", "intersport.fr", "shopify.com",
+  "etsy.com", "ebay.fr", "rakuten.com", "veepee.com", "showroomprive.com",
+  "wethenew.com", "sportshowroom.fr", "thelaststep.fr",
+]);
+const COMPARE_DOMAINS = ["idealo.fr", "leguide.com", "lesfurets.com",
+  "monchoix.com", "comparateur", "ledenicheur.fr"];
+const INFO_DOMAINS = new Set([
+  "wikipedia.org", "wikipedia.fr", "fandom.com", "lemonde.fr", "lefigaro.fr",
+  "lesnumeriques.com", "journaldunet.com", "futura-sciences.com",
+  "doctissimo.fr", "ameli.fr", "service-public.fr", "legifrance.gouv.fr",
+]);
+
+const FR_CITIES = new Set([
+  "paris", "lyon", "marseille", "lille", "bordeaux", "toulouse",
+  "nice", "nantes", "strasbourg", "montpellier", "rennes", "reims",
+  "rouen", "dijon", "brest", "grenoble", "tours", "nancy", "metz",
+  "annecy", "clermont", "biarritz", "perpignan", "limoges",
+]);
+
+export function detectIntent(keyword: string, results: SerpResult[]): Intent {
+  const kw = keyword.toLowerCase().trim();
+  const tokens = kw.split(/\s+/);
+
+  // 1. Patterns linguistiques (priorité haute, signal fort)
+  for (const [intent, patterns] of Object.entries(INTENT_PATTERNS)) {
+    for (const p of patterns) {
+      if (kw.includes(p) || tokens.includes(p)) {
+        return intent as Intent;
+      }
+    }
+  }
+
+  // 2. Local : ville française dans le keyword
+  if (tokens.some((t) => FR_CITIES.has(t))) return "local";
+
+  // 3. Analyse domaines top 10 (signal moyen)
+  const domains = results
+    .map((r) => {
+      try {
+        return new URL(r.link).hostname.replace(/^www\./, "").toLowerCase();
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean);
+
+  let commerceCount = 0;
+  let infoCount = 0;
+  let compareCount = 0;
+  for (const d of domains) {
+    if (COMMERCE_DOMAINS.has(d) || Array.from(COMMERCE_DOMAINS).some((cd) => d.endsWith("." + cd))) {
+      commerceCount++;
+    }
+    if (INFO_DOMAINS.has(d) || Array.from(INFO_DOMAINS).some((id) => d.endsWith("." + id))) {
+      infoCount++;
+    }
+    if (COMPARE_DOMAINS.some((cd) => d.includes(cd))) compareCount++;
+  }
+  const total = domains.length || 1;
+  if (commerceCount / total >= 0.3) return "transactional";
+  if (compareCount / total >= 0.3) return "commercial";
+  if (infoCount / total >= 0.3) return "informational";
+
+  // 4. Default : navigational si keyword très court (1-2 mots), sinon
+  // informational.
+  if (tokens.length <= 2 && tokens.every((t) => t.length >= 3)) {
+    return "navigational";
+  }
+  return "informational";
+}
+
+// ─── Embeddings sémantiques (Cloudflare Workers AI / bge-m3) ─────────────────
+
+/**
+ * Enrichit un NlpResult avec :
+ *   1. Un score de similarité sémantique au keyword principal pour chaque
+ *      nlpTerm (cosine sim entre embeddings bge-m3)
+ *   2. Un clustering thématique des termes par groupes de champ lexical
+ *      via threshold cosine 0.62
+ *   3. Un re-rank des nlpTerms par mix presence + sem avec pénalité noise
+ *
+ * Modèle : `@cf/baai/bge-m3` (1024 dimensions, multilingue, gratuit dans
+ * Workers AI). Un seul appel batch pour le keyword + tous les nlpTerms
+ * (limité aux 50 premiers pour borner les tokens).
+ *
+ * Sans binding AI, retourne le NlpResult inchangé (mode dégradé).
+ */
+export async function enrichWithSemantic(
+  nlp: NlpResult,
+  keyword: string,
+  ai: Ai | undefined,
+): Promise<NlpResult> {
+  if (!ai || !keyword) return nlp;
+  const terms = nlp.nlpTerms.slice(0, 50);
+  if (terms.length === 0) return nlp;
+
+  try {
+    const t0 = Date.now();
+    const inputs = [keyword, ...terms.map((t) => t.term)];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = (await ai.run("@cf/baai/bge-m3" as any, { text: inputs })) as {
+      data?: number[][];
+      shape?: number[];
+    };
+    const embeddings = result.data;
+    if (!embeddings || embeddings.length !== inputs.length) {
+      console.warn("[ai] embeddings count mismatch:", embeddings?.length, "vs", inputs.length);
+      return nlp;
+    }
+
+    const kwEmb = embeddings[0];
+    const termEmbs = embeddings.slice(1);
+    const enrichedTerms: NlpTerm[] = terms.map((t, i) => ({
+      ...t,
+      semanticScore: cosineSimilarity(kwEmb, termEmbs[i]),
+    }));
+
+    const clusters = clusterTermsByEmbedding(enrichedTerms, termEmbs, 0.62);
+
+    // Re-rank par mix presence + semanticScore : un terme idéal est BIEN
+    // présent chez les concurrents ET sémantiquement lié au keyword. Pénalité
+    // forte pour les termes haute presence + sem très basse (probablement du
+    // noise web généraliste).
+    const rerankedTop50 = enrichedTerms
+      .map((t) => {
+        const sem = t.semanticScore ?? 0.4;
+        let combinedScore = (t.presence / 100) * 0.5 + sem * 0.5;
+        if (t.presence >= 70 && sem < 0.3) combinedScore *= 0.4;
+        return { ...t, _rerank: combinedScore };
+      })
+      .sort((a, b) => b._rerank - a._rerank)
+      .map((t) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { _rerank, ...rest } = t;
+        return rest as NlpTerm;
+      });
+
+    console.log(
+      `[ai] embeddings ok in ${Date.now() - t0}ms : ${rerankedTop50.length} terms, ${clusters.length} clusters`,
+    );
+
+    return {
+      ...nlp,
+      nlpTerms: rerankedTop50.concat(nlp.nlpTerms.slice(50)),
+      semanticClusters: clusters,
+    };
+  } catch (err) {
+    console.error("[ai] enrichWithSemantic failed:", err);
+    return nlp;
+  }
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0;
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+/**
+ * Clustering threshold-based : prend chaque terme non-assigné comme seed,
+ * agrège tous les termes restants au-dessus du threshold cosine, marque
+ * comme assignés. Garde uniquement les clusters de 2+ termes.
+ *
+ * Threshold 0.62 : empiriquement trouvé pour bge-m3 sur du français.
+ */
+function clusterTermsByEmbedding(
+  terms: NlpTerm[],
+  embs: number[][],
+  threshold: number,
+): SemanticCluster[] {
+  const clusters: { members: number[] }[] = [];
+  const assigned = new Set<number>();
+  for (let i = 0; i < terms.length; i++) {
+    if (assigned.has(i)) continue;
+    const cluster = { members: [i] };
+    assigned.add(i);
+    for (let j = i + 1; j < terms.length; j++) {
+      if (assigned.has(j)) continue;
+      if (cosineSimilarity(embs[i], embs[j]) >= threshold) {
+        cluster.members.push(j);
+        assigned.add(j);
+      }
+    }
+    if (cluster.members.length >= 2) clusters.push(cluster);
+  }
+  return clusters
+    .map((c) => {
+      const members = c.members.map((i) => terms[i]);
+      // Filtre cluster de "noise" : avgSem trop basse = mots vagues sans
+      // lien thématique au keyword (ex "point/question/début").
+      const avgSem =
+        members.reduce((s, m) => s + (m.semanticScore ?? 0), 0) / members.length;
+      // Label = terme le plus représentatif. Ne pas commencer par
+      // stopword/préposition pour avoir un label parlant ("améliorer seo"
+      // plutôt que "pour améliorer").
+      const labelCandidates = members.slice().sort((a, b) => {
+        const aStartsBad =
+          NGRAM_BAD_START.has(a.term.split(" ")[0]) ||
+          NGRAM_KEEP_STOPWORDS.has(a.term.split(" ")[0])
+            ? 1
+            : 0;
+        const bStartsBad =
+          NGRAM_BAD_START.has(b.term.split(" ")[0]) ||
+          NGRAM_KEEP_STOPWORDS.has(b.term.split(" ")[0])
+            ? 1
+            : 0;
+        if (aStartsBad !== bStartsBad) return aStartsBad - bStartsBad;
+        return (
+          b.presence * (b.semanticScore ?? 0.5) -
+          a.presence * (a.semanticScore ?? 0.5)
+        );
+      });
+      const labelTerm = labelCandidates[0];
+      return {
+        label: labelTerm.term,
+        terms: members.map((m) => m.term),
+        avgSem,
+      };
+    })
+    .filter((c) => c.avgSem >= 0.35)
+    .sort((a, b) => b.terms.length - a.terms.length)
+    .slice(0, 10)
+    .map(({ label, terms }) => ({ label, terms }));
 }
