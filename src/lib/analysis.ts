@@ -854,16 +854,25 @@ const NOISE_TAGS = new Set([
  * Class / id qui signalent une zone non-éditoriale (sidebar, breadcrumb,
  * filtre produit, popup cookie, social share, listing produits…).
  * Word boundaries strictes pour éviter de matcher au milieu d'un mot.
+ *
+ * Sur les pages e-commerce, on rejette les listings de produits volontairement :
+ * leurs noms ("Polo Ralph Lauren", "Skechers Sport Confort", etc.) répétés
+ * par dizaines biaiseraient le NLP avec du vocabulaire produit/marque qui
+ * ne reflète pas l'intent SEO de la page. On garde uniquement le contenu
+ * éditorial (intro, description catégorie, FAQ, footer SEO).
  */
 const NOISE_CLASS_RE =
-  /\b(?:cookie[-_]?banner|cookie[-_]?consent|gdpr|newsletter|skip[-_]?link|skip[-_]?to|main[-_]?menu|mega[-_]?menu|nav[-_]?menu|site[-_]?header|site[-_]?footer|recently[-_]viewed|breadcrumb|filter[s]?[-_]|sort[-_]?by|pagination|toolbar|product[-_]?(card|grid|list|tile|teaser)|category[-_]?(list|tile|nav)|cart|wishlist|mini[-_]?cart|product[-_]?count|sidebar|side[-_]?panel|popup|modal|drawer|hero[-_]?banner|promo[-_]?banner|social[-_]?(share|links?))\b/i;
+  /^(?:cookie[-_]?banner|cookie[-_]?consent|gdpr|newsletter|skip[-_]?link|skip[-_]?to|main[-_]?menu|mega[-_]?menu|nav[-_]?menu|site[-_]?header|site[-_]?footer|recently[-_]?viewed|breadcrumb|filter|filters|sort[-_]?by|pagination|toolbar|product[-_]?(?:card|tile|teaser)|category[-_]?(?:tile|nav)|cart|wishlist|mini[-_]?cart|product[-_]?count|sidebar|side[-_]?panel|popup|modal|drawer|hero[-_]?banner|promo[-_]?banner|social[-_]?(?:share|links?))(?:[-_]|$)/i;
 
-function parseHTML(html: string): PageContent {
-  // Si la page contient un <main>/<article> (ou attribut équivalent), on
-  // restreint l'extraction à ce sous-arbre. Sinon on parse tout en filtrant
-  // les zones noise.
-  const hasMainRegion =
-    /<main\b|<article\b|role=["']main["']|itemprop=["']articleBody["']/i.test(html);
+export function parseHTML(html: string): PageContent {
+  // On parse tout le <body> et on filtre uniquement via NOISE_TAGS et
+  // NOISE_CLASS_RE. Auparavant on tentait de restreindre à <main>/<article>
+  // mais beaucoup de sites e-commerce (Zalando, Faguo, Decathlon) ont leur
+  // contenu SEO éditorial APRÈS le </main> (id="z-content-teaser") OU à
+  // l'intérieur d'un main mais bloqué par des wrappers non-fermés
+  // proprement par htmlparser2 → wordCount=0 systématique. Filtrer
+  // uniquement par NOISE_TAGS (header/nav/footer/aside/script...) +
+  // NOISE_CLASS_RE est plus robuste. (Bug fix 2026-05-01.)
 
   const headings: Heading[] = [];
   const paragraphs: string[] = []; // textes extraits par paragraphe
@@ -880,15 +889,10 @@ function parseHTML(html: string): PageContent {
   const noiseStack: number[] = [];
   const isInNoise = () => noiseStack.length > 0;
 
-  // Profondeur du <main>/<article> où l'on a commencé à collecter
-  // (-1 = on n'est pas encore dedans, ≥0 = on est dedans). Ignoré si
-  // hasMainRegion est false.
-  let mainStartDepth = -1;
   let depth = 0;
-
-  // Si hasMainRegion : on collecte uniquement à partir du moment où on
-  // entre dans le main/article. Sinon on collecte dès le départ.
-  let collecting = !hasMainRegion;
+  // On collecte par défaut. Les zones noise (header/nav/footer/aside +
+  // classes via NOISE_CLASS_RE) sont skippées via noiseStack.
+  const collecting = true;
 
   // Un vrai paragraphe éditorial fait quasiment toujours plus de 5 mots et
   // contient une ponctuation. Sous ce seuil c'est presque toujours un
@@ -916,18 +920,6 @@ function parseHTML(html: string): PageContent {
         depth++;
         const lower = name.toLowerCase();
 
-        // Détection main/article : on commence à collecter ici.
-        if (
-          !collecting &&
-          (lower === "main" ||
-            lower === "article" ||
-            attrs.role === "main" ||
-            attrs.itemprop === "articleBody")
-        ) {
-          collecting = true;
-          mainStartDepth = depth;
-        }
-
         // Tag noise → on entre dans une zone à ignorer.
         if (NOISE_TAGS.has(lower)) {
           noiseStack.push(depth);
@@ -942,11 +934,21 @@ function parseHTML(html: string): PageContent {
           return;
         }
 
-        // Class/id noise → idem.
-        const cls = `${attrs.class ?? ""} ${attrs.id ?? ""}`;
-        if (cls.trim() && NOISE_CLASS_RE.test(cls)) {
-          noiseStack.push(depth);
-          return;
+        // Class/id noise → idem. On teste chaque classe individuellement
+        // (NOISE_CLASS_RE est ancré ^...) pour éviter les faux positifs sur
+        // les classes composées type 'js-product-list-top' qui matchaient
+        // 'product-list' à tort en milieu de chaîne avec un \b.
+        // Exception : on ignore le check noise sur <body> et <html> car des
+        // sites (Faguo) y mettent des state-classes type 'filters-active'
+        // qui matchent à tort et bloquent toute la page.
+        if (lower !== "body" && lower !== "html") {
+          const classList = `${attrs.class ?? ""} ${attrs.id ?? ""}`
+            .split(/\s+/)
+            .filter(Boolean);
+          if (classList.some((c) => NOISE_CLASS_RE.test(c))) {
+            noiseStack.push(depth);
+            return;
+          }
         }
 
         if (!collecting || isInNoise()) return;
@@ -1000,13 +1002,6 @@ function parseHTML(html: string): PageContent {
 
         if (lower === "p") {
           flushParagraph();
-        }
-
-        // Sortie du <main>/<article> qu'on suivait : on arrête de collecter
-        // (un site peut avoir un footer après le main, on l'ignore).
-        if (mainStartDepth > 0 && depth === mainStartDepth) {
-          collecting = false;
-          mainStartDepth = -1;
         }
 
         depth--;
