@@ -1115,6 +1115,11 @@ function PaaCoverageList({
     "est", "ce", "qui", "que", "quoi", "qu", "qu'est", "qu'il", "où", "quand",
     "comment", "pourquoi", "combien", "quel", "quelle", "quels", "quelles",
     "peut", "peuvent", "fait", "faire", "sont",
+    // Mots vagues / quantifieurs très communs : présents dans n'importe
+    // quel texte de brief, ne sont pas distinctifs d'une question PAA.
+    "plus", "moins", "très", "tout", "tous", "toute", "toutes",
+    "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix",
+    "bien", "mieux", "aussi", "encore", "déjà", "même",
   ]);
   // Mots du keyword à exclure des tokens distinctifs : ils sont quasi
   // toujours présents dans tout texte du brief, sinon TOUTE PAA partageant
