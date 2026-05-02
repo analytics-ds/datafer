@@ -1637,7 +1637,12 @@ function SerpAnalyticsCharts({
       </ChartCard>
 
       <ChartCard title="Volume de contenu" dotColor="var(--green)" subtitle={`Moyenne SERP : ${avg(wcSeries.competitors.map((c) => c.value)).toLocaleString("fr-FR")} mots — Toi : ${userWordCount.toLocaleString("fr-FR")} mots`}>
-        <BarChartHorizontal series={wcSeries} max={Math.max(userWordCount, ...wcSeries.competitors.map((c) => c.value))} suffix=" mots" />
+        <BarChartHorizontal
+          series={wcSeries}
+          max={Math.max(userWordCount, ...wcSeries.competitors.map((c) => c.value))}
+          suffix=" mots"
+          colorMode="goldilocks"
+        />
       </ChartCard>
 
       <ChartCard title="Sous-titres (H2 + H3)" dotColor="#E85D3A" subtitle={`Moyenne SERP : ${avg(headingSeries.competitors.map((c) => c.value))} — Toi : ${userH2Count + userH3Count}`}>
@@ -1717,19 +1722,33 @@ function BarChartHorizontal<T extends BarPoint>({
   series,
   max,
   suffix = "",
+  colorMode = "higher",
 }: {
   series: { competitors: T[]; me: T; max: number };
   max: number;
   suffix?: string;
+  /**
+   * "higher" : plus c'est haut mieux c'est (score SEO).
+   * "goldilocks" : autour de la moyenne = idéal (volume de mots, sous-titres).
+   */
+  colorMode?: "higher" | "goldilocks";
 }) {
   const all = [...series.competitors.sort((a, b) => a.position - b.position), series.me];
   const localMax = Math.max(max, series.max, 1);
+  const competitorValues = series.competitors.map((c) => c.value);
+  const mean = competitorValues.length
+    ? competitorValues.reduce((s, v) => s + v, 0) / competitorValues.length
+    : 0;
   return (
     <div className="flex flex-col gap-[6px]">
       {all.map((p, i) => {
         const pct = (p.value / localMax) * 100;
         const isMe = p.position === -1;
-        const color = isMe ? "var(--accent)" : positionColor(p.position);
+        const color = isMe
+          ? "var(--accent)"
+          : colorMode === "higher"
+            ? colorByScoreDeviation(p.value, mean)
+            : colorByVolumeDeviation(p.value, mean);
         return (
           <div key={i} className="flex items-center gap-2 text-[11px]">
             <div className={`w-[100px] truncate ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-secondary)]"}`} title={p.label}>
@@ -1758,20 +1777,25 @@ function BarChartHorizontalStacked({
 }) {
   const all = [...series.competitors.sort((a, b) => a.position - b.position), series.me];
   const localMax = Math.max(series.max, 1);
+  const competitorTotals = series.competitors.map((c) => c.value);
+  const mean = competitorTotals.length
+    ? competitorTotals.reduce((s, v) => s + v, 0) / competitorTotals.length
+    : 0;
   return (
     <div className="flex flex-col gap-[6px]">
       {all.map((p, i) => {
         const isMe = p.position === -1;
         const h2Pct = (p.h2 / localMax) * 100;
         const h3Pct = (p.h3 / localMax) * 100;
+        const baseColor = isMe ? "var(--accent)" : colorByVolumeDeviation(p.value, mean);
         return (
           <div key={i} className="flex items-center gap-2 text-[11px]">
             <div className={`w-[100px] truncate ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-secondary)]"}`} title={p.label}>
               {isMe ? "★ Toi" : p.label}
             </div>
             <div className="flex-1 h-[14px] bg-[var(--bg)] rounded-[var(--radius-xs)] overflow-hidden flex">
-              <div className="h-full" style={{ width: `${h2Pct}%`, background: "#E85D3A", opacity: isMe ? 1 : 0.85 }} />
-              <div className="h-full" style={{ width: `${h3Pct}%`, background: "#E85D3A66", opacity: isMe ? 1 : 0.7 }} />
+              <div className="h-full" style={{ width: `${h2Pct}%`, background: baseColor, opacity: isMe ? 1 : 0.9 }} />
+              <div className="h-full" style={{ width: `${h3Pct}%`, background: baseColor, opacity: isMe ? 0.55 : 0.45 }} />
             </div>
             <div className={`font-[family-name:var(--font-mono)] text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
               {p.h2}H2 · {p.h3}H3
@@ -1780,8 +1804,8 @@ function BarChartHorizontalStacked({
         );
       })}
       <div className="flex gap-3 mt-2 text-[10px] text-[var(--text-muted)]">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: "#E85D3A" }} /> H2</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: "#E85D3A66" }} /> H3</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--text-muted)]" /> H2 (couleur pleine)</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--text-muted)] opacity-50" /> H3 (couleur tamisée)</span>
       </div>
     </div>
   );
@@ -1876,11 +1900,31 @@ function PositioningGauge({
   );
 }
 
-function positionColor(position: number): string {
-  if (position <= 3) return "var(--green)";
-  if (position <= 5) return "var(--accent)";
-  if (position <= 7) return "var(--orange)";
-  return "var(--text-muted)";
+/**
+ * Couleur "more is better" : on est au-dessus, en-dessous, ou autour de la
+ * moyenne SERP. Pour le score SEO uniquement : un score haut est toujours bon.
+ */
+function colorByScoreDeviation(value: number, mean: number): string {
+  const delta = value - mean;
+  if (delta >= 15) return "var(--green)";
+  if (delta >= 5) return "#7BAE5C"; // vert un peu plus pâle
+  if (delta >= -5) return "#C7B958"; // jaune (autour de la moyenne)
+  if (delta >= -15) return "var(--orange)";
+  return "var(--red)";
+}
+
+/**
+ * Couleur "Goldilocks" : autour de la moyenne = idéal, trop ou trop peu = mauvais.
+ * Pour les volumes (mots, sous-titres) où "trop optimisé" est aussi un signal négatif.
+ */
+function colorByVolumeDeviation(value: number, mean: number): string {
+  if (mean <= 0) return "var(--text-muted)";
+  const ratio = value / mean;
+  if (ratio >= 0.85 && ratio <= 1.15) return "var(--green)"; // idéal
+  if (ratio >= 0.7 && ratio <= 1.4) return "#7BAE5C"; // proche
+  if (ratio >= 0.5 && ratio <= 1.7) return "#C7B958"; // jaune
+  if (ratio >= 0.3 && ratio <= 2.2) return "var(--orange)"; // s'éloigne
+  return "var(--red)"; // beaucoup trop court ou beaucoup trop long
 }
 
 function CompetitorScoreRow({ scoreTotal, serp }: { scoreTotal: number; serp: SerpResult[] }) {

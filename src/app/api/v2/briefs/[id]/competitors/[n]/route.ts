@@ -69,7 +69,10 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
       // pour calculer (briefs anciens sans text persisté).
       breakdown: breakdown
         ? {
+            // Total concurrent = 95 % SEO + 5 % GEO (cf. briefs-service.ts).
+            competitorTotal: Math.round(breakdown.seoTotal * 0.95 + breakdown.geoTotal * 0.05),
             seoTotal: breakdown.seoTotal,
+            geoTotal: breakdown.geoTotal,
             keyword: breakdown.keyword,
             nlpCoverage: breakdown.nlpCoverage,
             contentLength: breakdown.contentLength,
