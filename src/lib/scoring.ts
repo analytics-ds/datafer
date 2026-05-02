@@ -8,10 +8,11 @@
 import type { NlpResult } from "./analysis";
 import { computeGeoScore, EMPTY_GEO_SIGNALS, type GeoScore, type GeoSignals } from "./geo-scoring";
 
-// GEO = simple checklist d'optimisation pour les LLMs, pèse 10 points sur 100.
-// Le SEO classique reste l'essentiel (90 pts).
-const SEO_WEIGHT = 0.9;
-const GEO_WEIGHT = 0.1;
+// GEO = simple checklist d'optimisation pour les LLMs, pèse 5 points sur 100.
+// Avant : 10 pts. Pierre a trouvé ça trop gros le 2026-05-02 — le SEO
+// reste l'essentiel à 95%, GEO est un bonus léger.
+const SEO_WEIGHT = 0.95;
+const GEO_WEIGHT = 0.05;
 
 // Mots non significatifs pour le matching "soft" du keyword sur les longues
 // expressions ("meilleur moto cross 125 fiable" → on ne va pas exiger que
@@ -157,7 +158,7 @@ const EMPTY: DetailedScore = {
   seoTotal: 0,
   geoTotal: 0,
   keyword: { score: 0, max: 15, details: {} },
-  nlpCoverage: { score: 0, max: 20, details: {} },
+  nlpCoverage: { score: 0, max: 25, details: {} },
   contentLength: { score: 0, max: 12, details: {} },
   headings: { score: 0, max: 18, details: {} },
   placement: { score: 0, max: 15, details: {} },
@@ -172,17 +173,24 @@ export function computeDetailedScore(
   geoSignals: GeoSignals = EMPTY_GEO_SIGNALS,
 ): DetailedScore {
   const geo = computeGeoScore(geoSignals);
+  // Pondération SEO sur 100 :
+  //   keyword 15 + nlpCoverage 25 + contentLength 12 + headings 15 +
+  //   placement 15 + structure 9 + quality 9 = 100.
+  // nlpCoverage est passé de 20 → 25 le 2026-05-02 (Pierre voulait que la
+  // mécanique "remplir les termes NLP" pèse plus dans le score). En
+  // contrepartie, headings (18→15), structure (10→9), quality (10→9) ont
+  // perdu chacun 1-3 pts.
   const r: DetailedScore = {
     total: 0,
     seoTotal: 0,
     geoTotal: geo.total,
     keyword: { score: 0, max: 15, details: {} },
-    nlpCoverage: { score: 0, max: 20, details: {} },
+    nlpCoverage: { score: 0, max: 25, details: {} },
     contentLength: { score: 0, max: 12, details: {} },
-    headings: { score: 0, max: 18, details: {} },
+    headings: { score: 0, max: 15, details: {} },
     placement: { score: 0, max: 15, details: {} },
-    structure: { score: 0, max: 10, details: {} },
-    quality: { score: 0, max: 10, details: {} },
+    structure: { score: 0, max: 9, details: {} },
+    quality: { score: 0, max: 9, details: {} },
     geo,
   };
   if (!nlp?.nlpTerms) {
@@ -243,7 +251,11 @@ export function computeDetailedScore(
     exactBonus,
   };
 
-  // 2. NLP /20
+  // 2. NLP /25 — barème quasi-linéaire, gamification : chaque terme
+  // intégré ajoute des points proportionnels (~0.83 pt par terme sur 30).
+  // Avant : paliers (80%→20/20). Maintenant : score = round(cov × 25).
+  // Encourage l'utilisateur à viser 100% de coverage plutôt que stagner
+  // sur un palier.
   const top30 = nlp.nlpTerms.slice(0, 30);
   let used = 0;
   top30.forEach((t) => {
@@ -254,16 +266,7 @@ export function computeDetailedScore(
     }
   });
   const cov = top30.length > 0 ? used / top30.length : 0;
-  r.nlpCoverage.score =
-    cov >= 0.8
-      ? 20
-      : cov >= 0.6
-        ? 15 + Math.round(((cov - 0.6) / 0.2) * 5)
-        : cov >= 0.4
-          ? 9 + Math.round(((cov - 0.4) / 0.2) * 6)
-          : cov >= 0.2
-            ? 3 + Math.round(((cov - 0.2) / 0.2) * 6)
-            : Math.round((cov / 0.2) * 3);
+  r.nlpCoverage.score = Math.min(25, Math.round(cov * 25));
   r.nlpCoverage.details = { used, total: top30.length, coverage: Math.round(cov * 100) };
 
   // 3. LENGTH /12
@@ -303,7 +306,11 @@ export function computeDetailedScore(
     )
       s += 2;
     if (ed.h3s.length > 0) s += 1;
-    r.headings.score = Math.min(18, s);
+    // Plafond 15 (avant 18, redistribué vers nlpCoverage le 2026-05-02).
+    // Tous les sous-scores intermédiaires restent identiques mais on cap
+    // à 15 — un contenu qui coche tous les critères headings touchait 18,
+    // maintenant il touche 15 avec la même pondération relative.
+    r.headings.score = Math.min(15, s);
     r.headings.details = {
       h1: ed.h1s.length,
       h2: ed.h2s.length,
@@ -371,7 +378,8 @@ export function computeDetailedScore(
     else if (aP > 15) s += 1;
     if (wc >= 200) s += 1;
     if (wc >= 500) s += 1;
-    r.structure.score = Math.min(10, s);
+    // Plafond 9 (avant 10, redistribué vers nlpCoverage le 2026-05-02).
+    r.structure.score = Math.min(9, s);
     r.structure.details = { paragraphs: pC };
   }
 
@@ -392,7 +400,8 @@ export function computeDetailedScore(
     else if (div >= 0.2) s += 1;
     if (wc >= 300) s += 1;
     if (wc >= 600) s += 1;
-    r.quality.score = Math.min(10, s);
+    // Plafond 9 (avant 10, redistribué vers nlpCoverage le 2026-05-02).
+    r.quality.score = Math.min(9, s);
     r.quality.details = { diversity: Math.round(div * 100) };
   }
 
