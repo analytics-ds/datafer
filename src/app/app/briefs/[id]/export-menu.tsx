@@ -42,10 +42,10 @@ export function ExportMenu({
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-[6px] px-3 py-[8px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[12px] font-semibold hover:bg-[var(--bg-warm)] transition-colors cursor-pointer"
-        title="Exporter le contenu rédigé"
+        title="Télécharger le contenu rédigé"
       >
         <DownloadIcon />
-        Exporter
+        Télécharger
         <svg width="9" height="9" viewBox="0 0 20 20" fill="none">
           <path
             d="M5 8l5 5 5-5"
