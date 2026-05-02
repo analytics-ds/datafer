@@ -1,0 +1,37 @@
+name: Cleanup stuck briefs
+
+on:
+  schedule:
+    # Toutes les 5 minutes (plus court non garanti côté GitHub Actions cron).
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: cleanup-stuck-briefs
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/cron/cleanup-stuck
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          response=$(curl -sS -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            https://datafer.analytics-e0d.workers.dev/api/cron/cleanup-stuck)
+          body=$(echo "$response" | sed '$d')
+          status=$(echo "$response" | tail -n1)
+          echo "HTTP $status"
+          echo "$body"
+          if [ "$status" != "200" ]; then
+            echo "::error::cleanup endpoint returned non-200"
+            exit 1
+          fi
+          cleaned=$(echo "$body" | jq -r '.cleaned // 0')
+          if [ "$cleaned" -gt 0 ]; then
+            echo "::notice::Cleaned $cleaned stuck brief(s)"
+          fi

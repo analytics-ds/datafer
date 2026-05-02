@@ -131,7 +131,13 @@ export async function createBrief(
       error: `${provider === "serpapi" ? "SERPAPI_KEY" : "CRAZYSERP_KEY"} missing on server`,
     };
 
-  const { results, allResults, paa } = await fetchSerp(keyword, country, serpKey, provider);
+  const { results, allResults, paa } = await fetchSerp(
+    keyword,
+    country,
+    serpKey,
+    provider,
+    provider === "crazyserp" ? e.CRAZYSERP_KEY_FALLBACK : undefined,
+  );
   if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
 
   const settled = await Promise.allSettled(results.map((r) => crawlPage(r.link)));
@@ -141,7 +147,18 @@ export async function createBrief(
     const c = crawled[i];
     if (c) {
       pageContents.push(c);
-      return { ...r, wordCount: c.wordCount, headings: c.headings, h1: c.h1, h2: c.h2, h3: c.h3, outline: c.outline };
+      return {
+        ...r,
+        wordCount: c.wordCount,
+        headings: c.headings,
+        paragraphs: c.paragraphs,
+        h1: c.h1,
+        h2: c.h2,
+        h3: c.h3,
+        outline: c.outline,
+        text: c.text,
+        structuredHtml: c.structuredHtml,
+      };
     }
     return { ...r, wordCount: 0, headings: 0 };
   });
@@ -352,7 +369,13 @@ export async function createPendingBrief(
 // 75s : compromis entre wall-time Workers (~30s par défaut, plus en
 // Standard plan) et le crawler 3 niveaux. On garde une marge pour
 // l'analyse NLP et les écritures DB après le crawl.
-const ANALYSIS_DEADLINE_MS = 75_000;
+// Cascade fetch direct → BD : ~70% des sites en fetch direct (1-2s) + ~30%
+// en BD (5-50s). Latence cible 30-60s. On garde 90s comme deadline pour
+// laisser de la marge sur les SERPs e-commerce sans risquer le worker timeout
+// CF (~30s CPU, mais wall time peut aller plus loin). Le cron cleanup
+// (`/api/cron/cleanup-stuck`) chasse les briefs zombies > 3min en pending,
+// au cas où le worker meurt avant d'avoir update le status.
+const ANALYSIS_DEADLINE_MS = 90_000;
 
 export async function completeBriefAnalysis(
   briefId: string,
@@ -477,7 +500,13 @@ async function createBriefAnalysisPayload(
     };
 
   await setStep("fetching_serp");
-  const { results, allResults, paa } = await fetchSerp(keyword, country, serpKey, provider);
+  const { results, allResults, paa } = await fetchSerp(
+    keyword,
+    country,
+    serpKey,
+    provider,
+    provider === "crazyserp" ? e.CRAZYSERP_KEY_FALLBACK : undefined,
+  );
   if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
 
   await setStep(`crawling:0/${results.length}`);
@@ -486,12 +515,12 @@ async function createBriefAnalysisPayload(
   // monter en temps réel.
   let done = 0;
   // Si l'utilisateur a fourni "Mon URL", on lance son crawl EN PARALLÈLE
-  // des concurrents pour ne pas additionner les latences ScrapingBee.
-  // Sans ça, un crawl ScrapingBee niveau 3 (25 crédits) sur myUrl peut
-  // ajouter 20-30s au total et faire dépasser le deadline analysis 75s.
-  // Retry une fois en cas d'erreur transitoire ScrapingBee (500/429), car
-  // myUrl est critique : sans elle l'éditeur démarre vide. Pour les
-  // concurrents, on s'en fiche d'en perdre 1 sur 10 dans le NLP.
+  // des concurrents pour ne pas additionner les latences Bright Data.
+  // Sans ça, un crawl BD Premium sur myUrl peut ajouter 20-30s au total
+  // et faire dépasser le deadline analysis 75s.
+  // Retry une fois en cas d'erreur transitoire BD (5xx/429), car myUrl
+  // est critique : sans elle l'éditeur démarre vide. Pour les concurrents,
+  // on s'en fiche d'en perdre 1 sur 10 dans le NLP.
   const crawlMyUrlOnce = async (): Promise<PageContent | null> => {
     try {
       const r = await crawlPage(myUrl!);
@@ -505,7 +534,7 @@ async function createBriefAnalysisPayload(
     ? (async () => {
         const first = await crawlMyUrlOnce();
         if (first) return first;
-        // 1 retry pour gérer les 500/429 ScrapingBee transitoires
+        // 1 retry pour gérer les 5xx/429 transitoires côté Bright Data
         console.log("[brief] myUrl first crawl failed, retrying...", { myUrl });
         await new Promise((res) => setTimeout(res, 1000));
         return crawlMyUrlOnce();
@@ -526,7 +555,18 @@ async function createBriefAnalysisPayload(
     const c = crawled[i];
     if (c) {
       pageContents.push(c);
-      return { ...r, wordCount: c.wordCount, headings: c.headings, h1: c.h1, h2: c.h2, h3: c.h3, outline: c.outline };
+      return {
+        ...r,
+        wordCount: c.wordCount,
+        headings: c.headings,
+        paragraphs: c.paragraphs,
+        h1: c.h1,
+        h2: c.h2,
+        h3: c.h3,
+        outline: c.outline,
+        text: c.text,
+        structuredHtml: c.structuredHtml,
+      };
     }
     return { ...r, wordCount: 0, headings: 0 };
   });

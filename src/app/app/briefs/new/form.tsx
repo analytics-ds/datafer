@@ -30,7 +30,7 @@ const LOADING_STEPS: Array<{
   {
     key: "crawling",
     label: "Crawl des 10 sites concurrents",
-    sub: "Rendering JS via IPs résidentielles (ScrapingBee)",
+    sub: "Rendering JS via IPs résidentielles (Bright Data Web Unlocker)",
   },
   {
     key: "analyzing_nlp",

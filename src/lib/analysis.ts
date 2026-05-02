@@ -20,6 +20,7 @@ export type SerpResult = {
   displayed_link: string;
   wordCount?: number;
   headings?: number;
+  paragraphs?: number;
   h1?: string[];
   h2?: string[];
   h3?: string[];
@@ -28,6 +29,13 @@ export type SerpResult = {
   // Score SEO /100 du concurrent (même algo que celui appliqué à la rédaction
   // côté éditeur). Calculé une fois au moment de la création du brief.
   score?: number;
+  // Texte brut extrait de la page concurrente (sans markup). Persisté dans
+  // serpJson uniquement pour les briefs créés à partir de l'API V2 (briefs
+  // antérieurs : champ undefined).
+  text?: string;
+  // HTML reconstitué (H1/H2/H3/P dans l'ordre du document original). Permet
+  // une comparaison visuelle directe avec la rédaction sans re-crawler.
+  structuredHtml?: string;
 };
 
 export type Paa = { question: string; snippet: string; link: string };
@@ -209,11 +217,12 @@ export async function fetchSerp(
   country: string,
   apiKey: string,
   provider: SerpProvider = "crazyserp",
+  apiKeyFallback?: string,
 ): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
   if (provider === "serpapi") {
     return fetchSerpFromSerpapi(keyword, country, apiKey);
   }
-  return fetchSerpFromCrazyserp(keyword, country, apiKey);
+  return fetchSerpFromCrazyserp(keyword, country, apiKey, apiKeyFallback);
 }
 
 // ─── CrazySerp ───────────────────────────────────────────────────────────────
@@ -280,10 +289,24 @@ async function fetchSerpFromCrazyserp(
   keyword: string,
   country: string,
   apiKey: string,
+  apiKeyFallback?: string,
 ): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
   // Page 1 = 1 crédit. Renvoie ~10 résultats organiques (parfois 8-9 si
   // Google a inséré des blocs spéciaux).
-  const first = await fetchCrazyserpPage(keyword, country, apiKey, 1);
+  let first = await fetchCrazyserpPage(keyword, country, apiKey, 1);
+  // Bascule automatique sur la clé secondaire si la primaire ne répond pas
+  // (cas typique : quota CrazySerp épuisé sur la primaire). Pierre voit
+  // [crazyserp] fallback dans les logs Cloudflare et sait qu'il faut
+  // recharger la primaire.
+  let activeKey = apiKey;
+  if (!first && apiKeyFallback) {
+    console.log("[crazyserp] primary key failed, trying fallback");
+    first = await fetchCrazyserpPage(keyword, country, apiKeyFallback, 1);
+    if (first) {
+      activeKey = apiKeyFallback;
+      console.log("[crazyserp] using fallback key for this brief");
+    }
+  }
   if (!first) return { results: [], allResults: [], paa: [] };
 
   const pd = first.parsed_data ?? {};
@@ -298,9 +321,10 @@ async function fetchSerpFromCrazyserp(
   // CrazySerp : `page=N` est cumulatif et coûte N crédits. Si on a <10
   // organiques sur la page 1 (Google insère souvent des blocs spéciaux),
   // on demande directement la page 2 (2 crédits, ~17 organiques) pour
-  // garantir le top 10 complet.
+  // garantir le top 10 complet. On utilise activeKey pour rester cohérent
+  // avec la 1re page (utile si on est passé en fallback).
   if (allOrganic.length < 10) {
-    const next = await fetchCrazyserpPage(keyword, country, apiKey, 2);
+    const next = await fetchCrazyserpPage(keyword, country, activeKey, 2);
     if (next) {
       const more = next.parsed_data?.organic ?? [];
       if (more.length > allOrganic.length) {
@@ -612,23 +636,27 @@ const GOOGLEBOT_UA =
  * on ne l'active que pour les pages réellement bloquées.
  */
 /**
- * Cascade de crawl simplifiée :
+ * Cascade de crawl à 2 niveaux :
  *
  *   1. fetch direct UA Googlebot (gratuit) — passe ~70% des sites
- *   2. ScrapingBee render_js + premium_proxy (25 crédits) — IP résidentielle
- *      + JS rendering, passe la quasi-totalité des sites bloquants.
+ *   2. Bright Data Web Unlocker (Premium domains activé sur la zone) —
+ *      IP résidentielle + full JS rendering automatique pour les SPAs et
+ *      sites blindés que le fetch direct n'attrape pas.
  *
- * Le niveau intermédiaire "render_js sans premium_proxy" (5 crédits) a été
- * supprimé : empiriquement, les sites qui ont besoin de JS rendering ont
- * aussi besoin d'IP résidentielles (sinon ils auraient pas besoin de SPA
- * pour bloquer les bots). Le niveau 2 retournait souvent du HTML "200 OK"
- * mais avec contenu pas hydraté → faux positifs (pages acceptées avec un
- * wordCount artificiel sur du marketing/footer, vrai contenu produit raté).
+ * Tentative passée le 2026-05-02 de virer la cascade (BD systématique sur
+ * 10/10) : les SERPs e-commerce avec 10 SPAs lourdes en parallèle font
+ * dépasser le wall Cloudflare Workers et le worker meurt sans update du
+ * status. Cascade restaurée, garde 70% de fetch direct gratuit + BD pour
+ * les 30% qui en ont besoin.
+ *
+ * Bright Data remplace ScrapingBee depuis le 2026-05-02 (cf. crawlWithBrightData).
+ * Tarif : $1.50/CPM standard, +$1/CPM sur domaines premium → ~50× moins
+ * cher que ScrapingBee à qualité équivalente.
  *
  * Coût moyen attendu pour 10 sites SERP :
- *   - ~7 sites en fetch direct = 0 crédit
- *   - ~3 sites en ScrapingBee niveau 2 = 75 crédits
- *   - Total : ~75 crédits/brief, soit 1000 crédits free = ~13 briefs gratuits.
+ *   - ~7 sites en fetch direct = $0
+ *   - ~3 sites en Bright Data, dont 1 premium = ~$0.0055/brief
+ *   - 200 briefs/mois ≈ $1.10
  */
 export async function crawlPage(url: string): Promise<PageContent | null> {
   // 1. Fetch direct (gratuit)
@@ -650,23 +678,22 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
         const parsed = parseHTML(truncated);
         // Seuil 200 mots : sous ce seuil on suppose que le contenu est
         // partiel ou tronqué (page non hydratée, contenu lazy-loaded, WAF
-        // qui sert une version dégradée). Dans ce cas on bascule
-        // directement sur ScrapingBee premium pour récupérer le vrai
-        // contenu.
+        // qui sert une version dégradée). Dans ce cas on bascule sur BD
+        // pour récupérer le vrai contenu hydraté.
         if (parsed.wordCount >= 200) return parsed;
       }
     }
   } catch {
-    // Timeout / TLS / DNS : on bascule sur ScrapingBee
+    // Timeout / TLS / DNS : on bascule sur Bright Data
   }
 
-  // 2. ScrapingBee premium (premium_proxy + render_js, 25 crédits)
-  const fullHtml = await crawlWithScrapingBee(url, { renderJs: true, premiumProxy: true });
+  // 2. Bright Data Web Unlocker (zone web_unlocker1, Premium domains activé)
+  const fullHtml = await crawlWithBrightData(url);
   if (fullHtml && !looksLikeChallengePage(fullHtml)) {
     const parsed = parseHTML(fullHtml);
     // Seuil 100 mots : on accepte un seuil plus bas qu'au niveau fetch
-    // direct car ScrapingBee est notre dernier recours, pas la peine de
-    // jeter une page à 150 mots de contenu utile.
+    // direct car BD est notre dernier recours, pas la peine de jeter une
+    // page à 150 mots de contenu utile.
     if (parsed.wordCount >= 100) return parsed;
   }
 
@@ -675,63 +702,97 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
 
 
 /**
- * Niveau 3 : ScrapingBee REST API. Utilise des IPs résidentielles et
- * peut activer le rendering JS, ce qui contourne les WAF stricts type
- * Akamai. Plan free : 1000 crédits offerts.
+ * Niveau 2 : Bright Data Web Unlocker API. JS rendering + IPs résidentielles
+ * automatiques sur les domaines bloquants (Akamai, DataDome, Cloudflare
+ * Turnstile, etc.) via l'option Premium domains activée sur la zone.
  *
- * Endpoint : GET https://app.scrapingbee.com/api/v1/
+ * Endpoint : POST https://api.brightdata.com/request
+ * Tarif (mai 2026) : $1.50/CPM standard, +$1/CPM sur domaines premium.
  *
- * Retourne null si la clé n'est pas configurée ou si la requête échoue.
+ * Bench du 2026-05-02 vs ScrapingBee : 10/10 OK avec Premium activé
+ * (sport2000 et autres SPAs sur-comptaient du noise chez ScrapingBee, BD
+ * est plus précis en moyenne). Coût estimé ~50× moindre.
+ *
+ * Retourne null si la zone/token ne sont pas configurés ou si la requête échoue.
  */
-async function crawlWithScrapingBee(
-  url: string,
-  opts: { renderJs: boolean; premiumProxy: boolean },
-): Promise<string | null> {
+async function crawlWithBrightData(url: string): Promise<string | null> {
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const env = getCloudflareContext().env as unknown as Record<
       string,
       string | undefined
     >;
-    const apiKey = env.SCRAPINGBEE_KEY;
-    if (!apiKey) return null;
+    const token = env.BRIGHTDATA_TOKEN;
+    const zone = env.BRIGHTDATA_ZONE;
+    if (!token || !zone) return null;
 
-    const params = new URLSearchParams({
-      api_key: apiKey,
-      url,
-      render_js: opts.renderJs ? "true" : "false",
-      premium_proxy: opts.premiumProxy ? "true" : "false",
-    });
-    // country_code (FR) n'est appliqué qu'avec premium_proxy ; ScrapingBee
-    // refuse le param si on n'est pas en proxy résidentiel.
-    if (opts.premiumProxy) params.set("country_code", "fr");
-    if (opts.renderJs) {
-      params.set("wait_browser", "domcontentloaded");
-      params.set("block_resources", "false");
-    }
-    const r = await fetch(`https://app.scrapingbee.com/api/v1/?${params.toString()}`, {
-      signal: AbortSignal.timeout(30000),
+    const r = await fetch("https://api.brightdata.com/request", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ zone, url, format: "raw", country: "fr" }),
+      // Premium domains peut aller jusqu'à ~30s sur les SPAs lourdes (full JS
+      // rendering côté BD). 50s laisse une marge sans bloquer le deadline
+      // d'analyse global de 120s côté briefs-service.
+      signal: AbortSignal.timeout(50000),
     });
     if (!r.ok) {
-      console.log("[scrapingbee] http error", {
-        url,
-        status: r.status,
-        opts,
-      });
+      console.log("[brightdata] http error", { url, status: r.status });
       return null;
     }
     const html = await r.text();
-    console.log("[scrapingbee] ok", {
-      url,
-      htmlLength: html.length,
-      cost: opts.premiumProxy && opts.renderJs ? 25 : opts.premiumProxy ? 10 : opts.renderJs ? 5 : 1,
-    });
+    console.log("[brightdata] ok", { url, htmlLength: html.length });
     return html;
   } catch (e) {
-    console.log("[scrapingbee] exception", { url, err: String(e) });
+    console.log("[brightdata] exception", { url, err: String(e) });
     return null;
   }
 }
+
+/**
+ * @deprecated Conservé en commentaire pour rollback rapide si Bright Data
+ * pose problème. Pour réactiver : décommenter, remettre l'appel dans
+ * crawlPage(), et `wrangler secret put SCRAPINGBEE_KEY`.
+ *
+ * Bench 2026-05-02 : ScrapingBee passait 9/10 sites sur "basket homme"
+ * mais sur-comptait le noise (footer/menu) sur sport2000 (404 → 924 mots
+ * de bruit) et faguo (1454 vs 523 réels DOM-rendered). Coût ~50× plus cher
+ * que Bright Data Web Unlocker à features équivalentes.
+ */
+// async function crawlWithScrapingBee(
+//   url: string,
+//   opts: { renderJs: boolean; premiumProxy: boolean },
+// ): Promise<string | null> {
+//   try {
+//     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+//     const env = getCloudflareContext().env as unknown as Record<
+//       string,
+//       string | undefined
+//     >;
+//     const apiKey = env.SCRAPINGBEE_KEY;
+//     if (!apiKey) return null;
+//     const params = new URLSearchParams({
+//       api_key: apiKey,
+//       url,
+//       render_js: opts.renderJs ? "true" : "false",
+//       premium_proxy: opts.premiumProxy ? "true" : "false",
+//     });
+//     if (opts.premiumProxy) params.set("country_code", "fr");
+//     if (opts.renderJs) {
+//       params.set("wait_browser", "domcontentloaded");
+//       params.set("block_resources", "false");
+//     }
+//     const r = await fetch(`https://app.scrapingbee.com/api/v1/?${params.toString()}`, {
+//       signal: AbortSignal.timeout(30000),
+//     });
+//     if (!r.ok) return null;
+//     return await r.text();
+//   } catch {
+//     return null;
+//   }
+// }
 
 /**
  * Heuristique pour détecter une page de challenge Cloudflare/Akamai/etc.
@@ -2138,13 +2199,24 @@ export async function enrichWithSemantic(
       semanticScore: cosineSimilarity(kwEmb, termEmbs[i]),
     }));
 
-    const clusters = clusterTermsByEmbedding(enrichedTerms, termEmbs, 0.62);
+    // Fusion sémantique des quasi-doublons (cosine ≥ 0.92) qu'on n'a pas pu
+    // attraper avec le fingerprint stopword (cf. dedup runNLP). Ex : "sneakers"
+    // / "baskets" ont des fingerprints différents mais sont sémantiquement
+    // équivalents. On garde le terme avec le meilleur score comme représentant
+    // et on consolide les autres dans `variants`.
+    const { terms: mergedTerms, embs: mergedEmbs } = mergeNearDuplicateTerms(
+      enrichedTerms,
+      termEmbs,
+      0.92,
+    );
+
+    const clusters = clusterTermsByEmbedding(mergedTerms, mergedEmbs, 0.62);
 
     // Re-rank par mix presence + semanticScore : un terme idéal est BIEN
     // présent chez les concurrents ET sémantiquement lié au keyword. Pénalité
     // forte pour les termes haute presence + sem très basse (probablement du
     // noise web généraliste).
-    const rerankedTop50 = enrichedTerms
+    const rerankedTop50 = mergedTerms
       .map((t) => {
         const sem = t.semanticScore ?? 0.4;
         let combinedScore = (t.presence / 100) * 0.5 + sem * 0.5;
@@ -2171,6 +2243,73 @@ export async function enrichWithSemantic(
     console.error("[ai] enrichWithSemantic failed:", err);
     return nlp;
   }
+}
+
+/**
+ * Fusion des paires/groupes de termes dont la cosine similarity dépasse un
+ * seuil très haut (typiquement 0.92). Le représentant est le terme au meilleur
+ * `presence × semanticScore`, les autres sont ajoutés à ses `variants`. Les
+ * compteurs (presence, avgCount, minCount, maxCount) sont mergés en max pour
+ * ne pas perdre d'info.
+ *
+ * Renvoie aussi le tableau d'embeddings filtré pour rester aligné avec les
+ * termes restants.
+ */
+function mergeNearDuplicateTerms(
+  terms: NlpTerm[],
+  embs: number[][],
+  threshold: number,
+): { terms: NlpTerm[]; embs: number[][] } {
+  const merged: NlpTerm[] = [];
+  const mergedEmbs: number[][] = [];
+  const assigned = new Set<number>();
+  for (let i = 0; i < terms.length; i++) {
+    if (assigned.has(i)) continue;
+    const groupIdx = [i];
+    assigned.add(i);
+    for (let j = i + 1; j < terms.length; j++) {
+      if (assigned.has(j)) continue;
+      if (cosineSimilarity(embs[i], embs[j]) >= threshold) {
+        groupIdx.push(j);
+        assigned.add(j);
+      }
+    }
+    if (groupIdx.length === 1) {
+      merged.push(terms[i]);
+      mergedEmbs.push(embs[i]);
+      continue;
+    }
+    // Fusion : représentant = celui avec le meilleur presence × semanticScore.
+    const group = groupIdx.map((idx) => ({ term: terms[idx], emb: embs[idx] }));
+    const ranked = group
+      .slice()
+      .sort(
+        (a, b) =>
+          b.term.presence * (b.term.semanticScore ?? 0.5) -
+          a.term.presence * (a.term.semanticScore ?? 0.5),
+      );
+    const winner = ranked[0];
+    const others = ranked.slice(1).map((r) => r.term);
+    const consolidatedVariants = Array.from(
+      new Set([
+        ...(winner.term.variants ?? []),
+        ...others.map((o) => o.term),
+        ...others.flatMap((o) => o.variants ?? []),
+      ]),
+    );
+    merged.push({
+      ...winner.term,
+      variants: consolidatedVariants,
+      // On prend le max de chaque métrique : c'est l'expression la plus forte
+      // de cette idée sémantique chez les concurrents.
+      presence: Math.max(...group.map((g) => g.term.presence)),
+      avgCount: Math.max(...group.map((g) => g.term.avgCount)),
+      minCount: Math.max(...group.map((g) => g.term.minCount)),
+      maxCount: Math.max(...group.map((g) => g.term.maxCount)),
+    });
+    mergedEmbs.push(winner.emb);
+  }
+  return { terms: merged, embs: mergedEmbs };
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {

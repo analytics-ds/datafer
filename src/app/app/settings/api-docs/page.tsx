@@ -22,18 +22,30 @@ export default function ApiDocsPage() {
 
       <Section title="Vue d'ensemble" dot="var(--accent)">
         <p className="mb-3">
-          L'API Datafer expose trois endpoints pour piloter les briefs depuis l'extérieur (script, N8N,
-          Make, Postman, Zapier, etc.). Le modèle est asynchrone : tu crées un brief, tu interroges
-          son statut jusqu'à ce qu'il soit prêt, puis tu peux soumettre ton contenu pour récupérer
-          un score comparé à celui de la concurrence SERP.
+          L&apos;API Datafer expose deux familles d&apos;endpoints pour piloter les briefs depuis l&apos;extérieur
+          (script, N8N, Make, Postman, Zapier, etc.). Le modèle est asynchrone : tu crées un brief,
+          tu interroges son statut jusqu&apos;à ce qu&apos;il soit prêt, puis tu peux soumettre ton contenu
+          pour récupérer un score comparé à celui de la concurrence SERP.
         </p>
+        <H4>API V1 (création + scoring)</H4>
         <ul className="list-disc pl-5 text-[var(--text-muted)] mb-3">
-          <li><Code>POST /api/v1/briefs</Code> — crée un brief et lance l'analyse</li>
-          <li><Code>GET /api/v1/briefs/&#123;id&#125;</Code> — lit le brief, renvoie <Code>pending</Code> / <Code>ready</Code> / <Code>failed</Code></li>
-          <li><Code>POST /api/v1/briefs/&#123;id&#125;/content</Code> — soumet du contenu HTML et reçoit le score détaillé</li>
+          <li><Code>POST /api/v1/briefs</Code>, crée un brief et lance l&apos;analyse</li>
+          <li><Code>GET /api/v1/briefs/&#123;id&#125;</Code>, lit le brief, renvoie <Code>pending</Code> / <Code>ready</Code> / <Code>failed</Code></li>
+          <li><Code>POST /api/v1/briefs/&#123;id&#125;/content</Code>, soumet du contenu HTML et reçoit le score détaillé</li>
+        </ul>
+        <H4>API V2 (lecture étendue, granulaire)</H4>
+        <ul className="list-disc pl-5 text-[var(--text-muted)] mb-3">
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;</Code>, résumé enrichi (intent, stats SERP, snapshot Haloscan)</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/serp</Code>, top 10 brut + People Also Ask</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors</Code>, les 10 concurrents enrichis (Hn, outline, score, wordCount)</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;</Code>, détail d&apos;un concurrent avec son texte brut et son HTML reconstitué</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/nlp</Code>, NLP complet (termes, clusters, sections, entités, opportunités, intent)</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/paa</Code>, People Also Ask seuls</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/scoring</Code>, breakdown détaillé du score (7 critères SEO + GEO)</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/haloscan</Code>, payload Haloscan brut + summary</li>
         </ul>
         <p className="text-[var(--text-muted)]">
-          Base URL : <Code>{BASE}</Code>
+          Base URL : <Code>{BASE}</Code>. Auth identique pour V1 et V2 (Bearer <Code>dfk_...</Code>).
         </p>
       </Section>
 
@@ -267,6 +279,193 @@ async function run(keyword: string, editorHtml: string) {
 }`}</Pre>
       </Section>
 
+      <Section title="API V2, lecture granulaire" dot="var(--accent-dark)">
+        <p className="mb-3">
+          La V2 est en lecture seule. Elle expose toute la richesse de l&apos;analyse Datafer
+          (SERP, concurrents, NLP, scoring détaillé, Haloscan) sur des endpoints séparés
+          pour ne charger que ce dont tu as besoin. Auth identique à la V1, même clé.
+        </p>
+        <p className="mb-3 text-[var(--text-muted)]">
+          La V2 ne crée pas de brief. Pour ça, utilise <Code>POST /api/v1/briefs</Code> puis
+          attends que <Code>status</Code> passe à <Code>ready</Code>. Les briefs en
+          <Code>pending</Code> ou <Code>failed</Code> renvoient leur statut sans payload métier.
+        </p>
+
+        <H4>GET /api/v2/briefs/&#123;id&#125;</H4>
+        <p className="mb-2 text-[var(--text-muted)]">Résumé enrichi du brief.</p>
+        <Pre>{`{
+  "id": "...",
+  "status": "ready",
+  "keyword": "chaussures running",
+  "country": "fr",
+  "score": 78,
+  "intent": "commercial",
+  "targetWordCount": 1850,
+  "minWordCount": 920, "maxWordCount": 3200,
+  "avgHeadings": 24, "avgParagraphs": 42,
+  "competitors": { "avg": 71, "best": 85, "bestUrl": "https://...", "count": 9 },
+  "position": 4,
+  "volume": 5400, "cpc": 0.42, "competition": 0.31,
+  "kgr": 0.18, "allintitleCount": 980,
+  "createdAt": "...", "updatedAt": "..."
+}`}</Pre>
+
+        <H4>GET /api/v2/briefs/&#123;id&#125;/serp</H4>
+        <p className="mb-2 text-[var(--text-muted)]">Top 10 SERP brut + People Also Ask.</p>
+        <Pre>{`{
+  "id": "...",
+  "keyword": "...",
+  "country": "fr",
+  "results": [
+    { "position": 1, "title": "...", "link": "https://...",
+      "snippet": "...", "displayed_link": "..." },
+    ...
+  ],
+  "paa": [
+    { "question": "Comment ...", "snippet": "...", "link": "https://..." }
+  ]
+}`}</Pre>
+
+        <H4>GET /api/v2/briefs/&#123;id&#125;/competitors</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Les 10 concurrents enrichis (Hn, outline, score, wordCount). Le contenu textuel
+          n&apos;est pas inclus ici pour borner le payload, demande
+          <Code>/competitors/&#123;n&#125;</Code> pour le récupérer.
+        </p>
+        <Pre>{`{
+  "id": "...",
+  "keyword": "...",
+  "stats": { "avg": 71, "best": 85, "bestUrl": "...", "count": 9 },
+  "competitors": [
+    {
+      "position": 1,
+      "title": "...", "link": "...", "displayed_link": "...", "snippet": "...",
+      "wordCount": 2480, "headings": 28, "paragraphs": 47,
+      "h1": ["..."], "h2": ["...", "..."], "h3": ["...", "..."],
+      "outline": [
+        { "level": 1, "text": "..." },
+        { "level": 2, "text": "..." }
+      ],
+      "score": 85,
+      "hasContent": true
+    },
+    ...
+  ]
+}`}</Pre>
+
+        <H4>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Détail d&apos;un concurrent à la position <Code>n</Code> (1 à 10), avec son texte brut
+          et son HTML reconstitué dans l&apos;ordre du document. Les briefs créés avant la mise
+          en place de la persistance contenu renvoient <Code>text</Code> et
+          <Code>structuredHtml</Code> à <Code>null</Code>.
+        </p>
+        <Pre>{`{
+  "id": "...",
+  "keyword": "...",
+  "competitor": {
+    "position": 3,
+    "title": "...", "link": "https://...",
+    "displayed_link": "...", "snippet": "...",
+    "wordCount": 2110, "headings": 22, "paragraphs": 38,
+    "h1": ["..."], "h2": [...], "h3": [...],
+    "outline": [...],
+    "score": 79,
+    "text": "Texte brut nettoyé, sans markup, séparé par des espaces ...",
+    "structuredHtml": "<h1>...</h1><p>...</p><h2>...</h2><p>...</p>..."
+  }
+}`}</Pre>
+
+        <H4>GET /api/v2/briefs/&#123;id&#125;/nlp</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Sortie NLP complète : termes pondérés par fréquence et embeddings sémantiques,
+          clusters thématiques, sections détectées dans la SERP, entités, opportunités PAA.
+        </p>
+        <Pre>{`{
+  "id": "...", "keyword": "...", "intent": "commercial",
+  "exactKeyword": {
+    "keyword": "...", "variations": [...],
+    "avgCount": 12, "avgDensity": 0.42,
+    "idealDensityMin": 0.3, "idealDensityMax": 0.6,
+    "inH1Pct": 80, "inH2Pct": 30, "inFirst100Pct": 90
+  },
+  "keywordTerms": [
+    { "term": "...", "kind": "exact", "presence": 90, "inHeadings": true,
+      "minCount": 4, "maxCount": 18, "avgCount": 11 }
+  ],
+  "nlpTerms": [
+    { "term": "...", "variants": [...], "score": 0.84,
+      "presence": 80, "df": 8, "inHeadings": true,
+      "minCount": 1, "maxCount": 6, "avgCount": 3.2,
+      "semanticScore": 0.71 }
+  ],
+  "semanticClusters": [
+    { "label": "couleurs", "terms": ["rouge", "noir", "blanc", ...] }
+  ],
+  "sections": [
+    { "label": "Comment choisir", "hits": 7, "total": 9,
+      "sampleHeadings": [...], "keyTerms": [...] }
+  ],
+  "entities": [
+    { "label": "Asics", "hits": 6, "total": 9, "totalOccurrences": 22 }
+  ],
+  "opportunities": [
+    { "type": "paa", "text": "Quelle pointure choisir ?", "competitorCoverage": 11 }
+  ],
+  "stats": {
+    "avgWordCount": 1850, "avgHeadings": 24, "avgParagraphs": 42,
+    "minWordCount": 920, "maxWordCount": 3200
+  }
+}`}</Pre>
+
+        <H4>GET /api/v2/briefs/&#123;id&#125;/paa</H4>
+        <p className="mb-2 text-[var(--text-muted)]">People Also Ask isolés.</p>
+        <Pre>{`{
+  "id": "...",
+  "keyword": "...",
+  "paa": [
+    { "question": "...", "snippet": "...", "link": "https://..." }
+  ]
+}`}</Pre>
+
+        <H4>GET /api/v2/briefs/&#123;id&#125;/scoring</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Breakdown détaillé du score, recalculé sur le HTML actuellement stocké dans le brief
+          (mis à jour par chaque <Code>POST /content</Code>). 7 critères SEO + bloc GEO.
+        </p>
+        <Pre>{`{
+  "id": "...", "keyword": "...",
+  "total": 78, "seoTotal": 82, "geoTotal": 70,
+  "breakdown": {
+    "keyword":      { "score": 13, "max": 15, "details": { ... } },
+    "nlpCoverage":  { "score": 16, "max": 20, "details": { ... } },
+    "contentLength":{ "score": 11, "max": 12, "details": { ... } },
+    "headings":     { "score": 14, "max": 18, "details": { ... } },
+    "placement":    { "score": 12, "max": 15, "details": { ... } },
+    "structure":    { "score":  8, "max": 10, "details": { ... } },
+    "quality":      { "score":  8, "max": 10, "details": { ... } },
+    "geo":          { "total": 70, ... }
+  },
+  "competitors": { "avg": 71, "best": 85, "bestUrl": "...", "count": 9 },
+  "editorWordCount": 1840
+}`}</Pre>
+
+        <H4>GET /api/v2/briefs/&#123;id&#125;/haloscan</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Snapshot des champs projetés en colonnes + payload Haloscan brut.
+          Renvoie <Code>404 haloscan data unavailable</Code> si le brief n&apos;a pas
+          d&apos;enrichissement Haloscan (clé absente ou KW introuvable).
+        </p>
+        <Pre>{`{
+  "id": "...", "keyword": "...",
+  "summary": {
+    "volume": 5400, "cpc": 0.42, "competition": 0.31,
+    "kgr": 0.18, "allintitleCount": 980
+  },
+  "raw": { /* payload Haloscan complet */ }
+}`}</Pre>
+      </Section>
+
       <Section title="Codes d'erreur" dot="var(--red)">
         <table className="w-full text-[12px] border-collapse">
           <thead>
@@ -278,10 +477,14 @@ async function run(keyword: string, editorHtml: string) {
           </thead>
           <tbody className="text-[var(--text-muted)]">
             <Err code="401" msg="unauthorized" cause="Clé absente, invalide ou révoquée" />
-            <Err code="400" msg="keyword required" cause="Body JSON sans keyword" />
+            <Err code="400" msg="keyword required" cause="Body JSON sans keyword (POST V1)" />
             <Err code="400" msg="editorHtml required" cause="Body sans editorHtml dans POST /content" />
+            <Err code="400" msg="invalid position" cause="V2 /competitors/{n} avec n non numérique ou < 1" />
             <Err code="403" msg="folder not accessible" cause="Le dossier n'existe pas ou n'appartient pas à ce user" />
             <Err code="404" msg="not found" cause="Brief introuvable" />
+            <Err code="404" msg="competitor not found at position" cause="Position demandée absente du top 10 stocké" />
+            <Err code="404" msg="nlp data unavailable" cause="V2 /nlp ou /scoring sur un brief sans NLP exploitable" />
+            <Err code="404" msg="haloscan data unavailable" cause="V2 /haloscan sur un brief sans payload Haloscan" />
             <Err code="409" msg="brief not ready yet" cause="Tentative de scorer un brief encore en status pending" />
             <Err code="409" msg="brief analysis failed" cause="L'analyse SERP initiale avait échoué" />
             <Err code="502" msg="no SERP results" cause="SerpAPI n'a rien renvoyé (remonté en status:failed)" />
