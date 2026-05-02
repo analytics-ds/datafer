@@ -78,9 +78,15 @@ export default async function AppHome() {
   ]);
 
   const tagsByBrief = await listTagsForBriefs(recentBriefs.map((b) => b.id));
+  // Thomas demandé caché du leaderboard et exclu du total équipe (sinon
+  // le pourcentage serait incohérent). Filtre par prénom : si plusieurs
+  // Thomas arrivent un jour, on raffinera par email/id.
+  const visibleLeaderboard = leaderboard.filter(
+    (u) => (u.firstName ?? u.name).split(" ")[0].toLowerCase() !== "thomas",
+  );
   const myBriefsThisMonth =
-    leaderboard.find((u) => u.userId === session.user.id)?.count ?? 0;
-  const totalBriefsThisMonth = leaderboard.reduce((s, u) => s + Number(u.count), 0);
+    visibleLeaderboard.find((u) => u.userId === session.user.id)?.count ?? 0;
+  const totalBriefsThisMonth = visibleLeaderboard.reduce((s, u) => s + Number(u.count), 0);
   const myShare = totalBriefsThisMonth > 0 ? myBriefsThisMonth / totalBriefsThisMonth : 0;
 
   // Pour passer aux BriefCard (qui s'attend à un type folder unique)
@@ -135,7 +141,7 @@ export default async function AppHome() {
           firstName={(session.user.name.split(" ")[0]) || "Toi"}
         />
         <Leaderboard
-          users={leaderboard.map((u) => ({
+          users={visibleLeaderboard.map((u) => ({
             id: u.userId,
             name: u.name,
             firstName: u.firstName,
