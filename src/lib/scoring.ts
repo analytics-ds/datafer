@@ -204,34 +204,35 @@ export function computeDetailedScore(
   const rx = buildKeywordRegex(ek.keyword);
 
   // 1. KEYWORD /15
-  // Algo en 2 couches :
-  //   a. Soft score (max 11) basé sur la couverture des tokens significatifs
-  //      du keyword. Permet aux pages qui parlent du sujet sans répéter la
-  //      phrase exacte (cas des KW longs où aucun top SERP ne l'écrit) de
-  //      quand même décrocher des points.
-  //   b. Bonus exact (jusqu'à 4) : la page qui écrit le keyword pile garde
-  //      un avantage. Sans ça, tout le monde plafonnerait au même score.
+  // Algo en 2 couches, rééquilibré le 2026-05-02 :
+  //   a. Soft score (max 7) basé sur la couverture des tokens significatifs
+  //      du keyword. Sans le keyword exact écrit pile dans le contenu, on
+  //      plafonne à 7/15 (≈47 %). Pierre a remonté que des contenus sans
+  //      keyword exact arrivaient à des scores trop hauts → on resserre.
+  //   b. Bonus exact (jusqu'à 8) : la page qui écrit le keyword pile
+  //      reprend la majorité des points. Combiné softScore + exactBonus
+  //      permet d'atteindre 15/15 quand tout est en place.
   const kwTokens = significantKwTokens(ek.keyword);
   const kwCov = tokenCoverage(lowerNorm, kwTokens);
-  const softScore = Math.round(kwCov * 11);
+  const softScore = Math.round(kwCov * 7);
 
   const m = lowerNorm.match(rx);
   const count = m ? m.length : 0;
   const density = wc > 0 ? ((count * ek.keyword.split(/\s+/).length) / wc) * 100 : 0;
-  // Bonus exact : plafond 4 points. On reproduit la pondération
-  // density (jusqu'à 2.4) + count (jusqu'à 1.6) en proportion.
+  // Bonus exact : plafond 8 points (vs 4 avant). Pondération
+  // density (jusqu'à 4.8) + count (jusqu'à 3.2).
   let exactBonus = 0;
   if (count > 0) {
     const dB =
       density >= ek.idealDensityMin && density <= ek.idealDensityMax
-        ? 2.4
+        ? 4.8
         : density > 0 && density < ek.idealDensityMin
-          ? (density / ek.idealDensityMin) * 2.4
+          ? (density / ek.idealDensityMin) * 4.8
           : density > ek.idealDensityMax
-            ? Math.max(0.5, 2.4 - (density - ek.idealDensityMax) * 0.8)
+            ? Math.max(1, 4.8 - (density - ek.idealDensityMax) * 1.6)
             : 0;
     const cR = ek.avgCount > 0 ? count / ek.avgCount : 0;
-    const cB = cR >= 0.7 && cR <= 1.5 ? 1.6 : Math.min(1.6, cR * 1.6);
+    const cB = cR >= 0.7 && cR <= 1.5 ? 3.2 : Math.min(3.2, cR * 3.2);
     exactBonus = Math.round(dB + cB);
   }
   r.keyword.score = Math.min(15, softScore + exactBonus);
@@ -326,12 +327,12 @@ export function computeDetailedScore(
 
     const f100 = normalize(words.slice(0, 100).join(" "));
     if (matchesExact(f100)) s += 5;
-    else if (matchesSoft(f100)) s += 3;
-    else if (variationsNorm.some((v) => f100.includes(v))) s += 2;
+    else if (matchesSoft(f100)) s += 2;
+    else if (variationsNorm.some((v) => f100.includes(v))) s += 1;
 
     const firstSent = normalize(text.split(/[.!?]\s/)[0]);
     if (matchesExact(firstSent)) s += 3;
-    else if (matchesSoft(firstSent)) s += 2;
+    else if (matchesSoft(firstSent)) s += 1;
 
     const last100 = normalize(words.slice(-100).join(" "));
     if (matchesExact(last100)) s += 2;
@@ -345,8 +346,10 @@ export function computeDetailedScore(
       if (matchesExact(seg)) qExact++;
       else if (matchesSoft(seg)) qSoft++;
     }
-    // Score distribution : exact pèse plein, soft pèse moitié.
-    const qScore = qExact * 1.25 + qSoft * 0.6;
+    // Score distribution : exact pèse plein (1.25), soft beaucoup moins
+    // (0.35) — sans kw exact dans aucun quart, on ne dépasse pas 2 points
+    // ici. Pondération resserrée le 2026-05-02 (Pierre).
+    const qScore = qExact * 1.25 + qSoft * 0.35;
     if (qScore >= 5) s += 5;
     else if (qScore >= 3.5) s += 4;
     else if (qScore >= 2) s += 2;
