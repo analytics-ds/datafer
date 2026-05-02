@@ -1,0 +1,45 @@
+# Worker dédié au traitement asynchrone des briefs Datafer.
+# Consomme la queue `datafer-analysis` et lance completeBriefAnalysis pour
+# chaque message. Voir src/worker-analysis/index.ts pour la logique.
+#
+# Déploiement : `npx wrangler deploy --config wrangler-analysis.toml`
+
+name = "datafer-analysis-consumer"
+compatibility_date = "2026-04-14"
+compatibility_flags = ["nodejs_compat"]
+main = "src/worker-analysis/index.ts"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "datafer"
+database_id = "52061f81-b4f5-4b32-9685-a015b0981a29"
+
+[ai]
+binding = "AI"
+
+[[queues.consumers]]
+queue = "datafer-analysis"
+# 1 brief à la fois : chaque analyse prend 30-60s CPU + 60-90s wall, on ne
+# veut pas paralléliser dans le même worker (sinon retour au problème de
+# budget Cloudflare). Plusieurs workers en parallèle = OK (CF spawn auto si
+# la queue grossit).
+max_batch_size = 1
+max_batch_timeout = 5
+# Si l'analyse échoue (uncaught), la queue retry 2 fois avec backoff puis
+# envoie le message dans la DLQ.
+max_retries = 2
+dead_letter_queue = "datafer-analysis-dlq"
+
+[vars]
+SERP_PROVIDER = "crazyserp"
+
+# Secrets à set via :
+#   wrangler secret put <NAME> --config wrangler-analysis.toml
+#
+# Liste à recopier depuis le worker datafer principal :
+# - CRAZYSERP_KEY
+# - CRAZYSERP_KEY_FALLBACK
+# - SERPAPI_KEY
+# - HALOSCAN_KEY
+# - BRIGHTDATA_TOKEN
+# - BRIGHTDATA_ZONE

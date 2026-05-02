@@ -11,6 +11,14 @@ database_name = "datafer"
 database_id = "52061f81-b4f5-4b32-9685-a015b0981a29"
 migrations_dir = "drizzle"
 
+# Queue Cloudflare consommée par le worker datafer-analysis-consumer.
+# Le worker principal (Next.js OpenNext) push les messages depuis
+# /api/briefs et /api/v1/briefs. Le consumer fait l'analyse complète
+# dans son propre budget CPU/wall, isolé du worker HTTP.
+[[queues.producers]]
+binding = "ANALYSIS_QUEUE"
+queue = "datafer-analysis"
+
 # Cloudflare Workers AI : utilisé pour générer les embeddings sémantiques
 # (modèle bge-m3 multilingue) qui permettent de calculer la similarité entre
 # le keyword et les nlpTerms et de clusteriser les termes par champ lexical.

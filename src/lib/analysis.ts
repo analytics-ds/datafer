@@ -658,7 +658,10 @@ const GOOGLEBOT_UA =
  *   - ~3 sites en Bright Data, dont 1 premium = ~$0.0055/brief
  *   - 200 briefs/mois ≈ $1.10
  */
-export async function crawlPage(url: string): Promise<PageContent | null> {
+export async function crawlPage(
+  url: string,
+  env: { BRIGHTDATA_TOKEN?: string; BRIGHTDATA_ZONE?: string },
+): Promise<PageContent | null> {
   // 1. Fetch direct (gratuit)
   try {
     const r = await fetch(url, {
@@ -688,7 +691,7 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
   }
 
   // 2. Bright Data Web Unlocker (zone web_unlocker1, Premium domains activé)
-  const fullHtml = await crawlWithBrightData(url);
+  const fullHtml = await crawlWithBrightData(url, env);
   if (fullHtml && !looksLikeChallengePage(fullHtml)) {
     const parsed = parseHTML(fullHtml);
     // Seuil 100 mots : on accepte un seuil plus bas qu'au niveau fetch
@@ -715,13 +718,11 @@ export async function crawlPage(url: string): Promise<PageContent | null> {
  *
  * Retourne null si la zone/token ne sont pas configurés ou si la requête échoue.
  */
-async function crawlWithBrightData(url: string): Promise<string | null> {
+async function crawlWithBrightData(
+  url: string,
+  env: { BRIGHTDATA_TOKEN?: string; BRIGHTDATA_ZONE?: string },
+): Promise<string | null> {
   try {
-    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-    const env = getCloudflareContext().env as unknown as Record<
-      string,
-      string | undefined
-    >;
     const token = env.BRIGHTDATA_TOKEN;
     const zone = env.BRIGHTDATA_ZONE;
     if (!token || !zone) return null;

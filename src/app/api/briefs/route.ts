@@ -2,15 +2,18 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getAuth } from "@/lib/auth";
-import { createPendingBrief, completeBriefAnalysis } from "@/lib/briefs-service";
+import { createPendingBrief } from "@/lib/briefs-service";
+import type { DataferEnv } from "@/lib/datafer-env";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Création d'un brief depuis l'UI : on insère un brief en pending tout
- * de suite et on lance l'analyse en background via ctx.waitUntil. Le
- * frontend reçoit l'id et poll /api/briefs/[id]/progress pour suivre
- * l'analyse en temps réel.
+ * Création d'un brief depuis l'UI : on insère un brief en pending et on
+ * envoie un message dans la queue Cloudflare `datafer-analysis`. Le
+ * worker consumer dédié (workers/analysis-consumer/) prend le relais et
+ * fait le crawl + NLP + scoring dans son propre budget CPU/wall, isolé
+ * de l'API HTTP. Garantit zéro zombie : si le consumer crash, la queue
+ * retry automatiquement, sinon DLQ.
  */
 export async function POST(req: Request) {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -33,8 +36,18 @@ export async function POST(req: Request) {
   const created = await createPendingBrief(session.user.id, input);
   if (!created.ok) return NextResponse.json({ error: created.error }, { status: created.status });
 
-  const { ctx } = getCloudflareContext();
-  ctx.waitUntil(completeBriefAnalysis(created.id, session.user.id, input));
+  const env = getCloudflareContext().env as unknown as DataferEnv;
+  if (!env.ANALYSIS_QUEUE) {
+    return NextResponse.json(
+      { error: "ANALYSIS_QUEUE binding missing" },
+      { status: 500 },
+    );
+  }
+  await env.ANALYSIS_QUEUE.send({
+    briefId: created.id,
+    userId: session.user.id,
+    input,
+  });
 
   return NextResponse.json({
     id: created.id,

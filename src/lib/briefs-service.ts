@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, or } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { getDb, type Db } from "@/db";
+import { getDb, getDbFromEnv, type Db } from "@/db";
 import { brief, client } from "@/db/schema";
+import type { DataferEnv } from "@/lib/datafer-env";
 import {
   fetchSerp,
   fetchHaloscan,
@@ -84,205 +85,9 @@ async function resolveFolder(
   return { ok: true, website: f.website };
 }
 
-/**
- * Version sync, utilisée par la web app (POST /api/briefs). Fait tout le
- * boulot d'un coup avant de répondre.
- */
-export async function createBrief(
-  userId: string,
-  input: CreateBriefInput,
-): Promise<CreateBriefResult> {
-  const keyword = input.keyword.trim();
-  const country = (input.country || "fr").toLowerCase();
-  const folderId = input.folderId || null;
-  const myUrl = input.myUrl?.trim() || null;
-
-  if (!keyword) return { ok: false, status: 400, error: "keyword required" };
-
-  const db = getDb();
-
-  let folderWebsite: string | null = null;
-  if (folderId) {
-    const [f] = await db
-      .select({ id: client.id, website: client.website })
-      .from(client)
-      .where(
-        and(
-          eq(client.id, folderId),
-          or(eq(client.ownerId, userId), eq(client.scope, "agency")),
-        ),
-      )
-      .limit(1);
-    if (!f) return { ok: false, status: 403, error: "folder not accessible" };
-    folderWebsite = f.website;
-  }
-
-  const { env } = getCloudflareContext();
-  const e = env as unknown as Record<string, string | undefined>;
-  const provider = (e.SERP_PROVIDER === "serpapi" ? "serpapi" : "crazyserp") as
-    | "crazyserp"
-    | "serpapi";
-  const serpKey = provider === "serpapi" ? e.SERPAPI_KEY : e.CRAZYSERP_KEY;
-  const haloscanKey = e.HALOSCAN_KEY;
-  if (!serpKey)
-    return {
-      ok: false,
-      status: 500,
-      error: `${provider === "serpapi" ? "SERPAPI_KEY" : "CRAZYSERP_KEY"} missing on server`,
-    };
-
-  const { results, allResults, paa } = await fetchSerp(
-    keyword,
-    country,
-    serpKey,
-    provider,
-    provider === "crazyserp" ? e.CRAZYSERP_KEY_FALLBACK : undefined,
-  );
-  if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
-
-  const settled = await Promise.allSettled(results.map((r) => crawlPage(r.link)));
-  const crawled = settled.map((s) => (s.status === "fulfilled" ? s.value : null));
-  const pageContents: PageContent[] = [];
-  const enrichedResults: SerpResult[] = results.map((r, i) => {
-    const c = crawled[i];
-    if (c) {
-      pageContents.push(c);
-      return {
-        ...r,
-        wordCount: c.wordCount,
-        headings: c.headings,
-        paragraphs: c.paragraphs,
-        h1: c.h1,
-        h2: c.h2,
-        h3: c.h3,
-        outline: c.outline,
-        text: c.text,
-        structuredHtml: c.structuredHtml,
-      };
-    }
-    return { ...r, wordCount: 0, headings: 0 };
-  });
-  if (pageContents.length < 3) {
-    results.forEach((r) => {
-      if (r.snippet) {
-        pageContents.push({
-          text: r.title + " " + r.snippet,
-          h1: [r.title], h2: [], h3: [], outline: [{ level: 1, text: r.title }],
-          headings: 1, paragraphs: 1, structuredHtml: "",
-          wordCount: (r.title + " " + r.snippet).split(/\s+/).length,
-        });
-      }
-    });
-  }
-
-  let nlp = runNLP(pageContents, keyword);
-  // Intent : signal d'angle (transactional, informational, etc.) pour aider
-  // le rédacteur à choisir le ton. Calculé sur le keyword + domaines top 10.
-  nlp.intent = detectIntent(keyword, results);
-  // Embeddings sémantiques bge-m3 : score de similarité keyword↔term + clusters
-  // thématiques + re-rank des nlpTerms par mix presence + sem. Mode dégradé
-  // si le binding AI n'est pas dispo (rien ne casse).
-  const aiBinding = (env as unknown as { AI?: Ai }).AI;
-  nlp = await enrichWithSemantic(nlp, keyword, aiBinding);
-
-  for (let i = 0; i < enrichedResults.length; i++) {
-    const c = crawled[i];
-    if (!c || c.wordCount < 50) continue;
-    const breakdown = computeDetailedScore(
-      { text: c.text, h1s: c.h1, h2s: c.h2, h3s: c.h3 },
-      nlp,
-    );
-    enrichedResults[i].score = breakdown.total;
-  }
-
-  const haloscan = haloscanKey ? await fetchHaloscan(keyword, country, haloscanKey) : null;
-  const volume = haloscan?.search_volume ?? null;
-
-  let kgr = haloscan?.kgr ?? null;
-  let allintitleCount = haloscan?.allintitleCount ?? null;
-  // fetchAllintitleCount utilise SerpAPI hardcoded ; n'a de sens que si
-  // le provider courant est SerpAPI (avec CrazySerp on n'a pas l'opérateur
-  // allintitle). Sinon kgr reste null.
-  if (kgr == null && provider === "serpapi" && e.SERPAPI_KEY) {
-    const fallbackAllintitle = await fetchAllintitleCount(keyword, country, e.SERPAPI_KEY);
-    if (fallbackAllintitle != null) {
-      allintitleCount = allintitleCount ?? fallbackAllintitle;
-      if (volume && volume > 0) kgr = Math.round((fallbackAllintitle / volume) * 1000) / 1000;
-    }
-  }
-
-  const position = findDomainPosition(allResults, folderWebsite);
-
-  const finalPaa = paa;
-  if (haloscanKey && finalPaa.length < 5) {
-    const extra = await fetchHaloscanQuestions(keyword, country, haloscanKey, 10);
-    const seen = new Set(finalPaa.map((q) => q.question.toLowerCase()));
-    for (const q of extra) {
-      const k = q.question.toLowerCase();
-      if (!seen.has(k)) { finalPaa.push(q); seen.add(k); }
-      if (finalPaa.length >= 8) break;
-    }
-  }
-
-  // Détecte les questions PAA peu couvertes par les concurrents : opportunités
-  // de différentiation pour le rédacteur. Utilise les pageContents qui ont du
-  // vrai contenu (pas les fallbacks SerpAPI snippets) pour ne pas être trompé.
-  const realPages = pageContents.filter((p) => p.wordCount > 100 && p.paragraphs > 1);
-  if (realPages.length >= 3) {
-    nlp.opportunities = detectOpportunities(finalPaa, realPages);
-  }
-
-  let initialEditorHtml = "";
-  let myInitialScore: number | null = null;
-  if (myUrl) {
-    const myPage = await crawlPage(myUrl);
-    if (myPage && myPage.wordCount > 50) {
-      // structuredHtml préserve la hiérarchie H1/H2/H3/P du doc.
-      if (myPage.structuredHtml && myPage.structuredHtml.length > 0) {
-        initialEditorHtml = myPage.structuredHtml;
-      } else {
-        const blocks: string[] = [];
-        for (const h of myPage.outline) {
-          const tag = `h${h.level}`;
-          blocks.push(`<${tag}>${escapeHtml(h.text)}</${tag}>`);
-        }
-        blocks.push(`<p>${escapeHtml(myPage.text)}</p>`);
-        initialEditorHtml = blocks.join("\n");
-      }
-      const breakdown = computeDetailedScore(
-        { text: myPage.text, h1s: myPage.h1, h2s: myPage.h2, h3s: myPage.h3 },
-        nlp,
-      );
-      myInitialScore = breakdown.total;
-    }
-  }
-
-  const id = randomUUID();
-  const initialScore = myInitialScore ?? scoreFromNlp(0, 0);
-
-  await db.insert(brief).values({
-    id,
-    ownerId: userId,
-    clientId: folderId,
-    keyword,
-    country,
-    serpJson: JSON.stringify(enrichedResults),
-    nlpJson: JSON.stringify(nlp),
-    haloscanJson: haloscan ? JSON.stringify(haloscan) : null,
-    paaJson: JSON.stringify(finalPaa),
-    editorHtml: initialEditorHtml,
-    score: initialScore,
-    volume,
-    cpc: haloscan?.cpc ?? null,
-    competition: haloscan?.competition ?? null,
-    kgr,
-    allintitleCount,
-    position,
-    workflowStatus: "pending",
-  });
-
-  return { ok: true, id, crawled: pageContents.length, total: results.length, score: initialScore };
-}
+// La version sync de createBrief a été supprimée le 2026-05-02 : remplacée
+// par createPendingBrief + Cloudflare Queue + completeBriefAnalysis (cf.
+// ARCHITECTURE plus bas et workers/analysis-consumer/).
 
 export function htmlToEditorData(html: string): EditorData {
   const grab = (tag: string) =>
@@ -378,11 +183,12 @@ export async function createPendingBrief(
 const ANALYSIS_DEADLINE_MS = 90_000;
 
 export async function completeBriefAnalysis(
+  env: DataferEnv,
   briefId: string,
   userId: string,
   input: CreateBriefInput,
 ): Promise<void> {
-  const db = getDb();
+  const db = getDbFromEnv(env);
   console.log("[brief-analysis] start", { briefId, keyword: input.keyword });
   // Hook que createBriefAnalysisPayload appelle pour déclarer son étape
   // courante. On l'écrit dans la BDD pour que le frontend (qui poll
@@ -406,7 +212,7 @@ export async function completeBriefAnalysis(
       ),
     );
     const res = await Promise.race([
-      createBriefAnalysisPayload(userId, input, setStep),
+      createBriefAnalysisPayload(env, userId, input, setStep),
       deadline,
     ]);
     console.log("[brief-analysis] payload computed", {
@@ -471,6 +277,7 @@ type AnalysisPayload =
   | { ok: false; status: number; error: string };
 
 async function createBriefAnalysisPayload(
+  env: DataferEnv,
   userId: string,
   input: CreateBriefInput,
   setStep: (step: string) => Promise<void> = async () => {},
@@ -480,18 +287,16 @@ async function createBriefAnalysisPayload(
   const folderId = input.folderId || null;
   const myUrl = input.myUrl?.trim() || null;
 
-  const db = getDb();
+  const db = getDbFromEnv(env);
   const folder = await resolveFolder(db, userId, folderId);
   if (!folder.ok) return folder;
   const folderWebsite = folder.website;
 
-  const { env } = getCloudflareContext();
-  const e = env as unknown as Record<string, string | undefined>;
-  const provider = (e.SERP_PROVIDER === "serpapi" ? "serpapi" : "crazyserp") as
+  const provider = (env.SERP_PROVIDER === "serpapi" ? "serpapi" : "crazyserp") as
     | "crazyserp"
     | "serpapi";
-  const serpKey = provider === "serpapi" ? e.SERPAPI_KEY : e.CRAZYSERP_KEY;
-  const haloscanKey = e.HALOSCAN_KEY;
+  const serpKey = provider === "serpapi" ? env.SERPAPI_KEY : env.CRAZYSERP_KEY;
+  const haloscanKey = env.HALOSCAN_KEY;
   if (!serpKey)
     return {
       ok: false,
@@ -505,7 +310,7 @@ async function createBriefAnalysisPayload(
     country,
     serpKey,
     provider,
-    provider === "crazyserp" ? e.CRAZYSERP_KEY_FALLBACK : undefined,
+    provider === "crazyserp" ? env.CRAZYSERP_KEY_FALLBACK : undefined,
   );
   if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
 
@@ -523,7 +328,7 @@ async function createBriefAnalysisPayload(
   // on s'en fiche d'en perdre 1 sur 10 dans le NLP.
   const crawlMyUrlOnce = async (): Promise<PageContent | null> => {
     try {
-      const r = await crawlPage(myUrl!);
+      const r = await crawlPage(myUrl!, env);
       if (r && r.wordCount > 50) return r;
       return null;
     } catch {
@@ -542,7 +347,7 @@ async function createBriefAnalysisPayload(
     : Promise.resolve(null);
   const settled = await Promise.allSettled(
     results.map(async (r) => {
-      const c = await crawlPage(r.link);
+      const c = await crawlPage(r.link, env);
       done++;
       // best-effort, on s'en fiche si l'update DB échoue ponctuellement
       void setStep(`crawling:${done}/${results.length}`);
@@ -608,8 +413,8 @@ async function createBriefAnalysisPayload(
   // fetchAllintitleCount utilise SerpAPI hardcoded ; n'a de sens que si
   // le provider courant est SerpAPI (avec CrazySerp on n'a pas l'opérateur
   // allintitle). Sinon kgr reste null.
-  if (kgr == null && provider === "serpapi" && e.SERPAPI_KEY) {
-    const fallbackAllintitle = await fetchAllintitleCount(keyword, country, e.SERPAPI_KEY);
+  if (kgr == null && provider === "serpapi" && env.SERPAPI_KEY) {
+    const fallbackAllintitle = await fetchAllintitleCount(keyword, country, env.SERPAPI_KEY);
     if (fallbackAllintitle != null) {
       allintitleCount = allintitleCount ?? fallbackAllintitle;
       if (volume && volume > 0) kgr = Math.round((fallbackAllintitle / volume) * 1000) / 1000;
