@@ -39,6 +39,8 @@ export default function ApiDocsPage() {
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/serp</Code>, top 10 brut + People Also Ask</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors</Code>, les 10 concurrents enrichis (Hn, outline, score, wordCount)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;</Code>, détail d&apos;un concurrent avec son texte brut et son HTML reconstitué</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/download?format=html|docx</Code>, télécharge le contenu d&apos;un concurrent en HTML ou Word</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/print</Code>, page imprimable d&apos;un concurrent (Save as PDF côté navigateur)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/nlp</Code>, NLP complet (termes, clusters, sections, entités, opportunités, intent)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/paa</Code>, People Also Ask seuls</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/scoring</Code>, breakdown détaillé du score (7 critères SEO + GEO)</li>
@@ -375,6 +377,32 @@ async function run(keyword: string, editorHtml: string) {
     "structuredHtml": "<h1>...</h1><p>...</p><h2>...</h2><p>...</p>..."
   }
 }`}</Pre>
+
+        <H4>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/download</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Télécharge le contenu HTML reconstitué d&apos;un concurrent dans un format prêt
+          à publier. Query param <Code>format=html|docx</Code>. Renvoie
+          <Code>404 competitor content not available</Code> sur les briefs
+          créés avant le 2026-05-02 (le contenu n&apos;était pas persisté avant cette date).
+        </p>
+        <Pre>{`GET /api/v2/briefs/{id}/competitors/3/download?format=html
+→ Content-Type: text/html; charset=utf-8
+→ Content-Disposition: attachment; filename="comparatif-scooter-3-cleanrider-com.html"
+
+GET /api/v2/briefs/{id}/competitors/3/download?format=docx
+→ Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+→ Content-Disposition: attachment; filename="comparatif-scooter-3-cleanrider-com.docx"`}</Pre>
+
+        <H4>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/print</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Sert une page HTML autonome qui auto-déclenche le print dialog du navigateur.
+          L&apos;utilisateur choisit "Enregistrer en PDF" pour générer un PDF
+          du contenu du concurrent. Même technique que l&apos;export PDF du brief rédigé.
+          À ouvrir directement dans un onglet (<Code>window.open</Code>), pas via fetch.
+        </p>
+        <Pre>{`GET /api/v2/briefs/{id}/competitors/3/print
+→ Content-Type: text/html; charset=utf-8
+→ Body: <!doctype html>...<script>window.print()</script></html>`}</Pre>
 
         <H4>GET /api/v2/briefs/&#123;id&#125;/nlp</H4>
         <p className="mb-2 text-[var(--text-muted)]">

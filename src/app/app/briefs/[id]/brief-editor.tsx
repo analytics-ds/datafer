@@ -22,6 +22,7 @@ import {
 import { faviconUrl } from "@/lib/favicon";
 import { EditorToolbar } from "./toolbar";
 import { ShareBriefPanel } from "../share-brief-panel";
+import { CompetitorDownloadMenu } from "./competitor-download-menu";
 import { StatusPicker } from "../status-picker";
 import { TagPicker, type TagDTO } from "../tag-picker";
 import type { WorkflowStatus } from "../workflow-status";
@@ -456,6 +457,7 @@ export function BriefEditor(props: BriefEditorProps) {
 
           {/* Sidebar */}
           <EditorSidebar
+            briefId={id}
             scoreTotal={score.total}
             wc={wc}
             score={score}
@@ -557,6 +559,7 @@ export function BriefEditor(props: BriefEditorProps) {
 }
 
 function EditorSidebar({
+  briefId,
   scoreTotal,
   wc,
   score,
@@ -574,6 +577,7 @@ function EditorSidebar({
   insertTermAtCursor,
   insertPaaAsH2,
 }: {
+  briefId: string;
   scoreTotal: number;
   wc: number;
   score: DetailedScore;
@@ -868,38 +872,45 @@ function EditorSidebar({
                   try { host = new URL(r.link).hostname.replace(/^www\./, ""); } catch {}
                   const fav = host ? faviconUrl(host) : null;
                   return (
-                    <a
+                    <div
                       key={r.position}
-                      href={r.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 py-[3px] text-[11px] hover:bg-[var(--bg-warm)] rounded-[var(--radius-xs)] px-1 -mx-1"
-                      title={r.link}
+                      className="group flex items-center gap-2 py-[3px] text-[11px] hover:bg-[var(--bg-warm)] rounded-[var(--radius-xs)] px-1 -mx-1"
                     >
-                      <span className="text-[10px] font-[family-name:var(--font-mono)] text-[var(--text-muted)] w-[18px] shrink-0">
-                        {r.position}.
-                      </span>
-                      {fav && (
-                        <img
-                          src={fav}
-                          alt=""
-                          width={14}
-                          height={14}
-                          className="shrink-0 rounded-[2px]"
-                          loading="lazy"
-                        />
-                      )}
-                      <span className="flex-1 truncate text-[var(--text-secondary)]">
-                        {host || r.link}
-                      </span>
-                      <span
-                        className={`shrink-0 font-[family-name:var(--font-mono)] text-[10px] ${
-                          wc === 0 ? "text-[var(--red)]" : "text-[var(--text-muted)]"
-                        }`}
+                      <a
+                        href={r.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 flex-1 min-w-0"
+                        title={r.link}
                       >
-                        {wcLabel}
-                      </span>
-                    </a>
+                        <span className="text-[10px] font-[family-name:var(--font-mono)] text-[var(--text-muted)] w-[18px] shrink-0">
+                          {r.position}.
+                        </span>
+                        {fav && (
+                          <img
+                            src={fav}
+                            alt=""
+                            width={14}
+                            height={14}
+                            className="shrink-0 rounded-[2px]"
+                            loading="lazy"
+                          />
+                        )}
+                        <span className="flex-1 truncate text-[var(--text-secondary)]">
+                          {host || r.link}
+                        </span>
+                        <span
+                          className={`shrink-0 font-[family-name:var(--font-mono)] text-[10px] ${
+                            wc === 0 ? "text-[var(--red)]" : "text-[var(--text-muted)]"
+                          }`}
+                        >
+                          {wcLabel}
+                        </span>
+                      </a>
+                      {wc > 0 && (
+                        <CompetitorDownloadMenu briefId={briefId} position={r.position} />
+                      )}
+                    </div>
                   );
                 })}
               </div>
