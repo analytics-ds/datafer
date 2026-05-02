@@ -924,7 +924,15 @@ const NOISE_TAGS = new Set([
  * éditorial (intro, description catégorie, FAQ, footer SEO).
  */
 const NOISE_CLASS_RE =
-  /^(?:cookie[-_]?banner|cookie[-_]?consent|gdpr|newsletter|skip[-_]?link|skip[-_]?to|main[-_]?menu|mega[-_]?menu|nav[-_]?menu|site[-_]?header|site[-_]?footer|recently[-_]?viewed|breadcrumb|filter|filters|sort[-_]?by|pagination|toolbar|product[-_]?(?:card|tile|teaser)|category[-_]?(?:tile|nav)|cart|wishlist|mini[-_]?cart|product[-_]?count|sidebar|side[-_]?panel|popup|modal|drawer|hero[-_]?banner|promo[-_]?banner|social[-_]?(?:share|links?))(?:[-_]|$)/i;
+  /^(?:cookie[-_]?banner|cookie[-_]?consent|gdpr|newsletter|skip[-_]?link|skip[-_]?to|main[-_]?menu|mega[-_]?menu|nav[-_]?menu|site[-_]?header|site[-_]?footer|recently[-_]?viewed|breadcrumb|filter|filters|sort[-_]?by|pagination|toolbar|category[-_]?(?:tile|nav)|cart|wishlist|mini[-_]?cart|sidebar|side[-_]?panel|popup|modal|drawer|hero[-_]?banner|promo[-_]?banner|social[-_]?(?:share|links?))(?:[-_]|$)/i;
+// Note 2026-05-02 : retiré product-(card|tile|teaser) et product-count
+// du noise. Sur les pages e-com type Shopify (blancofficial.store par
+// ex), tout le contenu produit était bloqué, ce qui plombait le wc à
+// 21 mots sur une page qui en a 184. Pour les KW e-com, les noms de
+// produits sont SOUVENT pertinents pour le NLP (« tshirt blanc » →
+// les noms type « BLANC 8 BALL WHITE T-SHIRT » contiennent les tokens
+// du keyword). On accepte un peu de bruit produit pour ne pas rater
+// des sites entiers.
 
 // Balises inline qu'on préserve dans le HTML reconstitué (gras, italique,
 // soulignement, etc.). Le texte reste compté normalement pour le NLP. b → strong
