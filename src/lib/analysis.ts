@@ -258,18 +258,52 @@ const COUNTRY_TO_LOCATION: Record<string, string> = {
   it: "Italy",
 };
 
+// Langue principale du pays. Sans `hl` explicite, CrazySerp utilise hl=en
+// par défaut même avec location=France → SERP en mix US/EN.
+const COUNTRY_TO_LANG: Record<string, string> = {
+  fr: "fr",
+  us: "en",
+  uk: "en",
+  gb: "en",
+  de: "de",
+  es: "es",
+  it: "it",
+};
+
+// Code Google Domain par pays. Sinon CrazySerp tape google.com par défaut,
+// ce qui ramène en priorité des résultats US.
+const COUNTRY_TO_GOOGLE_DOMAIN: Record<string, string> = {
+  fr: "google.fr",
+  us: "google.com",
+  uk: "google.co.uk",
+  gb: "google.co.uk",
+  de: "google.de",
+  es: "google.es",
+  it: "google.it",
+};
+
 async function fetchCrazyserpPage(
   keyword: string,
   country: string,
   apiKey: string,
   page: number,
 ): Promise<CrazySerpResponse | null> {
-  const location = COUNTRY_TO_LOCATION[country.toLowerCase()] ?? "France";
+  const cc = country.toLowerCase();
+  const location = COUNTRY_TO_LOCATION[cc] ?? "France";
+  const lang = COUNTRY_TO_LANG[cc] ?? "fr";
+  const googleDomain = COUNTRY_TO_GOOGLE_DOMAIN[cc] ?? "google.fr";
   const params = new URLSearchParams({
     q: keyword,
     page: String(page),
     pageOffset: "0",
     location,
+    // Sans gl + hl + googleDomain explicites, CrazySerp défaut sur gl=us
+    // / hl=en / google.com même avec location=France → SERP US-biased.
+    // (Bug fix 2026-05-02 remonté par Pierre sur "tshirt blanc" qui
+    // ramenait H&M /en_us/, Amazon.com etc. au lieu de Kiabi, Celio, etc.)
+    gl: cc === "uk" || cc === "gb" ? "uk" : cc,
+    hl: lang,
+    googleDomain,
   });
   const url = `https://crazyserp.com/api/search?${params.toString()}`;
   const r = await fetch(url, {
