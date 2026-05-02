@@ -871,10 +871,11 @@ async function crawlWithBrightDataBrowser(
     });
 
   try {
-    // Garde-fou global : on coupe tout après 30s même si CDP est bavard.
+    // Garde-fou global : on coupe tout après 35s (15s navigate + 5s post-load
+    // hydratation + 15s marge pour Runtime.evaluate sur de gros DOM).
     const overall = setTimeout(() => {
       try { ws.close(1000, "overall timeout"); } catch {}
-    }, 30000);
+    }, 35000);
 
     // 1. Crée un nouvel onglet blank (BD interdit d'ouvrir une URL non-blank
     // directement via Target.createTarget)
@@ -903,8 +904,10 @@ async function crawlWithBrightDataBrowser(
       // peut avoir bloqué sur un script lent mais le DOM est déjà là.
     }
 
-    // 5. Petit délai pour laisser les SPAs hydrater l'app après load
-    await new Promise((r) => setTimeout(r, 1500));
+    // 5. Délai post-load pour laisser les SPAs hydrater l'app. 5s nécessaires
+    // sur Nike Snkrs qui charge cookies banner puis fetch le contenu produit
+    // en async après loadEventFired.
+    await new Promise((r) => setTimeout(r, 5000));
 
     // 6. Récupère le HTML rendu via Runtime.evaluate
     const evalRes = await send<{
@@ -1156,15 +1159,23 @@ const NOISE_TAGS = new Set([
  * éditorial (intro, description catégorie, FAQ, footer SEO).
  */
 const NOISE_CLASS_RE =
-  /^(?:cookie[-_]?banner|cookie[-_]?consent|gdpr|newsletter|skip[-_]?link|skip[-_]?to|main[-_]?menu|mega[-_]?menu|nav[-_]?menu|site[-_]?header|site[-_]?footer|recently[-_]?viewed|breadcrumb|filter|filters|sort[-_]?by|pagination|toolbar|category[-_]?(?:tile|nav)|cart|wishlist|mini[-_]?cart|sidebar|side[-_]?panel|popup|modal|drawer|hero[-_]?banner|promo[-_]?banner|social[-_]?(?:share|links?))(?:[-_]|$)/i;
-// Note 2026-05-02 : retiré product-(card|tile|teaser) et product-count
-// du noise. Sur les pages e-com type Shopify (blancofficial.store par
-// ex), tout le contenu produit était bloqué, ce qui plombait le wc à
-// 21 mots sur une page qui en a 184. Pour les KW e-com, les noms de
-// produits sont SOUVENT pertinents pour le NLP (« tshirt blanc » →
-// les noms type « BLANC 8 BALL WHITE T-SHIRT » contiennent les tokens
-// du keyword). On accepte un peu de bruit produit pour ne pas rater
-// des sites entiers.
+  /^(?:cookie[-_]?banner|cookie[-_]?consent|gdpr|newsletter|skip[-_]?link|skip[-_]?to|main[-_]?menu|mega[-_]?menu|nav[-_]?menu|site[-_]?header|site[-_]?footer|recently[-_]?viewed|breadcrumb|filter|filters|sort[-_]?by|pagination|toolbar|category[-_]?(?:tile|nav)|cart|wishlist|mini[-_]?cart|sidebar|side[-_]?panel|drawer|hero[-_]?banner|promo[-_]?banner|social[-_]?(?:share|links?))(?:[-_]|$)/i;
+// Note 2026-05-02 : retiré product-(card|tile|teaser), product-count,
+// modal et popup du noise.
+//
+// product-* : les KW e-com type "tshirt blanc" sur Shopify type
+// blancofficial.store avaient leur contenu produit bloqué (wc=21 vs
+// 184 mots de body). Les noms de produits contiennent souvent les
+// tokens du keyword.
+//
+// modal/popup : Nike Snkrs structure ses pages de drop comme un modal
+// overlay (modal-portal-content-wrapper > modal-content > etc.). Avec
+// le filter en place, TOUT le contenu Nike (titres, description du
+// drop, dates) était bloqué — la page passait à wc=20. En les retirant,
+// on récupère ~400 mots utiles. Trade-off : sur les autres sites, les
+// vrais cookie-banners/popups d'inscription apportent peu de noise
+// (cookie consent = ~30-50 mots) qui sera filtré par les autres règles
+// (cookie-banner / newsletter restent dans la regex).
 
 // Balises inline qu'on préserve dans le HTML reconstitué (gras, italique,
 // soulignement, etc.). Le texte reste compté normalement pour le NLP. b → strong
