@@ -133,13 +133,7 @@ export default async function AppHome() {
 
       {/* Stats du mois : donut + leaderboard équipe */}
       <section className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-3 mb-12">
-        <ShareDonut
-          label="Briefs ce mois"
-          mine={myBriefsThisMonth}
-          total={totalBriefsThisMonth}
-          share={myShare}
-          firstName={(session.user.name.split(" ")[0]) || "Toi"}
-        />
+        <ShareDonut share={myShare} />
         <Leaderboard
           users={visibleLeaderboard.map((u) => ({
             id: u.userId,
@@ -250,35 +244,23 @@ export default async function AppHome() {
   );
 }
 
-function ShareDonut({
-  label,
-  mine,
-  total,
-  share,
-  firstName,
-}: {
-  label: string;
-  mine: number;
-  total: number;
-  share: number;
-  firstName: string;
-}) {
-  const R = 56;
+function ShareDonut({ share }: { share: number }) {
+  const R = 90;
   const C = 2 * Math.PI * R;
   const offset = C * (1 - share);
   const pct = Math.round(share * 100);
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-6 flex items-center gap-5">
-      <div className="relative w-[140px] h-[140px] shrink-0">
-        <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90">
-          <circle cx="70" cy="70" r={R} fill="none" stroke="var(--border)" strokeWidth="14" />
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-6 flex items-center justify-center">
+      <div className="relative w-[220px] h-[220px]">
+        <svg viewBox="0 0 220 220" className="w-full h-full -rotate-90">
+          <circle cx="110" cy="110" r={R} fill="none" stroke="var(--border)" strokeWidth="22" />
           <circle
-            cx="70"
-            cy="70"
+            cx="110"
+            cy="110"
             r={R}
             fill="none"
             stroke="var(--accent-dark)"
-            strokeWidth="14"
+            strokeWidth="22"
             strokeLinecap="round"
             strokeDasharray={C}
             strokeDashoffset={offset}
@@ -286,19 +268,8 @@ function ShareDonut({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-[family-name:var(--font-display)] text-[32px] leading-none">{pct}%</span>
-          <span className="text-[9px] uppercase tracking-[0.8px] text-[var(--text-muted)] mt-[2px]">de l&apos;équipe</span>
-        </div>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-2">
-          {label}
-        </div>
-        <div className="font-[family-name:var(--font-display)] text-[36px] leading-none tracking-[-0.5px] mb-1">
-          {mine}
-        </div>
-        <div className="text-[12px] text-[var(--text-secondary)]">
-          {firstName} · sur {total} brief{total > 1 ? "s" : ""} de l&apos;équipe ce mois
+          <span className="font-[family-name:var(--font-display)] text-[52px] leading-none tracking-[-1px]">{pct}%</span>
+          <span className="text-[9px] uppercase tracking-[1px] text-[var(--text-muted)] mt-2">de l&apos;équipe</span>
         </div>
       </div>
     </div>
