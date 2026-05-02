@@ -13,6 +13,38 @@ import { computeGeoScore, EMPTY_GEO_SIGNALS, type GeoScore, type GeoSignals } fr
 const SEO_WEIGHT = 0.9;
 const GEO_WEIGHT = 0.1;
 
+// Mots non significatifs pour le matching "soft" du keyword sur les longues
+// expressions ("meilleur moto cross 125 fiable" → on ne va pas exiger que
+// "meilleur" et "fiable" soient écrits dans cet ordre exact, on regarde la
+// présence des tokens significatifs dans le texte). Liste alignée avec
+// FINGERPRINT_FILLERS d'analysis.ts.
+const KW_FILLERS = new Set([
+  "pour", "de", "du", "des", "à", "au", "aux", "en", "avec", "sans",
+  "sur", "sous", "vers", "chez", "dans", "par", "entre", "selon",
+  "le", "la", "les", "un", "une", "et", "ou", "est", "sont",
+]);
+
+/**
+ * Renvoie les tokens "significatifs" du keyword (longueur >= 3 et hors
+ * KW_FILLERS), normalisés. Exemple : "meilleur moto cross 125 fiable"
+ * → ["meilleur", "moto", "cross", "125", "fiable"]. Sert au match "soft"
+ * sur les KW longs où l'expression exacte n'apparaît jamais dans aucun
+ * top SERP (cas typique : Google ranke un article qui parle du sujet,
+ * pas un article qui répète la phrase du KW mot pour mot).
+ */
+function significantKwTokens(keyword: string): string[] {
+  return normalize(keyword)
+    .split(/\s+/)
+    .filter((t) => t.length >= 3 && !KW_FILLERS.has(t));
+}
+
+/** Couverture des tokens significatifs du keyword dans un segment normalisé. */
+function tokenCoverage(segmentNorm: string, kwTokens: string[]): number {
+  if (kwTokens.length === 0) return 0;
+  const present = kwTokens.filter((t) => segmentNorm.includes(t)).length;
+  return present / kwTokens.length;
+}
+
 /**
  * Normalisation lowercase + suppression des diacritiques (accents).
  * Utilisée des deux côtés du matching KW pour que "moto électrique" et
@@ -172,23 +204,43 @@ export function computeDetailedScore(
   const rx = buildKeywordRegex(ek.keyword);
 
   // 1. KEYWORD /15
+  // Algo en 2 couches :
+  //   a. Soft score (max 11) basé sur la couverture des tokens significatifs
+  //      du keyword. Permet aux pages qui parlent du sujet sans répéter la
+  //      phrase exacte (cas des KW longs où aucun top SERP ne l'écrit) de
+  //      quand même décrocher des points.
+  //   b. Bonus exact (jusqu'à 4) : la page qui écrit le keyword pile garde
+  //      un avantage. Sans ça, tout le monde plafonnerait au même score.
+  const kwTokens = significantKwTokens(ek.keyword);
+  const kwCov = tokenCoverage(lowerNorm, kwTokens);
+  const softScore = Math.round(kwCov * 11);
+
   const m = lowerNorm.match(rx);
   const count = m ? m.length : 0;
   const density = wc > 0 ? ((count * ek.keyword.split(/\s+/).length) / wc) * 100 : 0;
-  const dS =
-    density >= ek.idealDensityMin && density <= ek.idealDensityMax
-      ? 9
-      : density > 0 && density < ek.idealDensityMin
-        ? Math.round((density / ek.idealDensityMin) * 9)
-        : density > ek.idealDensityMax
-          ? Math.max(2, 9 - Math.round((density - ek.idealDensityMax) * 3))
-          : 0;
-  let cS = 0;
-  const cR = ek.avgCount > 0 ? count / ek.avgCount : 0;
-  if (cR >= 0.7 && cR <= 1.5) cS = 6;
-  else if (cR > 0) cS = Math.min(6, Math.round(cR * 6));
-  r.keyword.score = Math.min(15, dS + cS);
-  r.keyword.details = { count, density: Math.round(density * 100) / 100 };
+  // Bonus exact : plafond 4 points. On reproduit la pondération
+  // density (jusqu'à 2.4) + count (jusqu'à 1.6) en proportion.
+  let exactBonus = 0;
+  if (count > 0) {
+    const dB =
+      density >= ek.idealDensityMin && density <= ek.idealDensityMax
+        ? 2.4
+        : density > 0 && density < ek.idealDensityMin
+          ? (density / ek.idealDensityMin) * 2.4
+          : density > ek.idealDensityMax
+            ? Math.max(0.5, 2.4 - (density - ek.idealDensityMax) * 0.8)
+            : 0;
+    const cR = ek.avgCount > 0 ? count / ek.avgCount : 0;
+    const cB = cR >= 0.7 && cR <= 1.5 ? 1.6 : Math.min(1.6, cR * 1.6);
+    exactBonus = Math.round(dB + cB);
+  }
+  r.keyword.score = Math.min(15, softScore + exactBonus);
+  r.keyword.details = {
+    count,
+    density: Math.round(density * 100) / 100,
+    softCoverage: `${Math.round(kwCov * 100)}%`,
+    exactBonus,
+  };
 
   // 2. NLP /20
   const top30 = nlp.nlpTerms.slice(0, 30);
@@ -262,26 +314,48 @@ export function computeDetailedScore(
   }
 
   // 5. PLACEMENT /15
+  // Soft (couverture ≥ 60% des tokens significatifs) ou exact match dans les
+  // segments-clés. Exact donne plus de points pour garder l'avantage à ceux
+  // qui écrivent le KW pile, mais le soft permet aux pages qui couvrent le
+  // sujet (sans la phrase exacte) de marquer aussi.
   {
     let s = 0;
-    const matchesKw = (segment: string) => buildKeywordRegex(ek.keyword).test(segment);
+    const matchesExact = (segment: string) => buildKeywordRegex(ek.keyword).test(segment);
+    const matchesSoft = (segNorm: string) =>
+      kwTokens.length > 0 && tokenCoverage(segNorm, kwTokens) >= 0.6;
+
     const f100 = normalize(words.slice(0, 100).join(" "));
-    if (matchesKw(f100)) s += 5;
+    if (matchesExact(f100)) s += 5;
+    else if (matchesSoft(f100)) s += 3;
     else if (variationsNorm.some((v) => f100.includes(v))) s += 2;
-    if (matchesKw(normalize(text.split(/[.!?]\s/)[0]))) s += 3;
-    if (matchesKw(normalize(words.slice(-100).join(" ")))) s += 2;
+
+    const firstSent = normalize(text.split(/[.!?]\s/)[0]);
+    if (matchesExact(firstSent)) s += 3;
+    else if (matchesSoft(firstSent)) s += 2;
+
+    const last100 = normalize(words.slice(-100).join(" "));
+    if (matchesExact(last100)) s += 2;
+    else if (matchesSoft(last100)) s += 1;
+
     const qL = Math.floor(words.length / 4);
-    let qK = 0;
+    let qExact = 0;
+    let qSoft = 0;
     for (let q = 0; q < 4; q++) {
-      if (matchesKw(normalize(words.slice(q * qL, (q + 1) * qL).join(" "))))
-        qK++;
+      const seg = normalize(words.slice(q * qL, (q + 1) * qL).join(" "));
+      if (matchesExact(seg)) qExact++;
+      else if (matchesSoft(seg)) qSoft++;
     }
-    if (qK >= 4) s += 5;
-    else if (qK >= 3) s += 4;
-    else if (qK >= 2) s += 2;
-    else if (qK >= 1) s += 1;
+    // Score distribution : exact pèse plein, soft pèse moitié.
+    const qScore = qExact * 1.25 + qSoft * 0.6;
+    if (qScore >= 5) s += 5;
+    else if (qScore >= 3.5) s += 4;
+    else if (qScore >= 2) s += 2;
+    else if (qScore >= 1) s += 1;
+
     r.placement.score = Math.min(15, s);
-    r.placement.details = { distribution: `${qK}/4` };
+    r.placement.details = {
+      distribution: `${qExact}/4 exact, ${qSoft}/4 soft`,
+    };
   }
 
   // 6. STRUCTURE /10
