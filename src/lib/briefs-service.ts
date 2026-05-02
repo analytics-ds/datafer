@@ -402,7 +402,13 @@ async function createBriefAnalysisPayload(
       { text: c.text, h1s: c.h1, h2s: c.h2, h3s: c.h3 },
       nlp,
     );
-    enrichedResults[i].score = breakdown.total;
+    // On utilise seoTotal et pas total : les patterns GEO (table, FAQ,
+    // quick summary, bullet list, statistiques) sont une checklist
+    // d'optimisation pour le contenu rédigé du user, pas un critère de
+    // benchmark des concurrents (qui n'ont aucune raison d'avoir tout
+    // ça en place pour bien ranker chez Google). Les compter pénalise
+    // artificiellement les concurrents et fausse la cible de score.
+    enrichedResults[i].score = breakdown.seoTotal;
   }
 
   await setStep("scoring");

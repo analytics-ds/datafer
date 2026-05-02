@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
+import { computeDetailedScore } from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,29 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
   const pending = notReady(row);
   if (pending) return pending;
 
-  const { serp } = loadBrief(row);
+  const { serp, nlp } = loadBrief(row);
   const competitor = serp.find((r) => r.position === position);
   if (!competitor) {
     return NextResponse.json({ error: "competitor not found at position" }, { status: 404 });
+  }
+
+  // Re-calcule à la volée le breakdown détaillé du concurrent pour qu'on
+  // sache *où* il pèche/excelle critère par critère. On utilise le `text`
+  // persisté + ses Hn ; sans `text` (briefs antérieurs au 2026-05-02), le
+  // breakdown reste null. On garde uniquement les 7 critères SEO, GEO est
+  // exclu : c'est une checklist pour le contenu rédigé du user, pas un
+  // benchmark concurrent.
+  let breakdown: ReturnType<typeof computeDetailedScore> | null = null;
+  if (nlp && competitor.text && competitor.text.length > 0) {
+    breakdown = computeDetailedScore(
+      {
+        text: competitor.text,
+        h1s: competitor.h1 ?? [],
+        h2s: competitor.h2 ?? [],
+        h3s: competitor.h3 ?? [],
+      },
+      nlp,
+    );
   }
 
   return NextResponse.json({
@@ -45,6 +65,20 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
       // antérieurs.
       text: competitor.text ?? null,
       structuredHtml: competitor.structuredHtml ?? null,
+      // Breakdown détaillé par critère SEO. null si pas assez de contenu
+      // pour calculer (briefs anciens sans text persisté).
+      breakdown: breakdown
+        ? {
+            seoTotal: breakdown.seoTotal,
+            keyword: breakdown.keyword,
+            nlpCoverage: breakdown.nlpCoverage,
+            contentLength: breakdown.contentLength,
+            headings: breakdown.headings,
+            placement: breakdown.placement,
+            structure: breakdown.structure,
+            quality: breakdown.quality,
+          }
+        : null,
     },
   });
 }
