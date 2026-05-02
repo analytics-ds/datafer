@@ -243,12 +243,14 @@ export function computeDetailedScore(
     exactBonus,
   };
 
-  // 2. NLP /20
+  // 2. NLP /20 — barème durci 2026-05-02 : Pierre comparait à Surfer qui
+  // exige une coverage très haute pour donner le max. Avant : 80% → 20/20
+  // (trop laxiste). Maintenant : 95% → 20/20, 80% → 16/20, 60% → 11/20,
+  // 40% → 6/20, 20% → 2/20. Pousse à intégrer plus de termes du champ
+  // sémantique avant d'atteindre le plafond.
   const top30 = nlp.nlpTerms.slice(0, 30);
   let used = 0;
   top30.forEach((t) => {
-    // On accepte n'importe quelle variante morphologique du terme (stemming).
-    // Normalisation des accents des deux côtés (texte et terme NLP).
     if (t.variants && t.variants.length > 0) {
       if (t.variants.some((v) => lowerNorm.includes(normalize(v)))) used++;
     } else if (lowerNorm.includes(normalize(t.term))) {
@@ -257,28 +259,45 @@ export function computeDetailedScore(
   });
   const cov = top30.length > 0 ? used / top30.length : 0;
   r.nlpCoverage.score =
-    cov >= 0.8
+    cov >= 0.95
       ? 20
-      : cov >= 0.6
-        ? 15 + Math.round(((cov - 0.6) / 0.2) * 5)
-        : cov >= 0.4
-          ? 9 + Math.round(((cov - 0.4) / 0.2) * 6)
-          : cov >= 0.2
-            ? 3 + Math.round(((cov - 0.2) / 0.2) * 6)
-            : Math.round((cov / 0.2) * 3);
+      : cov >= 0.8
+        ? 16 + Math.round(((cov - 0.8) / 0.15) * 4)
+        : cov >= 0.6
+          ? 11 + Math.round(((cov - 0.6) / 0.2) * 5)
+          : cov >= 0.4
+            ? 6 + Math.round(((cov - 0.4) / 0.2) * 5)
+            : cov >= 0.2
+              ? 2 + Math.round(((cov - 0.2) / 0.2) * 4)
+              : Math.round((cov / 0.2) * 2);
   r.nlpCoverage.details = { used, total: top30.length, coverage: Math.round(cov * 100) };
 
-  // 3. LENGTH /12
-  if (wc >= nlp.minWordCount && wc <= nlp.maxWordCount) r.contentLength.score = 12;
-  else if (wc < nlp.minWordCount)
-    r.contentLength.score = Math.round((wc / nlp.minWordCount) * 10);
-  else
-    r.contentLength.score = Math.max(
-      7,
-      12 - Math.round(((wc - nlp.maxWordCount) / nlp.maxWordCount) * 8),
-    );
-  r.contentLength.score = Math.min(12, r.contentLength.score);
-  r.contentLength.details = { wc };
+  // 3. LENGTH /12 — barème durci 2026-05-02. Avant : atteindre minWordCount
+  // (~70% de l'avg SERP) donnait 12/12. Maintenant on demande 90-110% de
+  // l'avg pour le max. Atteindre juste le min plafonne à 8/12.
+  // - 90-110% avg → 12/12 (sweet spot)
+  // - 70-90% avg → 8 + (cov-0.7)/0.2 * 4
+  // - 50-70% avg → 4 + (cov-0.5)/0.2 * 4
+  // - < 50% avg → proportional baisse
+  // - >110% avg → décroît doucement (over-long pénalise un peu)
+  {
+    const avg = nlp.avgWordCount || 1;
+    const ratio = wc / avg;
+    if (ratio >= 0.9 && ratio <= 1.1) {
+      r.contentLength.score = 12;
+    } else if (ratio < 0.9 && ratio >= 0.7) {
+      r.contentLength.score = 8 + Math.round(((ratio - 0.7) / 0.2) * 4);
+    } else if (ratio < 0.7 && ratio >= 0.5) {
+      r.contentLength.score = 4 + Math.round(((ratio - 0.5) / 0.2) * 4);
+    } else if (ratio < 0.5) {
+      r.contentLength.score = Math.round((ratio / 0.5) * 4);
+    } else {
+      // ratio > 1.1 : trop long, on dégrade doucement
+      r.contentLength.score = Math.max(7, 12 - Math.round((ratio - 1.1) * 5));
+    }
+    r.contentLength.score = Math.max(0, Math.min(12, r.contentLength.score));
+    r.contentLength.details = { wc, avg, ratio: Math.round(ratio * 100) };
+  }
 
   // 4. HEADINGS /18
   {
@@ -366,15 +385,20 @@ export function computeDetailedScore(
     let s = 0;
     const pC = text.split(/\n\s*\n/).filter((p) => p.trim().length > 20).length;
     const pR = nlp.avgParagraphs > 0 ? pC / nlp.avgParagraphs : 0;
-    if (pR >= 0.5 && pR <= 1.5) s += 5;
-    else if (pR > 0) s += Math.min(5, Math.round(pR * 3));
+    // Barème durci 2026-05-02. Avant : 50% des paragraphes moyens
+    // donnait déjà 5/5. Maintenant on demande 80-120% pour le max.
+    if (pR >= 0.8 && pR <= 1.2) s += 5;
+    else if (pR >= 0.5 && pR < 0.8) s += 3;
+    else if (pR >= 0.3 && pR < 0.5) s += 1;
+    else if (pR > 1.2 && pR <= 1.6) s += 4;
+    else if (pR > 1.6) s += 2;
     const aP = pC > 0 ? wc / pC : wc;
     if (aP >= 30 && aP <= 160) s += 3;
     else if (aP > 15) s += 1;
     if (wc >= 200) s += 1;
     if (wc >= 500) s += 1;
     r.structure.score = Math.min(10, s);
-    r.structure.details = { paragraphs: pC };
+    r.structure.details = { paragraphs: pC, ratio: Math.round(pR * 100) };
   }
 
   // 7. QUALITY /10
