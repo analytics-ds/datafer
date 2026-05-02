@@ -486,7 +486,7 @@ export function BriefEditor(props: BriefEditorProps) {
       <div className={tab === "serp" ? "flex-1 overflow-y-auto px-7 py-6" : "hidden"}>
         <div className="grid gap-2 max-w-[880px]">
           {serp.map((r) => (
-            <SerpCard key={r.position} r={r} />
+            <SerpCard key={r.position} r={r} briefId={id} />
           ))}
         </div>
         <SerpScoreChart serp={serp} myScore={score.total} className="mt-6 max-w-[880px]" />
@@ -1872,9 +1872,17 @@ function SerpScoreChart({
   );
 }
 
-function SerpCard({ r }: { r: SerpResult }) {
+function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
   const [open, setOpen] = useState(false);
   const hasStructure = (r.h1?.length ?? 0) + (r.h2?.length ?? 0) + (r.h3?.length ?? 0) > 0;
+  // Le contenu (text/structuredHtml) n'est persisté que pour les briefs créés
+  // après le 2026-05-02. Pour les anciens, on disable le bouton Télécharger.
+  // hasStructure ≠ hasContent, mais en pratique structuredHtml et h1/h2/h3
+  // sont créés ensemble : si l'un est là, l'autre l'est aussi pour les
+  // briefs récents. Pour les anciens, structuredHtml est null mais les Hn
+  // peuvent être présents — d'où le check côté serveur (404) qui reste le
+  // garde-fou final.
+  const hasContent = (r.wordCount ?? 0) > 0 && hasStructure;
 
   return (
     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] hover:border-[var(--border-strong)] transition-colors">
@@ -1943,6 +1951,12 @@ function SerpCard({ r }: { r: SerpResult }) {
           >
             {open ? "▲ Structure" : "▼ Structure"}
           </button>
+          <CompetitorDownloadMenu
+            briefId={briefId}
+            position={r.position}
+            variant="button"
+            disabled={!hasContent}
+          />
         </div>
       </div>
 

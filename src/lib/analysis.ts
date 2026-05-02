@@ -939,11 +939,20 @@ export function parseHTML(html: string): PageContent {
   const paragraphs: string[] = []; // textes extraits par paragraphe
   // Blocs structurés dans l'ordre du document pour reconstituer un HTML
   // propre balisé (utile pour l'affichage côté client et la comparaison
-  // concurrentielle).
-  const blocks: Array<{ tag: "h1" | "h2" | "h3" | "p"; text: string }> = [];
+  // concurrentielle). Les blocs "ul"/"ol" portent leurs items inline pour
+  // qu'on puisse rendre <ul><li>...</li></ul> au moment du structuredHtml.
+  type ParagraphBlock = { tag: "h1" | "h2" | "h3" | "p"; text: string };
+  type ListBlock = { tag: "ul" | "ol"; items: string[] };
+  type Block = ParagraphBlock | ListBlock;
+  const blocks: Block[] = [];
   let currentHeading: { level: 1 | 2 | 3; text: string } | null = null;
   let currentParagraph = "";
   let pCount = 0;
+  // État de listes : on supporte le nesting basique en gardant une stack.
+  // Chaque entrée = une liste ouverte, on remplit ses items au fur et à
+  // mesure qu'on ferme les <li>.
+  const listStack: ListBlock[] = [];
+  let currentLi: string | null = null;
 
   // Stack des profondeurs où l'on est entré en zone noise : on sort dès
   // qu'on referme la balise correspondante.
@@ -973,6 +982,21 @@ export function parseHTML(html: string): PageContent {
       blocks.push({ tag: "p", text: t });
     }
     currentParagraph = "";
+  };
+
+  // Flushe l'item <li> en cours dans la liste ouverte la plus interne.
+  const flushLi = () => {
+    if (currentLi == null) return;
+    const t = currentLi.replace(/\s+/g, " ").trim();
+    if (t && listStack.length > 0) {
+      // Filtre items vides ou trop courts (souvent menu/UI)
+      if (t.length >= 2) {
+        listStack[listStack.length - 1].items.push(t);
+        // Le texte des items nourrit le corpus global pour le NLP.
+        paragraphs.push(t);
+      }
+    }
+    currentLi = null;
   };
 
   const parser = new Parser(
@@ -1016,13 +1040,29 @@ export function parseHTML(html: string): PageContent {
 
         if (lower === "h1" || lower === "h2" || lower === "h3") {
           flushParagraph();
+          flushLi();
           const lvl = parseInt(lower.slice(1), 10) as 1 | 2 | 3;
           currentHeading = { level: lvl, text: "" };
           return;
         }
         if (lower === "p") {
           flushParagraph();
+          flushLi();
           pCount++;
+          return;
+        }
+        if (lower === "ul" || lower === "ol") {
+          flushParagraph();
+          listStack.push({ tag: lower, items: [] });
+          return;
+        }
+        if (lower === "li") {
+          // Ferme un éventuel li précédent (cas <li>...<li>...</li>... sans </li> propre)
+          flushLi();
+          if (listStack.length > 0) {
+            currentLi = "";
+          }
+          return;
         }
       },
 
@@ -1030,6 +1070,8 @@ export function parseHTML(html: string): PageContent {
         if (!collecting || isInNoise()) return;
         if (currentHeading) {
           currentHeading.text += text;
+        } else if (currentLi != null) {
+          currentLi += text;
         } else {
           currentParagraph += text;
         }
@@ -1065,6 +1107,18 @@ export function parseHTML(html: string): PageContent {
           flushParagraph();
         }
 
+        if (lower === "li") {
+          flushLi();
+        }
+
+        if (lower === "ul" || lower === "ol") {
+          flushLi();
+          const list = listStack.pop();
+          if (list && list.items.length > 0) {
+            blocks.push(list);
+          }
+        }
+
         depth--;
       },
     },
@@ -1088,7 +1142,14 @@ export function parseHTML(html: string): PageContent {
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
   const structuredHtml = blocks
-    .map((b) => `<${b.tag}>${escapeHtml(b.text)}</${b.tag}>`)
+    .map((b): string => {
+      if (b.tag === "ul" || b.tag === "ol") {
+        const items = b.items.map((it) => `  <li>${escapeHtml(it)}</li>`).join("\n");
+        return `<${b.tag}>\n${items}\n</${b.tag}>`;
+      }
+      const para = b as ParagraphBlock;
+      return `<${para.tag}>${escapeHtml(para.text)}</${para.tag}>`;
+    })
     .join("\n");
 
   return {
