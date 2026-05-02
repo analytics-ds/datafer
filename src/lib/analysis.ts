@@ -926,6 +926,25 @@ const NOISE_TAGS = new Set([
 const NOISE_CLASS_RE =
   /^(?:cookie[-_]?banner|cookie[-_]?consent|gdpr|newsletter|skip[-_]?link|skip[-_]?to|main[-_]?menu|mega[-_]?menu|nav[-_]?menu|site[-_]?header|site[-_]?footer|recently[-_]?viewed|breadcrumb|filter|filters|sort[-_]?by|pagination|toolbar|product[-_]?(?:card|tile|teaser)|category[-_]?(?:tile|nav)|cart|wishlist|mini[-_]?cart|product[-_]?count|sidebar|side[-_]?panel|popup|modal|drawer|hero[-_]?banner|promo[-_]?banner|social[-_]?(?:share|links?))(?:[-_]|$)/i;
 
+// Balises inline qu'on préserve dans le HTML reconstitué (gras, italique,
+// soulignement, etc.). Le texte reste compté normalement pour le NLP. b → strong
+// et i → em pour normaliser à la sortie HTML5.
+const INLINE_TAG_MAP: Record<string, string> = {
+  strong: "strong",
+  b: "strong",
+  em: "em",
+  i: "em",
+  u: "u",
+  code: "code",
+  mark: "mark",
+  sup: "sup",
+  sub: "sub",
+  small: "small",
+  s: "s",
+  del: "del",
+  ins: "ins",
+};
+
 export function parseHTML(html: string): PageContent {
   // On parse tout le <body> et on filtre uniquement via NOISE_TAGS et
   // NOISE_CLASS_RE. Auparavant on tentait de restreindre à <main>/<article>
@@ -937,23 +956,35 @@ export function parseHTML(html: string): PageContent {
   // NOISE_CLASS_RE est plus robuste. (Bug fix 2026-05-01.)
 
   const headings: Heading[] = [];
-  const paragraphs: string[] = []; // textes extraits par paragraphe
+  const paragraphs: string[] = []; // textes extraits par paragraphe (NLP corpus)
   // Blocs structurés dans l'ordre du document pour reconstituer un HTML
-  // propre balisé (utile pour l'affichage côté client et la comparaison
-  // concurrentielle). Les blocs "ul"/"ol" portent leurs items inline pour
-  // qu'on puisse rendre <ul><li>...</li></ul> au moment du structuredHtml.
-  type ParagraphBlock = { tag: "h1" | "h2" | "h3" | "p"; text: string };
-  type ListBlock = { tag: "ul" | "ol"; items: string[] };
-  type Block = ParagraphBlock | ListBlock;
+  // propre balisé (utile pour le téléchargement HTML/Word/PDF côté client).
+  // Chaque bloc maintient à la fois le texte plat (pour NLP) et le HTML
+  // reconstitué (avec balises inline strong/em/u/etc préservées). Les
+  // tableaux portent leur structure de cellules complète.
+  type HeadingTag = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+  type ParagraphBlock = {
+    tag: HeadingTag | "p" | "blockquote" | "pre";
+    text: string;
+    html: string;
+  };
+  type ListItem = { text: string; html: string };
+  type ListBlock = { tag: "ul" | "ol"; items: ListItem[] };
+  type TableCell = { text: string; html: string; isHeader: boolean };
+  type TableRow = { cells: TableCell[] };
+  type TableBlock = { tag: "table"; rows: TableRow[] };
+  type Block = ParagraphBlock | ListBlock | TableBlock;
   const blocks: Block[] = [];
-  let currentHeading: { level: 1 | 2 | 3; text: string } | null = null;
-  let currentParagraph = "";
+  let currentHeading: { level: 1 | 2 | 3 | 4 | 5 | 6; text: string; html: string } | null = null;
+  let currentParagraph: { text: string; html: string; tag: "p" | "blockquote" | "pre" } | null = null;
   let pCount = 0;
-  // État de listes : on supporte le nesting basique en gardant une stack.
-  // Chaque entrée = une liste ouverte, on remplit ses items au fur et à
-  // mesure qu'on ferme les <li>.
+  // État de listes : nesting basique via stack.
   const listStack: ListBlock[] = [];
-  let currentLi: string | null = null;
+  let currentLi: { text: string; html: string } | null = null;
+  // État de tables : on supporte 1 niveau (pas de tables nested, rare).
+  let currentTable: TableBlock | null = null;
+  let currentRow: TableRow | null = null;
+  let currentCell: TableCell | null = null;
 
   // Stack des profondeurs où l'on est entré en zone noise : on sort dès
   // qu'on referme la balise correspondante.
@@ -961,14 +992,8 @@ export function parseHTML(html: string): PageContent {
   const isInNoise = () => noiseStack.length > 0;
 
   let depth = 0;
-  // On collecte par défaut. Les zones noise (header/nav/footer/aside +
-  // classes via NOISE_CLASS_RE) sont skippées via noiseStack.
   const collecting = true;
 
-  // Un vrai paragraphe éditorial fait quasiment toujours plus de 5 mots et
-  // contient une ponctuation. Sous ce seuil c'est presque toujours un
-  // label de filtre / un item de menu / un nom de catégorie, qu'on
-  // n'aurait pas dû extraire. On les rejette.
   const isMeaningfulParagraph = (t: string): boolean => {
     if (t.length < 25) return false;
     const words = t.split(/\s+/).filter(Boolean);
@@ -976,28 +1001,93 @@ export function parseHTML(html: string): PageContent {
     return true;
   };
 
-  const flushParagraph = () => {
-    const t = currentParagraph.replace(/\s+/g, " ").trim();
-    if (t && isMeaningfulParagraph(t)) {
-      paragraphs.push(t);
-      blocks.push({ tag: "p", text: t });
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // Routes le texte dans le bon buffer selon l'état d'imbrication courant.
+  const appendText = (raw: string) => {
+    const escaped = escapeHtml(raw);
+    if (currentCell) {
+      currentCell.text += raw;
+      currentCell.html += escaped;
+      return;
     }
-    currentParagraph = "";
+    if (currentHeading) {
+      currentHeading.text += raw;
+      currentHeading.html += escaped;
+      return;
+    }
+    if (currentLi) {
+      currentLi.text += raw;
+      currentLi.html += escaped;
+      return;
+    }
+    if (currentParagraph) {
+      currentParagraph.text += raw;
+      currentParagraph.html += escaped;
+      return;
+    }
+    // Texte hors de tout bloc : on le considère comme un paragraphe
+    // implicite (cas typique des forums lo-fi sans <p>).
+    currentParagraph = { text: raw, html: escapeHtml(raw), tag: "p" };
   };
 
-  // Flushe l'item <li> en cours dans la liste ouverte la plus interne.
+  // Pareil pour les balises inline qu'on veut garder dans le HTML.
+  const appendInlineOpen = (htmlTag: string) => {
+    const tag = `<${htmlTag}>`;
+    if (currentCell) currentCell.html += tag;
+    else if (currentHeading) currentHeading.html += tag;
+    else if (currentLi) currentLi.html += tag;
+    else if (currentParagraph) currentParagraph.html += tag;
+  };
+  const appendInlineClose = (htmlTag: string) => {
+    const tag = `</${htmlTag}>`;
+    if (currentCell) currentCell.html += tag;
+    else if (currentHeading) currentHeading.html += tag;
+    else if (currentLi) currentLi.html += tag;
+    else if (currentParagraph) currentParagraph.html += tag;
+  };
+
+  const flushParagraph = () => {
+    if (!currentParagraph) return;
+    const t = currentParagraph.text.replace(/\s+/g, " ").trim();
+    if (t && isMeaningfulParagraph(t)) {
+      paragraphs.push(t);
+      blocks.push({
+        tag: currentParagraph.tag,
+        text: t,
+        html: currentParagraph.html.replace(/\s+/g, " ").trim(),
+      });
+    }
+    currentParagraph = null;
+  };
+
   const flushLi = () => {
-    if (currentLi == null) return;
-    const t = currentLi.replace(/\s+/g, " ").trim();
-    if (t && listStack.length > 0) {
-      // Filtre items vides ou trop courts (souvent menu/UI)
-      if (t.length >= 2) {
-        listStack[listStack.length - 1].items.push(t);
-        // Le texte des items nourrit le corpus global pour le NLP.
-        paragraphs.push(t);
-      }
+    if (!currentLi) return;
+    const t = currentLi.text.replace(/\s+/g, " ").trim();
+    if (t && t.length >= 2 && listStack.length > 0) {
+      listStack[listStack.length - 1].items.push({
+        text: t,
+        html: currentLi.html.replace(/\s+/g, " ").trim(),
+      });
+      paragraphs.push(t);
     }
     currentLi = null;
+  };
+
+  const flushCell = () => {
+    if (!currentCell) return;
+    const t = currentCell.text.replace(/\s+/g, " ").trim();
+    if (currentRow) {
+      currentRow.cells.push({
+        text: t,
+        html: currentCell.html.replace(/\s+/g, " ").trim(),
+        isHeader: currentCell.isHeader,
+      });
+      // Le texte des cellules nourrit aussi le NLP.
+      if (t) paragraphs.push(t);
+    }
+    currentCell = null;
   };
 
   const parser = new Parser(
@@ -1006,27 +1096,18 @@ export function parseHTML(html: string): PageContent {
         depth++;
         const lower = name.toLowerCase();
 
-        // Tag noise → on entre dans une zone à ignorer.
         if (NOISE_TAGS.has(lower)) {
           noiseStack.push(depth);
           return;
         }
 
-        // Liens internes (table des matières, anchor jumps) : on ignore
-        // leur texte, sinon on récupère 2× les titres (TOC + heading
-        // réel) et le contenu paraît bordélique.
+        // Liens internes (anchors) : on ignore leur sous-arbre pour ne pas
+        // doublonner les TOC. Liens externes : on laisse passer le texte.
         if (lower === "a" && (attrs.href ?? "").startsWith("#")) {
           noiseStack.push(depth);
           return;
         }
 
-        // Class/id noise → idem. On teste chaque classe individuellement
-        // (NOISE_CLASS_RE est ancré ^...) pour éviter les faux positifs sur
-        // les classes composées type 'js-product-list-top' qui matchaient
-        // 'product-list' à tort en milieu de chaîne avec un \b.
-        // Exception : on ignore le check noise sur <body> et <html> car des
-        // sites (Faguo) y mettent des state-classes type 'filters-active'
-        // qui matchent à tort et bloquent toute la page.
         if (lower !== "body" && lower !== "html") {
           const classList = `${attrs.class ?? ""} ${attrs.id ?? ""}`
             .split(/\s+/)
@@ -1039,17 +1120,45 @@ export function parseHTML(html: string): PageContent {
 
         if (!collecting || isInNoise()) return;
 
-        if (lower === "h1" || lower === "h2" || lower === "h3") {
+        // Inline tags : on les préserve dans le HTML reconstitué sans
+        // toucher au texte plat (NLP corpus inchangé).
+        const inlineTag = INLINE_TAG_MAP[lower];
+        if (inlineTag) {
+          appendInlineOpen(inlineTag);
+          return;
+        }
+        // <br> → espace dans le texte, <br> dans le HTML.
+        if (lower === "br") {
+          appendText(" ");
+          if (currentCell) currentCell.html += "<br>";
+          else if (currentParagraph) currentParagraph.html += "<br>";
+          return;
+        }
+
+        if (lower.match(/^h[1-6]$/)) {
           flushParagraph();
           flushLi();
-          const lvl = parseInt(lower.slice(1), 10) as 1 | 2 | 3;
-          currentHeading = { level: lvl, text: "" };
+          const lvl = parseInt(lower.slice(1), 10) as 1 | 2 | 3 | 4 | 5 | 6;
+          currentHeading = { level: lvl, text: "", html: "" };
           return;
         }
         if (lower === "p") {
           flushParagraph();
           flushLi();
           pCount++;
+          currentParagraph = { text: "", html: "", tag: "p" };
+          return;
+        }
+        if (lower === "blockquote") {
+          flushParagraph();
+          flushLi();
+          currentParagraph = { text: "", html: "", tag: "blockquote" };
+          return;
+        }
+        if (lower === "pre") {
+          flushParagraph();
+          flushLi();
+          currentParagraph = { text: "", html: "", tag: "pre" };
           return;
         }
         if (lower === "ul" || lower === "ol") {
@@ -1058,53 +1167,73 @@ export function parseHTML(html: string): PageContent {
           return;
         }
         if (lower === "li") {
-          // Ferme un éventuel li précédent (cas <li>...<li>...</li>... sans </li> propre)
           flushLi();
           if (listStack.length > 0) {
-            currentLi = "";
+            currentLi = { text: "", html: "" };
           }
+          return;
+        }
+        if (lower === "table") {
+          flushParagraph();
+          flushLi();
+          currentTable = { tag: "table", rows: [] };
+          return;
+        }
+        if (lower === "tr" && currentTable) {
+          currentRow = { cells: [] };
+          return;
+        }
+        if ((lower === "td" || lower === "th") && currentRow) {
+          currentCell = { text: "", html: "", isHeader: lower === "th" };
           return;
         }
       },
 
       ontext(text) {
         if (!collecting || isInNoise()) return;
-        if (currentHeading) {
-          currentHeading.text += text;
-        } else if (currentLi != null) {
-          currentLi += text;
-        } else {
-          currentParagraph += text;
-        }
+        appendText(text);
       },
 
       onclosetag(name) {
         const lower = name.toLowerCase();
 
-        // Sortie d'une zone noise : pop si on est exactement à la même
-        // profondeur que celle où on est rentré.
         if (noiseStack.length > 0 && noiseStack[noiseStack.length - 1] === depth) {
           noiseStack.pop();
           depth--;
           return;
         }
 
-        if (currentHeading && (lower === "h1" || lower === "h2" || lower === "h3")) {
+        const inlineTag = INLINE_TAG_MAP[lower];
+        if (inlineTag) {
+          appendInlineClose(inlineTag);
+          depth--;
+          return;
+        }
+
+        if (currentHeading && lower.match(/^h[1-6]$/)) {
           const t = currentHeading.text.replace(/\s+/g, " ").trim();
           if (t) {
-            headings.push({ level: currentHeading.level, text: t });
-            // Le texte du heading nourrit aussi le corpus global
-            // (utile pour la NLP / TF-IDF).
+            // outline + h1/h2/h3 typés ne supportent que niveaux 1-3
+            // (compat avec l'API V2 et le scoring existant). Les h4-h6
+            // sont gardés dans `blocks` pour le rendu HTML mais pas
+            // exposés dans `headings[]`.
+            if (currentHeading.level <= 3) {
+              headings.push({
+                level: currentHeading.level as 1 | 2 | 3,
+                text: t,
+              });
+            }
             paragraphs.push(t);
             blocks.push({
-              tag: lower as "h1" | "h2" | "h3",
+              tag: lower as HeadingTag,
               text: t,
+              html: currentHeading.html.replace(/\s+/g, " ").trim(),
             });
           }
           currentHeading = null;
         }
 
-        if (lower === "p") {
+        if (lower === "p" || lower === "blockquote" || lower === "pre") {
           flushParagraph();
         }
 
@@ -1118,6 +1247,25 @@ export function parseHTML(html: string): PageContent {
           if (list && list.items.length > 0) {
             blocks.push(list);
           }
+        }
+
+        if (lower === "td" || lower === "th") {
+          flushCell();
+        }
+
+        if (lower === "tr" && currentTable && currentRow) {
+          flushCell();
+          if (currentRow.cells.length > 0) {
+            currentTable.rows.push(currentRow);
+          }
+          currentRow = null;
+        }
+
+        if (lower === "table" && currentTable) {
+          if (currentTable.rows.length > 0) {
+            blocks.push(currentTable);
+          }
+          currentTable = null;
         }
 
         depth--;
@@ -1137,19 +1285,28 @@ export function parseHTML(html: string): PageContent {
   const text = paragraphs.join(" ").replace(/\s+/g, " ").trim();
   const wordCount = text.split(/\s+/).filter(Boolean).length;
 
-  const escapeHtml = (s: string) =>
-    s
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+  const renderTable = (t: TableBlock): string => {
+    const rowsHtml = t.rows
+      .map((row) => {
+        const cellsHtml = row.cells
+          .map((c) => `    <${c.isHeader ? "th" : "td"}>${c.html}</${c.isHeader ? "th" : "td"}>`)
+          .join("\n");
+        return `  <tr>\n${cellsHtml}\n  </tr>`;
+      })
+      .join("\n");
+    return `<table>\n${rowsHtml}\n</table>`;
+  };
   const structuredHtml = blocks
     .map((b): string => {
       if (b.tag === "ul" || b.tag === "ol") {
-        const items = b.items.map((it) => `  <li>${escapeHtml(it)}</li>`).join("\n");
+        const items = b.items.map((it) => `  <li>${it.html}</li>`).join("\n");
         return `<${b.tag}>\n${items}\n</${b.tag}>`;
       }
+      if (b.tag === "table") {
+        return renderTable(b);
+      }
       const para = b as ParagraphBlock;
-      return `<${para.tag}>${escapeHtml(para.text)}</${para.tag}>`;
+      return `<${para.tag}>${para.html}</${para.tag}>`;
     })
     .join("\n");
 
