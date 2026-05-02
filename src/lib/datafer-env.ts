@@ -36,6 +36,12 @@ export type DataferEnv = {
   HALOSCAN_KEY?: string;
   BRIGHTDATA_TOKEN?: string;
   BRIGHTDATA_ZONE?: string;
+  /**
+   * URL WebSocket complète du Bright Data Scraping Browser (zone "scraping_browser1").
+   * Format : wss://brd-customer-XXX-zone-YYY:PASSWORD@brd.superproxy.io:9222
+   * Utilisé en niveau 3 de la cascade crawl (cf. crawlWithBrightDataBrowser).
+   */
+  BRIGHTDATA_BROWSER_WSS?: string;
   CF_BROWSER_TOKEN?: string;
   CRON_SECRET?: string;
 };

@@ -694,7 +694,11 @@ const GOOGLEBOT_UA =
  */
 export async function crawlPage(
   url: string,
-  env: { BRIGHTDATA_TOKEN?: string; BRIGHTDATA_ZONE?: string },
+  env: {
+    BRIGHTDATA_TOKEN?: string;
+    BRIGHTDATA_ZONE?: string;
+    BRIGHTDATA_BROWSER_WSS?: string;
+  },
 ): Promise<PageContent | null> {
   // 1. Fetch direct (gratuit)
   try {
@@ -734,7 +738,177 @@ export async function crawlPage(
     if (parsed.wordCount >= 100) return parsed;
   }
 
+  // 3. Bright Data Scraping Browser via CDP raw (vrai Chromium headless).
+  // Pour les SPAs ultra-blindées (Nike Snkrs, Patta, etc.) qui retournent
+  // un squelette HTML vide via Web Unlocker. Plus cher (~$0.05/page),
+  // donc utilisé uniquement quand les niveaux 1+2 ont échoué.
+  const browserHtml = await crawlWithBrightDataBrowser(url, env);
+  if (browserHtml && !looksLikeChallengePage(browserHtml)) {
+    const parsed = parseHTML(browserHtml);
+    if (parsed.wordCount >= 100) return parsed;
+  }
+
   return null;
+}
+
+/**
+ * Niveau 3 : Bright Data Scraping Browser via Chrome DevTools Protocol raw.
+ *
+ * Le Browser API de Bright Data n'expose qu'une URL WebSocket Puppeteer.
+ * Comme on tourne dans Cloudflare Workers (pas de Node.js, pas de Puppeteer),
+ * on parle CDP directement en JSON via WebSocket. ~150 lignes mais zéro
+ * dépendance Node.
+ *
+ * Tarif : $8/GB standard + $3/GB sur domaines premium (Nike, etc.). Une page
+ * rendue avec assets ≈ 1-2 MB → ~$0.01-0.025 par crawl.
+ *
+ * Flow CDP :
+ *  1. WS connect vers wss://brd.superproxy.io:9222 (creds inline dans l'URL)
+ *  2. Target.createTarget {url} → on a un targetId
+ *  3. Target.attachToTarget {targetId, flatten:true} → on a un sessionId
+ *  4. Page.enable + Page.navigate → on déclenche le chargement
+ *  5. On attend Page.loadEventFired (ou timeout)
+ *  6. Runtime.evaluate "document.documentElement.outerHTML" → on a le HTML
+ *  7. Target.closeTarget pour libérer le tab
+ */
+async function crawlWithBrightDataBrowser(
+  url: string,
+  env: { BRIGHTDATA_BROWSER_WSS?: string },
+): Promise<string | null> {
+  const wssUrl = env.BRIGHTDATA_BROWSER_WSS;
+  if (!wssUrl) return null;
+
+  // Cloudflare Workers : pour ouvrir un WebSocket sortant on passe par
+  // fetch() avec Upgrade header. Le request URL doit être en wss://.
+  let wsResp: Response;
+  try {
+    wsResp = await fetch(wssUrl, {
+      headers: { Upgrade: "websocket" },
+    });
+  } catch (e) {
+    console.log("[bd-browser] fetch upgrade failed", { url, err: String(e) });
+    return null;
+  }
+  if (wsResp.status !== 101 || !wsResp.webSocket) {
+    console.log("[bd-browser] no websocket on response", { url, status: wsResp.status });
+    return null;
+  }
+
+  const ws = wsResp.webSocket;
+  ws.accept();
+
+  let nextId = 1;
+  const pending = new Map<number, (result: unknown) => void>();
+  const events = new Map<string, ((params: unknown) => void)[]>();
+
+  ws.addEventListener("message", (e: MessageEvent) => {
+    try {
+      const msg = JSON.parse(typeof e.data === "string" ? e.data : "") as {
+        id?: number;
+        result?: unknown;
+        error?: { message?: string };
+        method?: string;
+        params?: unknown;
+      };
+      if (typeof msg.id === "number") {
+        const cb = pending.get(msg.id);
+        if (cb) {
+          pending.delete(msg.id);
+          cb(msg.error ? { __error: msg.error.message } : msg.result);
+        }
+      } else if (msg.method) {
+        const handlers = events.get(msg.method);
+        if (handlers) handlers.forEach((h) => h(msg.params));
+      }
+    } catch {}
+  });
+
+  const send = <T = unknown>(
+    method: string,
+    params: Record<string, unknown> = {},
+    sessionId?: string,
+  ): Promise<T> => {
+    const id = nextId++;
+    return new Promise<T>((resolve, reject) => {
+      pending.set(id, (result) => {
+        if (result && typeof result === "object" && "__error" in result) {
+          reject(new Error((result as { __error: string }).__error));
+        } else {
+          resolve(result as T);
+        }
+      });
+      ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+    });
+  };
+
+  const waitFor = (method: string, timeoutMs = 15000): Promise<unknown> =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`timeout waiting ${method}`)), timeoutMs);
+      const handlers = events.get(method) ?? [];
+      handlers.push((params) => {
+        clearTimeout(timer);
+        resolve(params);
+      });
+      events.set(method, handlers);
+    });
+
+  try {
+    // Garde-fou global : on coupe tout après 30s même si CDP est bavard.
+    const overall = setTimeout(() => {
+      try { ws.close(1000, "overall timeout"); } catch {}
+    }, 30000);
+
+    // 1. Crée un nouvel onglet pointant directement vers l'URL
+    const target = await send<{ targetId: string }>("Target.createTarget", { url });
+
+    // 2. Attache la session pour pouvoir piloter cet onglet
+    const attached = await send<{ sessionId: string }>("Target.attachToTarget", {
+      targetId: target.targetId,
+      flatten: true,
+    });
+    const sid = attached.sessionId;
+
+    // 3. Active Page domain pour recevoir loadEventFired
+    await send("Page.enable", {}, sid);
+
+    // 4. Attend le chargement complet (DOM + assets), max 15s
+    try {
+      await waitFor("Page.loadEventFired", 15000);
+    } catch {
+      // Si load n'est pas firé en 15s, on continue quand même : la page
+      // peut avoir bloqué sur un script lent mais le DOM est déjà là.
+    }
+
+    // 5. Petit délai pour laisser les SPAs hydrater l'app après load
+    await new Promise((r) => setTimeout(r, 1500));
+
+    // 6. Récupère le HTML rendu via Runtime.evaluate
+    const evalRes = await send<{
+      result: { value?: string };
+    }>(
+      "Runtime.evaluate",
+      {
+        expression: "document.documentElement.outerHTML",
+        returnByValue: true,
+      },
+      sid,
+    );
+    const html = evalRes.result?.value;
+
+    // 7. Ferme l'onglet (best-effort)
+    try { await send("Target.closeTarget", { targetId: target.targetId }); } catch {}
+
+    clearTimeout(overall);
+    try { ws.close(1000, "done"); } catch {}
+
+    if (typeof html !== "string" || html.length < 500) return null;
+    console.log("[bd-browser] ok", { url, htmlLength: html.length });
+    return html;
+  } catch (e) {
+    console.log("[bd-browser] error", { url, err: String(e) });
+    try { ws.close(1011, "error"); } catch {}
+    return null;
+  }
 }
 
 
