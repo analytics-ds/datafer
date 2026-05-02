@@ -493,7 +493,17 @@ export function BriefEditor(props: BriefEditorProps) {
       </div>
 
       <div className={tab === "insights" ? "flex-1 overflow-y-auto px-7 py-6" : "hidden"}>
-        <InsightsPane nlp={nlp} halo={halo} serp={serp} paa={paa} />
+        <InsightsPane
+          nlp={nlp}
+          halo={halo}
+          serp={serp}
+          paa={paa}
+          userScore={score.total}
+          userSeoScore={score.seoTotal}
+          userWordCount={wc}
+          userH2Count={editorData.h2s.length}
+          userH3Count={editorData.h3s.length}
+        />
       </div>
 
       <style jsx global>{`
@@ -1443,11 +1453,29 @@ function TabButton({ active, onClick, count, children }: { active: boolean; onCl
   );
 }
 
-function InsightsPane({ nlp, halo, serp, paa }: { nlp: NlpResult | null; halo: HaloscanOverview | null; serp: SerpResult[]; paa: Paa[] }) {
+function InsightsPane({
+  nlp,
+  halo,
+  serp,
+  paa,
+  userScore,
+  userSeoScore,
+  userWordCount,
+  userH2Count,
+  userH3Count,
+}: {
+  nlp: NlpResult | null;
+  halo: HaloscanOverview | null;
+  serp: SerpResult[];
+  paa: Paa[];
+  userScore: number;
+  userSeoScore: number;
+  userWordCount: number;
+  userH2Count: number;
+  userH3Count: number;
+}) {
   const vp = serp.filter((r) => (r.wordCount ?? 0) > 0);
   const aW = vp.length ? Math.round(vp.reduce((s, r) => s + (r.wordCount ?? 0), 0) / vp.length) : 0;
-  const tk = (nlp?.nlpTerms ?? []).slice(0, 12);
-  const ms = tk.length ? tk[0].score : 1;
 
   const haloHasData =
     halo &&
@@ -1528,27 +1556,331 @@ function InsightsPane({ nlp, halo, serp, paa }: { nlp: NlpResult | null; halo: H
         <InsightMetric label="Mots moyen" value={aW.toLocaleString("fr-FR")} />
       </InsightCard>
 
-      {tk.length > 0 && (
-        <div className="col-span-full bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-5">
-          <div className="flex items-center gap-[7px] text-[13px] font-semibold mb-4">
-            <span className="w-[7px] h-[7px] rounded-full bg-[var(--purple)]" />
-            Top NLP
-          </div>
-          <div className="flex flex-col gap-[5px]">
-            {tk.map((k) => (
-              <div key={k.term} className="flex items-center justify-between px-[10px] py-[7px] bg-[var(--bg)] rounded-[var(--radius-xs)] text-[12px]">
-                <span className="font-medium">{k.term}</span>
-                <div className="flex-1 max-w-[80px] h-[3px] bg-[var(--border)] rounded-full mx-[10px] overflow-hidden">
-                  <div className="h-full bg-[var(--accent)] rounded-full" style={{ width: `${Math.round((k.score / ms) * 100)}%` }} />
-                </div>
-                <span className="font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-muted)]">{k.presence}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="col-span-full">
+        <SerpAnalyticsCharts
+          serp={serp}
+          userScore={userScore}
+          userSeoScore={userSeoScore}
+          userWordCount={userWordCount}
+          userH2Count={userH2Count}
+          userH3Count={userH3Count}
+        />
+      </div>
     </div>
   );
+}
+
+/**
+ * Bloc d'analyse concurrentielle avec graphiques côte à côte.
+ * - Score SEO : barres horizontales, concurrents + nous, ligne moyenne SERP.
+ * - Mots : idem.
+ * - Sous-titres (H2 + H3 empilés) : idem.
+ * - Score vs wordCount : nuage de points pour visualiser la corrélation.
+ */
+function SerpAnalyticsCharts({
+  serp,
+  userScore,
+  userSeoScore,
+  userWordCount,
+  userH2Count,
+  userH3Count,
+}: {
+  serp: SerpResult[];
+  userScore: number;
+  userSeoScore: number;
+  userWordCount: number;
+  userH2Count: number;
+  userH3Count: number;
+}) {
+  const vp = serp.filter((r) => (r.wordCount ?? 0) > 0);
+  if (vp.length === 0) return null;
+
+  const scoreSeries = buildSeries(
+    vp.map((r) => ({ label: hostOf(r.link, r.position), value: r.score ?? 0, position: r.position })),
+    { label: "Toi", value: userSeoScore, position: -1 },
+  );
+  const wcSeries = buildSeries(
+    vp.map((r) => ({ label: hostOf(r.link, r.position), value: r.wordCount ?? 0, position: r.position })),
+    { label: "Toi", value: userWordCount, position: -1 },
+  );
+  const headingSeries = buildSeries(
+    vp.map((r) => ({
+      label: hostOf(r.link, r.position),
+      value: (r.h2?.length ?? 0) + (r.h3?.length ?? 0),
+      h2: r.h2?.length ?? 0,
+      h3: r.h3?.length ?? 0,
+      position: r.position,
+    })),
+    {
+      label: "Toi",
+      value: userH2Count + userH3Count,
+      h2: userH2Count,
+      h3: userH3Count,
+      position: -1,
+    },
+  );
+
+  const scatterPoints = [
+    ...vp.map((r) => ({
+      x: r.wordCount ?? 0,
+      y: r.score ?? 0,
+      label: hostOf(r.link, r.position),
+      isMe: false,
+    })),
+    { x: userWordCount, y: userSeoScore, label: "Toi", isMe: true },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <ChartCard title="Score SEO concurrents vs toi" dotColor="var(--accent)" subtitle={`Moyenne SERP : ${avg(scoreSeries.competitors.map((c) => c.value))}/100 — Toi : ${userSeoScore}/100`}>
+        <BarChartHorizontal series={scoreSeries} max={100} suffix="/100" />
+      </ChartCard>
+
+      <ChartCard title="Volume de contenu" dotColor="var(--green)" subtitle={`Moyenne SERP : ${avg(wcSeries.competitors.map((c) => c.value)).toLocaleString("fr-FR")} mots — Toi : ${userWordCount.toLocaleString("fr-FR")} mots`}>
+        <BarChartHorizontal series={wcSeries} max={Math.max(userWordCount, ...wcSeries.competitors.map((c) => c.value))} suffix=" mots" />
+      </ChartCard>
+
+      <ChartCard title="Sous-titres (H2 + H3)" dotColor="#E85D3A" subtitle={`Moyenne SERP : ${avg(headingSeries.competitors.map((c) => c.value))} — Toi : ${userH2Count + userH3Count}`}>
+        <BarChartHorizontalStacked series={headingSeries} />
+      </ChartCard>
+
+      <ChartCard title="Score vs Volume" dotColor="var(--purple)" subtitle="Plus en haut à droite = mieux">
+        <ScatterChart points={scatterPoints} />
+      </ChartCard>
+
+      <div className="lg:col-span-2">
+        <ChartCard title="Ton positionnement" dotColor={userScore >= avg(scoreSeries.competitors.map((c) => c.value)) ? "var(--green)" : "var(--orange)"} subtitle={positioningSubtitle(userSeoScore, scoreSeries.competitors.map((c) => c.value))}>
+          <PositioningGauge userScore={userSeoScore} competitors={scoreSeries.competitors.map((c) => c.value)} />
+        </ChartCard>
+      </div>
+    </div>
+  );
+}
+
+function buildSeries<T extends { label: string; value: number; position: number }>(
+  competitors: T[],
+  me: T,
+): { competitors: T[]; me: T; max: number } {
+  const max = Math.max(me.value, ...competitors.map((c) => c.value), 1);
+  return { competitors, me, max };
+}
+
+function avg(values: number[]): number {
+  if (values.length === 0) return 0;
+  return Math.round(values.reduce((s, v) => s + v, 0) / values.length);
+}
+
+function hostOf(url: string, fallbackPosition: number): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return `#${fallbackPosition}`;
+  }
+}
+
+function positioningSubtitle(userScore: number, competitors: number[]): string {
+  if (competitors.length === 0) return "";
+  const sorted = [...competitors, userScore].sort((a, b) => b - a);
+  const rank = sorted.indexOf(userScore) + 1;
+  return `Tu es classé #${rank} sur ${sorted.length} (avec ${userScore}/100)`;
+}
+
+function ChartCard({
+  title,
+  subtitle,
+  dotColor,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  dotColor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-5">
+      <div className="flex items-center gap-[7px] text-[13px] font-semibold mb-1">
+        <span className="w-[7px] h-[7px] rounded-full" style={{ background: dotColor }} />
+        {title}
+      </div>
+      {subtitle && (
+        <div className="text-[11px] text-[var(--text-muted)] mb-4">{subtitle}</div>
+      )}
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+type BarPoint = { label: string; value: number; position: number };
+type StackedBarPoint = BarPoint & { h2: number; h3: number };
+
+function BarChartHorizontal<T extends BarPoint>({
+  series,
+  max,
+  suffix = "",
+}: {
+  series: { competitors: T[]; me: T; max: number };
+  max: number;
+  suffix?: string;
+}) {
+  const all = [...series.competitors.sort((a, b) => a.position - b.position), series.me];
+  const localMax = Math.max(max, series.max, 1);
+  return (
+    <div className="flex flex-col gap-[6px]">
+      {all.map((p, i) => {
+        const pct = (p.value / localMax) * 100;
+        const isMe = p.position === -1;
+        const color = isMe ? "var(--accent)" : positionColor(p.position);
+        return (
+          <div key={i} className="flex items-center gap-2 text-[11px]">
+            <div className={`w-[100px] truncate ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-secondary)]"}`} title={p.label}>
+              {isMe ? "★ Toi" : p.label}
+            </div>
+            <div className="flex-1 h-[14px] bg-[var(--bg)] rounded-[var(--radius-xs)] overflow-hidden relative">
+              <div
+                className="h-full rounded-[var(--radius-xs)] transition-all"
+                style={{ width: `${Math.max(pct, 2)}%`, background: color, opacity: isMe ? 1 : 0.85 }}
+              />
+            </div>
+            <div className={`font-[family-name:var(--font-mono)] text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
+              {p.value.toLocaleString("fr-FR")}{suffix}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function BarChartHorizontalStacked({
+  series,
+}: {
+  series: { competitors: StackedBarPoint[]; me: StackedBarPoint; max: number };
+}) {
+  const all = [...series.competitors.sort((a, b) => a.position - b.position), series.me];
+  const localMax = Math.max(series.max, 1);
+  return (
+    <div className="flex flex-col gap-[6px]">
+      {all.map((p, i) => {
+        const isMe = p.position === -1;
+        const h2Pct = (p.h2 / localMax) * 100;
+        const h3Pct = (p.h3 / localMax) * 100;
+        return (
+          <div key={i} className="flex items-center gap-2 text-[11px]">
+            <div className={`w-[100px] truncate ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-secondary)]"}`} title={p.label}>
+              {isMe ? "★ Toi" : p.label}
+            </div>
+            <div className="flex-1 h-[14px] bg-[var(--bg)] rounded-[var(--radius-xs)] overflow-hidden flex">
+              <div className="h-full" style={{ width: `${h2Pct}%`, background: "#E85D3A", opacity: isMe ? 1 : 0.85 }} />
+              <div className="h-full" style={{ width: `${h3Pct}%`, background: "#E85D3A66", opacity: isMe ? 1 : 0.7 }} />
+            </div>
+            <div className={`font-[family-name:var(--font-mono)] text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
+              {p.h2}H2 · {p.h3}H3
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex gap-3 mt-2 text-[10px] text-[var(--text-muted)]">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: "#E85D3A" }} /> H2</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: "#E85D3A66" }} /> H3</span>
+      </div>
+    </div>
+  );
+}
+
+function ScatterChart({
+  points,
+}: {
+  points: { x: number; y: number; label: string; isMe: boolean }[];
+}) {
+  const maxX = Math.max(...points.map((p) => p.x), 1);
+  const W = 320;
+  const H = 220;
+  const PAD = 30;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
+      <line x1={PAD} y1={H - PAD} x2={W - 5} y2={H - PAD} stroke="var(--border)" strokeWidth="1" />
+      <line x1={PAD} y1={5} x2={PAD} y2={H - PAD} stroke="var(--border)" strokeWidth="1" />
+      {[25, 50, 75].map((y) => {
+        const yPx = H - PAD - ((y / 100) * (H - PAD - 5));
+        return (
+          <g key={y}>
+            <line x1={PAD} y1={yPx} x2={W - 5} y2={yPx} stroke="var(--border)" strokeWidth="0.5" strokeDasharray="2 3" />
+            <text x={2} y={yPx + 3} fontSize="9" fill="var(--text-muted)">{y}</text>
+          </g>
+        );
+      })}
+      {points.map((p, i) => {
+        const cx = PAD + (p.x / maxX) * (W - PAD - 5);
+        const cy = H - PAD - ((p.y / 100) * (H - PAD - 5));
+        return (
+          <g key={i}>
+            <circle
+              cx={cx}
+              cy={cy}
+              r={p.isMe ? 7 : 5}
+              fill={p.isMe ? "var(--accent)" : "var(--purple)"}
+              opacity={p.isMe ? 1 : 0.7}
+              stroke={p.isMe ? "var(--text)" : "none"}
+              strokeWidth={p.isMe ? 1.5 : 0}
+            >
+              <title>{`${p.label} : ${p.x.toLocaleString("fr-FR")} mots, ${p.y}/100`}</title>
+            </circle>
+            {p.isMe && (
+              <text x={cx + 9} y={cy + 4} fontSize="10" fontWeight="bold" fill="var(--text)">★</text>
+            )}
+          </g>
+        );
+      })}
+      <text x={W / 2} y={H - 4} fontSize="9" fill="var(--text-muted)" textAnchor="middle">Mots</text>
+      <text x={3} y={12} fontSize="9" fill="var(--text-muted)">Score</text>
+    </svg>
+  );
+}
+
+function PositioningGauge({
+  userScore,
+  competitors,
+}: {
+  userScore: number;
+  competitors: number[];
+}) {
+  const all = [...competitors, userScore].sort((a, b) => a - b);
+  const min = Math.min(...all);
+  const max = Math.max(...all);
+  const range = max - min || 1;
+  return (
+    <div className="relative h-[40px]">
+      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[6px] bg-gradient-to-r from-[var(--red)] via-[var(--orange)] to-[var(--green)] rounded-full opacity-50" />
+      {competitors.map((c, i) => (
+        <div
+          key={i}
+          className="absolute top-1/2 -translate-y-1/2 w-[8px] h-[8px] rounded-full bg-[var(--purple)] border border-white"
+          style={{ left: `calc(${((c - min) / range) * 100}% - 4px)`, opacity: 0.7 }}
+          title={`Concurrent : ${c}/100`}
+        />
+      ))}
+      <div
+        className="absolute top-0 bottom-0 flex flex-col items-center -translate-x-1/2"
+        style={{ left: `${((userScore - min) / range) * 100}%` }}
+      >
+        <div className="w-[2px] flex-1 bg-[var(--accent)]" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full mb-1 px-2 py-1 bg-[var(--accent)] text-white text-[10px] font-bold rounded whitespace-nowrap">
+          ★ Toi : {userScore}
+        </div>
+      </div>
+      <div className="absolute inset-x-0 bottom-0 flex justify-between text-[9px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+        <span>{min}</span>
+        <span>{max}</span>
+      </div>
+    </div>
+  );
+}
+
+function positionColor(position: number): string {
+  if (position <= 3) return "var(--green)";
+  if (position <= 5) return "var(--accent)";
+  if (position <= 7) return "var(--orange)";
+  return "var(--text-muted)";
 }
 
 function CompetitorScoreRow({ scoreTotal, serp }: { scoreTotal: number; serp: SerpResult[] }) {
