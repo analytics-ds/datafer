@@ -25,9 +25,10 @@ queue = "datafer-analysis"
 # la queue grossit).
 max_batch_size = 1
 max_batch_timeout = 5
-# Si l'analyse échoue (uncaught), la queue retry 2 fois avec backoff puis
-# envoie le message dans la DLQ.
-max_retries = 2
+# max_retries=1 : si l'analyse plante, on retry UNE fois puis DLQ. Plus de
+# retries = on laisse le brief en pending visiblement plus longtemps côté
+# user, alors qu'il faut vite faillir et laisser le cron cleanup ramasser.
+max_retries = 1
 dead_letter_queue = "datafer-analysis-dlq"
 
 [vars]

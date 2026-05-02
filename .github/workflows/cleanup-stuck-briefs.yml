@@ -2,8 +2,11 @@ name: Cleanup stuck briefs
 
 on:
   schedule:
-    # Toutes les 5 minutes (plus court non garanti côté GitHub Actions cron).
-    - cron: "*/5 * * * *"
+    # Toutes les 1 minute (le minimum supporté par GH Actions). En pratique
+    # GitHub a une latence variable (1 à 5 min selon la charge), mais c'est
+    # la fréquence la plus agressive disponible. Combiné avec STUCK_THRESHOLD_MS
+    # = 2 min côté endpoint, le worst-case visible user est ~3 min.
+    - cron: "* * * * *"
   workflow_dispatch: {}
 
 permissions: {}

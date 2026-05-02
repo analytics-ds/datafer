@@ -6,10 +6,12 @@ import { brief } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
-// Briefs en `pending` depuis plus de 3 minutes : on les force en `failed`.
-// Permet de chasser les zombies créés quand le worker Cloudflare meurt
-// brutalement (CPU timeout, OOM, etc.) sans avoir pu update le status.
-const STUCK_THRESHOLD_MS = 3 * 60 * 1000;
+// Briefs en `pending` depuis plus de 2 minutes : on les force en `failed`.
+// ANALYSIS_DEADLINE_MS côté consumer = 90s, donc 2 min laisse 30s de marge
+// avant qu'on considère un brief comme zombie. Combiné avec un cron qui
+// tourne toutes les 1 min côté GH Actions, le worst-case d'attente côté
+// user passe de 8 min (cron 5 + seuil 3) à 3 min.
+const STUCK_THRESHOLD_MS = 2 * 60 * 1000;
 
 export async function POST(req: Request) {
   // Auth via Bearer = secret CRON_SECRET. On compare en constant-time pour
