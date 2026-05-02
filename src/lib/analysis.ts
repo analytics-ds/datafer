@@ -778,12 +778,30 @@ async function crawlWithBrightDataBrowser(
   const wssUrl = env.BRIGHTDATA_BROWSER_WSS;
   if (!wssUrl) return null;
 
-  // Cloudflare Workers : pour ouvrir un WebSocket sortant on passe par
-  // fetch() avec Upgrade header. Le request URL doit être en wss://.
+  // Cloudflare Workers : fetch() ne supporte pas wss:// et strippe les
+  // credentials inline de l'URL. On parse user:pass de l'URL Bright Data
+  // et on les passe en header Authorization: Basic ... à la place.
+  // L'URL devient https://host:port/ propre.
+  let httpsUrl: string;
+  let basicAuth: string;
+  try {
+    const u = new URL(wssUrl);
+    basicAuth = "Basic " + btoa(`${decodeURIComponent(u.username)}:${decodeURIComponent(u.password)}`);
+    u.username = "";
+    u.password = "";
+    httpsUrl = u.toString().replace(/^wss:\/\//, "https://");
+  } catch (e) {
+    console.log("[bd-browser] bad WSS URL", { err: String(e) });
+    return null;
+  }
+
   let wsResp: Response;
   try {
-    wsResp = await fetch(wssUrl, {
-      headers: { Upgrade: "websocket" },
+    wsResp = await fetch(httpsUrl, {
+      headers: {
+        Upgrade: "websocket",
+        Authorization: basicAuth,
+      },
     });
   } catch (e) {
     console.log("[bd-browser] fetch upgrade failed", { url, err: String(e) });
@@ -858,8 +876,11 @@ async function crawlWithBrightDataBrowser(
       try { ws.close(1000, "overall timeout"); } catch {}
     }, 30000);
 
-    // 1. Crée un nouvel onglet pointant directement vers l'URL
-    const target = await send<{ targetId: string }>("Target.createTarget", { url });
+    // 1. Crée un nouvel onglet blank (BD interdit d'ouvrir une URL non-blank
+    // directement via Target.createTarget)
+    const target = await send<{ targetId: string }>("Target.createTarget", {
+      url: "about:blank",
+    });
 
     // 2. Attache la session pour pouvoir piloter cet onglet
     const attached = await send<{ sessionId: string }>("Target.attachToTarget", {
@@ -871,7 +892,10 @@ async function crawlWithBrightDataBrowser(
     // 3. Active Page domain pour recevoir loadEventFired
     await send("Page.enable", {}, sid);
 
-    // 4. Attend le chargement complet (DOM + assets), max 15s
+    // 4. Navigue vers l'URL cible
+    await send("Page.navigate", { url }, sid);
+
+    // 5. Attend le chargement complet (DOM + assets), max 15s
     try {
       await waitFor("Page.loadEventFired", 15000);
     } catch {
