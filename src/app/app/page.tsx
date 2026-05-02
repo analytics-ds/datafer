@@ -20,7 +20,7 @@ export default async function AppHome() {
   const db = getDb();
   const startOfMonth = Math.floor(new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() / 1000);
 
-  const [recentBriefs, foldersWithCount, availableTags, monthStats, totalStats] = await Promise.all([
+  const [recentBriefs, foldersWithCount, availableTags, leaderboard] = await Promise.all([
     db
       .select({
         id: brief.id,
@@ -59,25 +59,29 @@ export default async function AppHome() {
       .groupBy(client.id)
       .orderBy(desc(sql`MAX(${brief.createdAt})`), asc(client.name)),
     listAllTags(),
+    // Classement de l'équipe : briefs créés ce mois par user, avec leur photo.
     db
       .select({
-        briefsThisMonth: sql<number>`COUNT(*)`,
-        avgScoreThisMonth: sql<number | null>`AVG(${brief.score})`,
+        userId: user.id,
+        name: user.name,
+        firstName: user.firstName,
+        image: user.image,
+        count: sql<number>`COUNT(${brief.id})`,
       })
-      .from(brief)
-      .where(and(gte(brief.createdAt, new Date(startOfMonth * 1000)), eq(brief.status, "ready"))),
-    db
-      .select({
-        briefsTotal: sql<number>`COUNT(*)`,
-      })
-      .from(brief),
+      .from(user)
+      .leftJoin(
+        brief,
+        and(eq(brief.ownerId, user.id), gte(brief.createdAt, new Date(startOfMonth * 1000))),
+      )
+      .groupBy(user.id)
+      .orderBy(desc(sql`COUNT(${brief.id})`), asc(user.name)),
   ]);
 
   const tagsByBrief = await listTagsForBriefs(recentBriefs.map((b) => b.id));
-  const briefsThisMonth = monthStats[0]?.briefsThisMonth ?? 0;
-  const avgScoreThisMonth = Math.round(monthStats[0]?.avgScoreThisMonth ?? 0);
-  const briefsTotal = totalStats[0]?.briefsTotal ?? 0;
-  const clientsActive = foldersWithCount.filter((f) => f.briefCount > 0).length;
+  const myBriefsThisMonth =
+    leaderboard.find((u) => u.userId === session.user.id)?.count ?? 0;
+  const totalBriefsThisMonth = leaderboard.reduce((s, u) => s + Number(u.count), 0);
+  const myShare = totalBriefsThisMonth > 0 ? myBriefsThisMonth / totalBriefsThisMonth : 0;
 
   // Pour passer aux BriefCard (qui s'attend à un type folder unique)
   const folders = foldersWithCount.map((f) => ({ id: f.id, name: f.name, website: f.website }));
@@ -121,12 +125,25 @@ export default async function AppHome() {
         </Link>
       </section>
 
-      {/* Stats du mois */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-12">
-        <StatCard label="Briefs ce mois" value={briefsThisMonth.toString()} accent="var(--accent)" />
-        <StatCard label="Score moyen" value={avgScoreThisMonth > 0 ? `${avgScoreThisMonth}/100` : "—"} accent="var(--green)" />
-        <StatCard label="Briefs total" value={briefsTotal.toString()} accent="var(--purple)" />
-        <StatCard label="Clients actifs" value={`${clientsActive}/${foldersWithCount.length}`} accent="#E85D3A" />
+      {/* Stats du mois : donut + leaderboard équipe */}
+      <section className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-3 mb-12">
+        <ShareDonut
+          label="Briefs ce mois"
+          mine={myBriefsThisMonth}
+          total={totalBriefsThisMonth}
+          share={myShare}
+          firstName={(session.user.name.split(" ")[0]) || "Toi"}
+        />
+        <Leaderboard
+          users={leaderboard.map((u) => ({
+            id: u.userId,
+            name: u.name,
+            firstName: u.firstName,
+            image: u.image,
+            count: Number(u.count),
+            isMe: u.userId === session.user.id,
+          }))}
+        />
       </section>
 
       {/* Tes clients */}
@@ -227,16 +244,130 @@ export default async function AppHome() {
   );
 }
 
-function StatCard({ label, value, accent }: { label: string; value: string; accent: string }) {
+function ShareDonut({
+  label,
+  mine,
+  total,
+  share,
+  firstName,
+}: {
+  label: string;
+  mine: number;
+  total: number;
+  share: number;
+  firstName: string;
+}) {
+  const R = 56;
+  const C = 2 * Math.PI * R;
+  const offset = C * (1 - share);
+  const pct = Math.round(share * 100);
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] px-4 py-4 relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: accent }} />
-      <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-2">
-        {label}
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-6 flex items-center gap-5">
+      <div className="relative w-[140px] h-[140px] shrink-0">
+        <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90">
+          <circle cx="70" cy="70" r={R} fill="none" stroke="var(--border)" strokeWidth="14" />
+          <circle
+            cx="70"
+            cy="70"
+            r={R}
+            fill="none"
+            stroke="var(--accent-dark)"
+            strokeWidth="14"
+            strokeLinecap="round"
+            strokeDasharray={C}
+            strokeDashoffset={offset}
+            style={{ transition: "stroke-dashoffset .6s ease" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="font-[family-name:var(--font-display)] text-[32px] leading-none">{pct}%</span>
+          <span className="text-[9px] uppercase tracking-[0.8px] text-[var(--text-muted)] mt-[2px]">de l&apos;équipe</span>
+        </div>
       </div>
-      <div className="font-[family-name:var(--font-display)] text-[28px] leading-none tracking-[-0.5px]">
-        {value}
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-2">
+          {label}
+        </div>
+        <div className="font-[family-name:var(--font-display)] text-[36px] leading-none tracking-[-0.5px] mb-1">
+          {mine}
+        </div>
+        <div className="text-[12px] text-[var(--text-secondary)]">
+          {firstName} · sur {total} brief{total > 1 ? "s" : ""} de l&apos;équipe ce mois
+        </div>
       </div>
+    </div>
+  );
+}
+
+function Leaderboard({
+  users,
+}: {
+  users: { id: string; name: string; firstName: string | null; image: string | null; count: number; isMe: boolean }[];
+}) {
+  const top = users.slice(0, 5);
+  const max = Math.max(1, ...top.map((u) => u.count));
+  return (
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-6">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-4">
+        Classement de l&apos;équipe ce mois
+      </div>
+      {top.length === 0 || top.every((u) => u.count === 0) ? (
+        <div className="text-[12px] text-[var(--text-muted)] italic">Aucun brief créé ce mois pour l&apos;instant.</div>
+      ) : (
+        <div className="flex flex-col gap-[10px]">
+          {top.map((u, i) => {
+            const display = u.firstName || u.name.split(" ")[0] || "?";
+            const pct = u.count > 0 ? (u.count / max) * 100 : 0;
+            return (
+              <div
+                key={u.id}
+                className={`flex items-center gap-3 ${u.isMe ? "" : ""}`}
+              >
+                <div className="text-[11px] font-[family-name:var(--font-mono)] text-[var(--text-muted)] w-[16px] shrink-0">
+                  {i + 1}.
+                </div>
+                <Avatar image={u.image} name={display} isMe={u.isMe} />
+                <div className="flex-1 min-w-0">
+                  <div className={`text-[12px] truncate ${u.isMe ? "font-bold" : "font-medium"}`}>
+                    {display}{u.isMe ? " (toi)" : ""}
+                  </div>
+                  <div className="h-[4px] bg-[var(--bg)] rounded-full mt-[3px] overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${pct}%`,
+                        background: u.isMe ? "var(--accent-dark)" : "var(--accent)",
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className={`font-[family-name:var(--font-mono)] text-[14px] tabular-nums w-[36px] text-right ${u.isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-secondary)]"}`}>
+                  {u.count}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Avatar({ image, name, isMe }: { image: string | null; name: string; isMe: boolean }) {
+  const initial = name.charAt(0).toUpperCase();
+  return (
+    <div
+      className={`w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-[11px] font-bold shrink-0 ${
+        isMe ? "ring-2 ring-[var(--accent-dark)] ring-offset-2 ring-offset-[var(--bg-card)]" : ""
+      }`}
+      style={{ background: image ? "transparent" : "var(--bg-olive-light)", color: "var(--accent-dark)" }}
+    >
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt={name} className="w-full h-full object-cover" />
+      ) : (
+        <span>{initial}</span>
+      )}
     </div>
   );
 }
