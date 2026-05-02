@@ -5,7 +5,7 @@
  * GEO valorise les patterns appréciés par les LLMs (table, listes, TL;DR,
  * FAQ, données chiffrées). Exécuté côté client à chaque édition.
  */
-import type { NlpResult } from "./analysis";
+import type { NlpResult, NlpTerm } from "./analysis";
 import { computeGeoScore, EMPTY_GEO_SIGNALS, type GeoScore, type GeoSignals } from "./geo-scoring";
 
 // GEO = simple checklist d'optimisation pour les LLMs, pèse 5 points sur 100.
@@ -251,23 +251,49 @@ export function computeDetailedScore(
     exactBonus,
   };
 
-  // 2. NLP /25 — barème quasi-linéaire, gamification : chaque terme
-  // intégré ajoute des points proportionnels (~0.83 pt par terme sur 30).
-  // Avant : paliers (80%→20/20). Maintenant : score = round(cov × 25).
-  // Encourage l'utilisateur à viser 100% de coverage plutôt que stagner
-  // sur un palier.
-  const top30 = nlp.nlpTerms.slice(0, 30);
-  let used = 0;
-  top30.forEach((t) => {
+  // 2. NLP /25 — split par tier (cohérent avec l'UI brief-view/editor).
+  // Essentiels (presence ≥ 70) : 15 pts linéaire → 100% requis pour le max.
+  // Importants (40 ≤ presence < 70) : 10 pts linéaire.
+  // Opportunités (< 40) ignorées : ce sont des bonus, pas des termes
+  // obligatoires.
+  // Pourquoi le split : avant on faisait round(cov × 25) sur top30 mélangé.
+  // Du coup avec 4/5 essentiels + 18/32 importants (≈60% coverage globale)
+  // on obtenait 15/25 NLP, mais comme keyword/headings/placement
+  // peuvent être à fond ailleurs, le seoTotal grimpait quand même fort
+  // alors qu'il manquait 1 essentiel + 14 importants. Le split punit
+  // proportionnellement chaque tier et reflète l'importance réelle des
+  // termes que l'utilisateur voit dans l'éditeur.
+  const top40 = nlp.nlpTerms.slice(0, 40);
+  const essentials = top40.filter((t) => t.presence >= 70);
+  const importants = top40.filter((t) => t.presence >= 40 && t.presence < 70);
+  const matchTerm = (t: NlpTerm): boolean => {
     if (t.variants && t.variants.length > 0) {
-      if (t.variants.some((v) => lowerNorm.includes(normalize(v)))) used++;
-    } else if (lowerNorm.includes(normalize(t.term))) {
-      used++;
+      return t.variants.some((v) => lowerNorm.includes(normalize(v)));
     }
-  });
-  const cov = top30.length > 0 ? used / top30.length : 0;
-  r.nlpCoverage.score = Math.min(25, Math.round(cov * 25));
-  r.nlpCoverage.details = { used, total: top30.length, coverage: Math.round(cov * 100) };
+    return lowerNorm.includes(normalize(t.term));
+  };
+  const essUsed = essentials.filter(matchTerm).length;
+  const impUsed = importants.filter(matchTerm).length;
+  // Si pas de termes dans le tier, coverage = 1 (rien à plomber).
+  const essCov = essentials.length > 0 ? essUsed / essentials.length : 1;
+  const impCov = importants.length > 0 ? impUsed / importants.length : 1;
+  const essScore = Math.min(15, Math.round(essCov * 15));
+  const impScore = Math.min(10, Math.round(impCov * 10));
+  r.nlpCoverage.score = essScore + impScore;
+  r.nlpCoverage.details = {
+    essentialsUsed: essUsed,
+    essentialsTotal: essentials.length,
+    essentialsCoverage: Math.round(essCov * 100),
+    essentialsScore: essScore,
+    importantsUsed: impUsed,
+    importantsTotal: importants.length,
+    importantsCoverage: Math.round(impCov * 100),
+    importantsScore: impScore,
+    // Champs legacy conservés pour rétro-compat (UI/API consommateurs).
+    used: essUsed + impUsed,
+    total: essentials.length + importants.length,
+    coverage: Math.round(((essCov * 15 + impCov * 10) / 25) * 100),
+  };
 
   // 3. LENGTH /12
   if (wc >= nlp.minWordCount && wc <= nlp.maxWordCount) r.contentLength.score = 12;
