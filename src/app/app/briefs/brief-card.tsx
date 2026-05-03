@@ -28,10 +28,41 @@ export type BriefCardData = {
   kgr: number | null;
   position: number | null;
   workflowStatus: WorkflowStatus;
+  /** Statut de l'analyse async côté backend : pending = encore en queue/crawl,
+   *  ready = analyse terminée et accessible, failed = échec de l'analyse. */
+  analysisStatus?: "pending" | "ready" | "failed";
   tags: TagDTO[];
   author: { id: string; name: string | null; image: string | null } | null;
   folder: { id: string; name: string; website: string | null } | null;
 };
+
+/** Mapping step backend → progression % + label utilisateur. Aligné avec
+ *  LOADING_STEPS du formulaire de création (form.tsx). */
+const PROGRESS_STEPS: Array<{ key: string; pct: number; label: string }> = [
+  { key: "fetching_serp", pct: 15, label: "Récupération SERP" },
+  { key: "crawling", pct: 40, label: "Crawl des concurrents" },
+  { key: "analyzing_nlp", pct: 65, label: "Analyse sémantique" },
+  { key: "scoring", pct: 85, label: "Calcul du score" },
+  { key: "saving", pct: 95, label: "Finalisation" },
+];
+
+function progressFromStep(step: string | null): { pct: number; label: string } {
+  if (!step) return { pct: 5, label: "En attente" };
+  const key = step.split(":")[0];
+  const found = PROGRESS_STEPS.find((s) => s.key === key);
+  if (!found) return { pct: 5, label: "En attente" };
+  // crawling:X/10 → on raffine le label en montrant la progression du crawl
+  if (key === "crawling") {
+    const m = step.match(/:(\d+)\/(\d+)$/);
+    if (m) {
+      const done = Number(m[1]);
+      const total = Number(m[2]);
+      const sub = total > 0 ? Math.round((done / total) * 25) : 0;
+      return { pct: 15 + sub, label: `Crawl ${done}/${total} sites` };
+    }
+  }
+  return { pct: found.pct, label: found.label };
+}
 
 export type FolderOption = {
   id: string;
@@ -64,6 +95,52 @@ export function BriefCard({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const [deleting, startDelete] = useTransition();
+
+  // Progression live pour les briefs encore en cours d'analyse. On poll
+  // /api/briefs/[id]/progress toutes les 2 secondes tant que l'analyse n'est
+  // pas terminée. Quand le brief passe en ready/failed, on rafraîchit la liste
+  // côté serveur (router.refresh) pour récupérer les nouvelles métriques.
+  const isPending = brief.analysisStatus === "pending";
+  const isFailed = brief.analysisStatus === "failed";
+  const [liveStep, setLiveStep] = useState<string | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isPending) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const r = await fetch(`/api/briefs/${brief.id}/progress`, { cache: "no-store" });
+        if (r.ok) {
+          const d = (await r.json()) as {
+            status: "pending" | "ready" | "failed";
+            analysisStep: string | null;
+            errorMessage: string | null;
+          };
+          if (cancelled) return;
+          if (d.status === "ready") {
+            router.refresh();
+            return;
+          }
+          if (d.status === "failed") {
+            setLiveError(d.errorMessage ?? "L'analyse a échoué");
+            router.refresh();
+            return;
+          }
+          setLiveStep(d.analysisStep);
+        }
+      } catch {
+        // retry au prochain tick
+      }
+      timer = setTimeout(tick, 2000);
+    };
+    tick();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [isPending, brief.id, router]);
 
   async function onFolderChange(next: FolderOption | null) {
     const prev = currentFolder;
@@ -134,54 +211,81 @@ export function BriefCard({
       onMouseLeave={() => setHover(false)}
     >
       <div className="grid grid-cols-[56px_1fr_auto] items-center gap-4">
-        <ScoreGauge score={brief.score ?? 0} />
+        {isPending ? (
+          <PendingGauge step={liveStep} />
+        ) : isFailed ? (
+          <FailedGauge />
+        ) : (
+          <ScoreGauge score={brief.score ?? 0} />
+        )}
 
         <div className="min-w-0 flex flex-col gap-[5px]">
-          {/* L1 : titre */}
-          <Link
-            href={`/app/briefs/${brief.id}`}
-            className="font-semibold text-[15px] leading-tight hover:underline truncate block"
-          >
-            {brief.keyword}
-          </Link>
-
-          {/* L2 : meta + métriques sur la même ligne */}
-          <div className="flex items-center gap-[10px] text-[12px] flex-wrap">
-            <FolderPickerInline
-              current={currentFolder}
-              folders={folders}
-              onChange={onFolderChange}
-            />
-            <span className="inline-flex items-center gap-[4px] text-[var(--text-muted)]">
-              <GlobeIcon />
-              {countryLabel}
-            </span>
-            <span className="text-[var(--text-muted)] font-[family-name:var(--font-mono)] text-[11px]">
-              {relativeDate(brief.createdAt)}
-            </span>
-            <span className="w-[1px] h-3 bg-[var(--border)]" />
-            <InlineMetric
-              label="Vol"
-              value={brief.volume != null ? fmtNum(brief.volume) : "—"}
-              tone="default"
-            />
-            <InlineMetric
-              label="KGR"
-              value={brief.kgr != null ? brief.kgr.toFixed(2) : "—"}
-              tone={brief.kgr != null && brief.kgr < 0.25 ? "good" : "default"}
-              tooltip="Keyword Golden Ratio. < 0.25 = opportunité forte."
-            />
-            <InlineMetric
-              label="Pos"
-              value={brief.position != null ? `#${brief.position}` : "—"}
-              tone={positionTone(brief.position) as "good" | "warn" | "bad" | "best" | "muted"}
-              tooltip={
-                brief.folder?.website
-                  ? `Position de ${brief.folder.website} dans Google (top 100).`
-                  : "Rattache un client avec un site pour suivre ta position."
+          {/* L1 : titre. Pas cliquable tant que l'analyse n'est pas terminée. */}
+          {isPending || isFailed ? (
+            <span
+              className="font-semibold text-[15px] leading-tight truncate block text-[var(--text)] cursor-default"
+              title={
+                isPending
+                  ? "Analyse en cours, le brief sera accessible à la fin"
+                  : "Analyse échouée, brief non accessible"
               }
-            />
-          </div>
+            >
+              {brief.keyword}
+            </span>
+          ) : (
+            <Link
+              href={`/app/briefs/${brief.id}`}
+              className="font-semibold text-[15px] leading-tight hover:underline truncate block"
+            >
+              {brief.keyword}
+            </Link>
+          )}
+
+          {/* L2 : meta + métriques (ready) ou barre de progression (pending) */}
+          {isPending ? (
+            <ProgressBar step={liveStep} />
+          ) : isFailed ? (
+            <div className="text-[12px] text-[var(--red)] leading-[1.4]">
+              {liveError ?? "Analyse échouée. Tu peux supprimer ce brief et le relancer."}
+            </div>
+          ) : (
+            <div className="flex items-center gap-[10px] text-[12px] flex-wrap">
+              <FolderPickerInline
+                current={currentFolder}
+                folders={folders}
+                onChange={onFolderChange}
+              />
+              <span className="inline-flex items-center gap-[4px] text-[var(--text-muted)]">
+                <GlobeIcon />
+                {countryLabel}
+              </span>
+              <span className="text-[var(--text-muted)] font-[family-name:var(--font-mono)] text-[11px]">
+                {relativeDate(brief.createdAt)}
+              </span>
+              <span className="w-[1px] h-3 bg-[var(--border)]" />
+              <InlineMetric
+                label="Vol"
+                value={brief.volume != null ? fmtNum(brief.volume) : "—"}
+                tone="default"
+              />
+              <InlineMetric
+                label="KGR"
+                value={brief.kgr != null ? brief.kgr.toFixed(2) : "—"}
+                tone={brief.kgr != null && brief.kgr < 0.25 ? "good" : "default"}
+                tooltip="Keyword Golden Ratio. < 0.25 = opportunité forte."
+              />
+              <InlineMetric
+                label="Pos"
+                value={brief.position != null ? `#${brief.position}` : "—"}
+                tone={positionTone(brief.position) as "good" | "warn" | "bad" | "best" | "muted"}
+                tooltip={
+                  brief.folder?.website
+                    ? `Position de ${brief.folder.website} dans Google (top 100).`
+                    : "Rattache un client avec un site pour suivre ta position."
+                }
+              />
+            </div>
+          )}
 
           {/* L3 : tags */}
           <div className="flex items-center gap-[6px] flex-wrap">
@@ -361,6 +465,81 @@ export function positionTone(position: number | null): PillTone {
 
 function fmtNum(n: number): string {
   return n.toLocaleString("fr-FR");
+}
+
+// ─── Gauge "analyse en cours" : spinner en demi-cercle ────────────────────
+function PendingGauge({ step }: { step: string | null }) {
+  const { pct } = progressFromStep(step);
+  const r = 28;
+  const length = Math.PI * r;
+  const offset = length - (pct / 100) * length;
+  return (
+    <div className="relative w-[64px] h-[44px]" title={`Analyse en cours · ${pct}%`}>
+      <svg viewBox="0 0 64 44" className="w-full h-full">
+        <path
+          d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
+          fill="none"
+          stroke="var(--border)"
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
+        <path
+          d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
+          fill="none"
+          stroke="var(--accent-dark)"
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeDasharray={length}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset .4s ease" }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-end justify-center pb-[1px] font-[family-name:var(--font-mono)] font-semibold text-[12px] text-[var(--accent-dark)]">
+        {pct}%
+      </div>
+    </div>
+  );
+}
+
+function FailedGauge() {
+  const r = 28;
+  const length = Math.PI * r;
+  return (
+    <div className="relative w-[64px] h-[44px]" title="Analyse échouée">
+      <svg viewBox="0 0 64 44" className="w-full h-full">
+        <path
+          d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
+          fill="none"
+          stroke="var(--red)"
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeDasharray={length}
+          strokeDashoffset={0}
+          opacity={0.4}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-end justify-center pb-[1px] font-[family-name:var(--font-mono)] font-semibold text-[14px] text-[var(--red)]">
+        ✕
+      </div>
+    </div>
+  );
+}
+
+function ProgressBar({ step }: { step: string | null }) {
+  const { pct, label } = progressFromStep(step);
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-[6px] bg-[var(--bg-warm)] rounded-full overflow-hidden">
+        <div
+          className="h-full bg-[var(--accent-dark)] rounded-full"
+          style={{ width: `${pct}%`, transition: "width .4s ease" }}
+        />
+      </div>
+      <span className="text-[11px] text-[var(--text-secondary)] font-medium whitespace-nowrap">
+        {label}
+      </span>
+    </div>
+  );
 }
 
 // ─── Score gauge (demi-cercle) ─────────────────────────────────────────────

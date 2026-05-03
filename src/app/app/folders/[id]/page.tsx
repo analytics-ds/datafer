@@ -56,6 +56,7 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
         kgr: brief.kgr,
         position: brief.position,
         workflowStatus: brief.workflowStatus,
+        analysisStatus: brief.status,
       })
       .from(brief)
       .leftJoin(client, eq(client.id, brief.clientId))
@@ -128,6 +129,7 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
             kgr: b.kgr,
             position: b.position,
             workflowStatus: b.workflowStatus as WorkflowStatus,
+            analysisStatus: b.analysisStatus as "pending" | "ready" | "failed",
             tags: tagsByBrief.get(b.id) ?? [],
             folder: b.clientId
               ? { id: b.clientId, name: b.folderName ?? "", website: b.folderWebsite }
