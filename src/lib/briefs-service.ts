@@ -99,7 +99,10 @@ export function htmlToEditorData(html: string): EditorData {
   const h2s = grab("h2");
   const h3s = grab("h3");
   const text = stripTags(html).replace(/\s+/g, " ").trim();
-  return { text, h1s, h2s, h3s };
+  // Compte les <img> du HTML (self-closing inclus). Sert au critère images
+  // du scoring : on compare ce nombre à la médiane des concurrents.
+  const imageCount = (html.match(/<img\b[^>]*>/gi) ?? []).length;
+  return { text, h1s, h2s, h3s, imageCount };
 }
 
 function stripTags(s: string): string {
@@ -376,9 +379,10 @@ async function createBriefAnalysisPayload(
         outline: c.outline,
         text: c.text,
         structuredHtml: c.structuredHtml,
+        imageCount: c.imageCount,
       };
     }
-    return { ...r, wordCount: 0, headings: 0 };
+    return { ...r, wordCount: 0, headings: 0, imageCount: 0 };
   });
   if (pageContents.length < 3) {
     results.forEach((r) => {
@@ -388,6 +392,7 @@ async function createBriefAnalysisPayload(
           h1: [r.title], h2: [], h3: [], outline: [{ level: 1, text: r.title }],
           headings: 1, paragraphs: 1, structuredHtml: "",
           wordCount: (r.title + " " + r.snippet).split(/\s+/).length,
+          imageCount: 0,
         });
       }
     });
@@ -404,7 +409,7 @@ async function createBriefAnalysisPayload(
     const c = crawled[i];
     if (!c || c.wordCount < 50) continue;
     const breakdown = computeDetailedScore(
-      { text: c.text, h1s: c.h1, h2s: c.h2, h3s: c.h3 },
+      { text: c.text, h1s: c.h1, h2s: c.h2, h3s: c.h3, imageCount: c.imageCount },
       nlp,
     );
     // Score concurrent = 95 % SEO + 5 % GEO. Les patterns GEO (table, FAQ,

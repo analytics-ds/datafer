@@ -38,6 +38,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
         h1s: competitor.h1 ?? [],
         h2s: competitor.h2 ?? [],
         h3s: competitor.h3 ?? [],
+        imageCount: competitor.imageCount ?? 0,
       },
       nlp,
     );

@@ -29,6 +29,9 @@ export type SerpResult = {
   // Score SEO /100 du concurrent (même algo que celui appliqué à la rédaction
   // côté éditeur). Calculé une fois au moment de la création du brief.
   score?: number;
+  // Nombre d'images dans le contenu éditorial du concurrent (cap à 30, hors
+  // zones noise). Sert au breakdown détaillé "Images" côté UI compétiteur.
+  imageCount?: number;
   // Texte brut extrait de la page concurrente (sans markup). Persisté dans
   // serpJson uniquement pour les briefs créés à partir de l'API V2 (briefs
   // antérieurs : champ undefined).
@@ -49,6 +52,10 @@ export type PageContent = {
   headings: number;
   paragraphs: number;
   wordCount: number;
+  // Nombre d'images dans le contenu éditorial (hors nav/footer/sidebar/
+  // zones noise). Cap dur à 30 par page pour éviter les outliers e-commerce
+  // (listings produits) qui feraient exploser la médiane concurrentielle.
+  imageCount: number;
   // Reconstitution simple du contenu scrapé en HTML balisé. Conserve
   // l'ordre du document original (H1, P, H2, P, H3, P…) pour qu'on
   // puisse l'afficher en éditeur ou faire des comparaisons concurrentielles.
@@ -198,6 +205,11 @@ export type NlpResult = {
   avgParagraphs: number;
   minWordCount: number;
   maxWordCount: number;
+  // Médiane du nombre d'images chez les concurrents valides du top 10.
+  // Médiane plutôt que moyenne pour résister aux outliers e-commerce
+  // (un listing produits qui pousse la moyenne à 25 alors que la majorité
+  // des concurrents sont à 4-6 images).
+  medianImages: number;
 };
 
 // ─── SERP providers (CrazySerp + SerpAPI) ────────────────────────────────────
@@ -1272,6 +1284,8 @@ export function parseHTML(html: string): PageContent {
 
   let depth = 0;
   const collecting = true;
+  let imageCount = 0;
+  const IMAGE_CAP = 30;
 
   const isMeaningfulParagraph = (t: string): boolean => {
     if (t.length < 25) return false;
@@ -1412,6 +1426,16 @@ export function parseHTML(html: string): PageContent {
           if (currentCell) currentCell.html += "<br>";
           else if (currentParagraph) currentParagraph.html += "<br>";
           return;
+        }
+
+        // Compteur d'images : on ne compte que les <img> dans le contenu
+        // éditorial (les zones noise nav/footer/sidebar/menus sont déjà
+        // sortis plus haut via NOISE_TAGS / NOISE_CLASS_RE). Cap dur à 30
+        // pour neutraliser les listings e-commerce (grilles produits) qui
+        // pourraient remonter 100+ images et tirer la médiane concurrentielle
+        // dans le décor.
+        if (lower === "img" && imageCount < IMAGE_CAP) {
+          imageCount++;
         }
 
         if (lower.match(/^h[1-6]$/)) {
@@ -1598,6 +1622,7 @@ export function parseHTML(html: string): PageContent {
     headings: headings.length,
     paragraphs: pCount || paragraphs.length,
     wordCount,
+    imageCount,
     structuredHtml,
   };
 }
@@ -2044,7 +2069,17 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
   const avg = (arr: PageContent[], fn: (c: PageContent) => number) =>
     arr.length ? Math.round(arr.reduce((s, c) => s + fn(c), 0) / arr.length) : 0;
 
+  const median = (arr: number[]): number => {
+    if (arr.length === 0) return 0;
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0
+      ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+      : sorted[mid];
+  };
+
   const avgWC = avg(valid, (c) => c.wordCount) || 1500;
+  const medImg = median(valid.map((c) => c.imageCount));
   const sections = detectCompetitorSections(valid, kwStems);
   const entities = detectNamedEntities(valid);
   const baseKeywordTerms = computeKeywordTerms(valid, kwLower, kwParts);
@@ -2089,6 +2124,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     avgParagraphs: avg(valid, (c) => c.paragraphs) || 15,
     minWordCount: Math.round(avgWC * 0.7),
     maxWordCount: Math.round(avgWC * 1.3),
+    medianImages: medImg,
   };
 }
 

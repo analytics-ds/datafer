@@ -19,6 +19,7 @@ function makePage(text: string, h1: string[] = [], h2: string[] = []): PageConte
     paragraphs: Math.ceil(wc / 80),
     wordCount: wc,
     structuredHtml: "",
+    imageCount: 0,
   };
 }
 

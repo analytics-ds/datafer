@@ -131,6 +131,10 @@ export type EditorData = {
   h1s: string[];
   h2s: string[];
   h3s: string[];
+  // Nombre d'images insérées dans le contenu rédigé. Compté côté UI (DOM
+  // count des `<img>` dans l'éditeur). 0 par défaut si non fourni — le
+  // critère images vaudra alors 0/3.
+  imageCount?: number;
 };
 
 export type ScoreCriterion = {
@@ -150,6 +154,7 @@ export type DetailedScore = {
   placement: ScoreCriterion;
   structure: ScoreCriterion;
   quality: ScoreCriterion;
+  images: ScoreCriterion;
   geo: GeoScore;
 };
 
@@ -160,10 +165,11 @@ const EMPTY: DetailedScore = {
   keyword: { score: 0, max: 15, details: {} },
   nlpCoverage: { score: 0, max: 25, details: {} },
   contentLength: { score: 0, max: 12, details: {} },
-  headings: { score: 0, max: 18, details: {} },
+  headings: { score: 0, max: 15, details: {} },
   placement: { score: 0, max: 15, details: {} },
-  structure: { score: 0, max: 10, details: {} },
-  quality: { score: 0, max: 10, details: {} },
+  structure: { score: 0, max: 9, details: {} },
+  quality: { score: 0, max: 6, details: {} },
+  images: { score: 0, max: 3, details: {} },
   geo: computeGeoScore(EMPTY_GEO_SIGNALS),
 };
 
@@ -175,11 +181,11 @@ export function computeDetailedScore(
   const geo = computeGeoScore(geoSignals);
   // Pondération SEO sur 100 :
   //   keyword 15 + nlpCoverage 25 + contentLength 12 + headings 15 +
-  //   placement 15 + structure 9 + quality 9 = 100.
-  // nlpCoverage est passé de 20 → 25 le 2026-05-02 (Pierre voulait que la
-  // mécanique "remplir les termes NLP" pèse plus dans le score). En
-  // contrepartie, headings (18→15), structure (10→9), quality (10→9) ont
-  // perdu chacun 1-3 pts.
+  //   placement 15 + structure 9 + quality 6 + images 3 = 100.
+  // Itération 6 (2026-05-03) : ajout du critère images (3 pts). Quality
+  // descend de 9 à 6 pour rester sur 100. Le critère images compare le
+  // nombre d'<img> dans le contenu rédigé à la médiane des concurrents
+  // (`nlp.medianImages`), barème linéaire.
   const r: DetailedScore = {
     total: 0,
     seoTotal: 0,
@@ -190,7 +196,8 @@ export function computeDetailedScore(
     headings: { score: 0, max: 15, details: {} },
     placement: { score: 0, max: 15, details: {} },
     structure: { score: 0, max: 9, details: {} },
-    quality: { score: 0, max: 9, details: {} },
+    quality: { score: 0, max: 6, details: {} },
+    images: { score: 0, max: 3, details: {} },
     geo,
   };
   if (!nlp?.nlpTerms) {
@@ -409,26 +416,51 @@ export function computeDetailedScore(
     r.structure.details = { paragraphs: pC };
   }
 
-  // 7. QUALITY /10
+  // 7. QUALITY /6
+  // Plafond passé de 9 à 6 le 2026-05-03 pour libérer 3 pts au profit du
+  // nouveau critère images. Diversité lexicale + longueur des phrases +
+  // contrôle keyword stuffing restent les 3 sous-axes.
   {
     let s = 0;
     const sents = text.split(/[.!?]+/).filter((x) => x.trim().length > 10);
     const aS = sents.length > 0 ? wc / sents.length : wc;
-    if (aS >= 10 && aS <= 25) s += 3;
+    if (aS >= 10 && aS <= 25) s += 2;
     else if (aS > 5 && aS < 35) s += 1;
     // density est déjà calculé en section keyword ; on le réutilise pour
     // pénaliser le keyword stuffing.
-    if (density <= 3) s += 2;
+    if (density <= 3) s += 1;
     const uniq = new Set(words.map((w) => w.toLowerCase()));
     const div = uniq.size / words.length;
-    if (div >= 0.4) s += 3;
-    else if (div >= 0.3) s += 2;
-    else if (div >= 0.2) s += 1;
+    if (div >= 0.4) s += 2;
+    else if (div >= 0.3) s += 1;
     if (wc >= 300) s += 1;
-    if (wc >= 600) s += 1;
-    // Plafond 9 (avant 10, redistribué vers nlpCoverage le 2026-05-02).
-    r.quality.score = Math.min(9, s);
+    r.quality.score = Math.min(6, s);
     r.quality.details = { diversity: Math.round(div * 100) };
+  }
+
+  // 8. IMAGES /3
+  // Compare le nb d'images du contenu rédigé à la médiane des concurrents.
+  // Cible = médiane (sans pénalité au-dessus, on plafonne à 3 dès qu'on
+  // atteint la médiane). Linéaire en dessous : si médiane=4 et user=2,
+  // score = round(2/4 × 3) = 2/3.
+  // Si la médiane = 0 (cas rare où aucun concurrent n'a d'image dans son
+  // contenu), on neutralise le critère : 3/3 par défaut, pas de pénalité.
+  {
+    const userImg = ed.imageCount ?? 0;
+    const target = nlp.medianImages ?? 0;
+    let s: number;
+    if (target <= 0) {
+      s = 3;
+    } else if (userImg >= target) {
+      s = 3;
+    } else {
+      s = Math.max(0, Math.round((userImg / target) * 3));
+    }
+    r.images.score = s;
+    r.images.details = {
+      count: userImg,
+      target,
+    };
   }
 
   r.seoTotal = Math.min(
@@ -439,7 +471,8 @@ export function computeDetailedScore(
       r.headings.score +
       r.placement.score +
       r.structure.score +
-      r.quality.score,
+      r.quality.score +
+      r.images.score,
   );
   r.total = Math.min(
     100,

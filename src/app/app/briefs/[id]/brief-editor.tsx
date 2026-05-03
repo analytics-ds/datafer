@@ -147,7 +147,7 @@ export function BriefEditor(props: BriefEditorProps) {
 
   const editorRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("editor");
-  const [editorData, setEditorData] = useState({ text: "", h1s: [] as string[], h2s: [] as string[], h3s: [] as string[] });
+  const [editorData, setEditorData] = useState({ text: "", h1s: [] as string[], h2s: [] as string[], h3s: [] as string[], imageCount: 0 });
   const [geoSignals, setGeoSignals] = useState<GeoSignals>(EMPTY_GEO_SIGNALS);
   const [currentTag, setCurrentTag] = useState<"h1" | "h2" | "h3" | "p" | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -168,7 +168,8 @@ export function BriefEditor(props: BriefEditorProps) {
     const h1s = [...el.querySelectorAll("h1")].map((h) => (h.textContent || "").trim()).filter(Boolean);
     const h2s = [...el.querySelectorAll("h2")].map((h) => (h.textContent || "").trim()).filter(Boolean);
     const h3s = [...el.querySelectorAll("h3")].map((h) => (h.textContent || "").trim()).filter(Boolean);
-    setEditorData({ text, h1s, h2s, h3s });
+    const imageCount = el.querySelectorAll("img").length;
+    setEditorData({ text, h1s, h2s, h3s, imageCount });
     setGeoSignals(extractGeoSignals(el));
     updateCurrentTag();
   }, []);
@@ -478,6 +479,7 @@ export function BriefEditor(props: BriefEditorProps) {
             }
             editorH2s={editorData.h2s}
             editorH3s={editorData.h3s}
+            editorImageCount={editorData.imageCount}
             insertTermAtCursor={insertTermAtCursor}
             insertPaaAsH2={insertPaaAsH2}
           />
@@ -584,6 +586,7 @@ function EditorSidebar({
   editorH1HasKw,
   editorH2s,
   editorH3s,
+  editorImageCount,
   insertTermAtCursor,
   insertPaaAsH2,
 }: {
@@ -602,6 +605,7 @@ function EditorSidebar({
   editorH1HasKw: boolean;
   editorH2s: string[];
   editorH3s: string[];
+  editorImageCount: number;
   insertTermAtCursor: (t: string) => void;
   insertPaaAsH2: (q: string) => void;
 }) {
@@ -627,7 +631,15 @@ function EditorSidebar({
     { label: "Structure", s: score.structure, color: "var(--orange)",
       tip: score.structure.score < 6 ? "↑ Découpez en paragraphes plus courts" : "✓ Bonne structure" },
     { label: "Qualité rédac.", s: score.quality, color: "var(--text-secondary)",
-      tip: score.quality.score < 6 ? "↑ Variez le vocabulaire et la longueur des phrases" : "✓ Bonne qualité rédactionnelle" },
+      tip: score.quality.score < 4 ? "↑ Variez le vocabulaire et la longueur des phrases" : "✓ Bonne qualité rédactionnelle" },
+    { label: "Images", s: score.images, color: "var(--blue)",
+      tip: (() => {
+        const target = Number(score.images.details.target ?? 0);
+        const count = Number(score.images.details.count ?? 0);
+        if (target === 0) return "Aucune image attendue (concurrents sans visuels)";
+        if (count >= target) return `✓ ${count} image${count > 1 ? "s" : ""} dans le contenu (cible : ${target})`;
+        return `↑ Ajoutez ${target - count} image${(target - count) > 1 ? "s" : ""} (cible médiane concurrents : ${target})`;
+      })() },
     { label: "GEO (LLMs)", s: { score: score.geo.total, max: 100, details: {} }, color: "var(--purple)",
       tip: score.geo.total < 60
         ? "↑ Ajoutez tableau / FAQ / liste / résumé / chiffre pour citation IA"
@@ -868,7 +880,12 @@ function EditorSidebar({
           <BenchRow label="Plage de mots" value={`${nlp.minWordCount} à ${nlp.maxWordCount}`} />
           <BenchRow label="Moyenne" value={String(nlp.avgWordCount)} />
           <BenchRow label="Titres" value={String(nlp.avgHeadings)} />
-          <BenchRow label="Paragraphes" value={String(nlp.avgParagraphs)} last />
+          <BenchRow label="Paragraphes" value={String(nlp.avgParagraphs)} />
+          <BenchRow
+            label="Images recommandées"
+            value={`${editorImageCount}/${nlp.medianImages ?? 0}`}
+            last
+          />
           {serp.length > 0 && (
             <div className="mt-[10px] pt-[10px] border-t border-[var(--border)]">
               <div className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[6px]">
