@@ -739,6 +739,8 @@ function EditorSidebar({
         kgr={haloscan?.kgr ?? null}
         position={position}
         folderWebsite={folderWebsite}
+        imagesUser={editorImageCount}
+        imagesTarget={nlp?.medianImages ?? 0}
       />
 
       {/* Sub-scores */}
@@ -2026,11 +2028,15 @@ function KeywordStatsRow({
   kgr,
   position,
   folderWebsite,
+  imagesUser,
+  imagesTarget,
 }: {
   volume: number | null;
   kgr: number | null;
   position: number | null;
   folderWebsite: string | null;
+  imagesUser: number;
+  imagesTarget: number;
 }) {
   // Échelle position : top 3 vert foncé, top 10 vert, top 30 orange, au-delà rouge.
   const positionTone =
@@ -2046,9 +2052,19 @@ function KeywordStatsRow({
   // KGR : vert quand opportunité (< 0.25), neutre sinon. Pas de rouge :
   // un KGR élevé est un signal informatif, pas une erreur.
   const kgrTone = kgr != null && kgr < 0.25 ? "good" : "muted";
+  // Images : vert quand on a atteint la cible mediane, orange en dessous,
+  // muted si pas de cible (briefs anciens sans medianImages).
+  const imagesTone: StatTone =
+    imagesTarget <= 0
+      ? "muted"
+      : imagesUser >= imagesTarget
+        ? "good"
+        : imagesUser > 0
+          ? "warn"
+          : "bad";
 
   return (
-    <div className="grid grid-cols-3 gap-2 mb-5">
+    <div className="grid grid-cols-2 gap-2 mb-5">
       <KeyStat
         label="Volume"
         value={volume != null ? volume.toLocaleString("fr-FR") : "N/A"}
@@ -2070,6 +2086,16 @@ function KeywordStatsRow({
             : "Rattache un client avec un site pour suivre ta position."
         }
         tone={positionTone}
+      />
+      <KeyStat
+        label="Images"
+        value={imagesTarget > 0 ? `${imagesUser}/${imagesTarget}` : "—"}
+        tooltip={
+          imagesTarget > 0
+            ? `${imagesUser} image${imagesUser > 1 ? "s" : ""} dans ton contenu, médiane des concurrents : ${imagesTarget}. Atteins la médiane pour 3/3.`
+            : "Pas de médiane disponible (briefs antérieurs à la feature images)."
+        }
+        tone={imagesTone}
       />
     </div>
   );
@@ -2335,6 +2361,14 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             </div>
             <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
               titres
+            </div>
+          </div>
+          <div title="Nombre d'images dans le contenu éditorial (cap à 30 par page)">
+            <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
+              {r.imageCount ?? "N/A"}
+            </div>
+            <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
+              images
             </div>
           </div>
           <button

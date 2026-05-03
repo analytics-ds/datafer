@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief, client, user } from "@/db/schema";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default async function BriefsPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return null;
+  if (!session) redirect("/login");
 
   const db = getDb();
 

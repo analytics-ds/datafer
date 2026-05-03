@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief, client, folderFavorite } from "@/db/schema";
@@ -10,7 +11,7 @@ import { SearchableFolderList } from "./searchable-folder-list";
 
 export default async function FoldersPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return null;
+  if (!session) redirect("/login");
 
   const db = getDb();
   const userId = session.user.id;

@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { client } from "@/db/schema";
@@ -12,7 +13,7 @@ export default async function NewBriefPage({
   searchParams: Promise<{ folder?: string }>;
 }) {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return null;
+  if (!session) redirect("/login");
 
   const { folder: defaultFolderId } = await searchParams;
 

@@ -35,6 +35,21 @@ function buildAuth() {
       disableSignUp: true,
       autoSignIn: true,
     },
+    session: {
+      // 30 jours : on garde l'utilisateur connecté longtemps. Outil interne
+      // datashake, pas de raison d'expirer la session a 7 jours (defaut).
+      expiresIn: 60 * 60 * 24 * 30,
+      // Refresh la session a chaque visite si elle a plus de 1 jour, pour
+      // que l'expiration glisse tant que l'utilisateur reste actif.
+      updateAge: 60 * 60 * 24,
+      // Cache la session 5 min cote worker pour limiter les hits D1 sur
+      // chaque requete. Acceptable : si on revoke une session, l'effet est
+      // visible apres 5 min max.
+      cookieCache: {
+        enabled: true,
+        maxAge: 60 * 5,
+      },
+    },
   });
 }
 

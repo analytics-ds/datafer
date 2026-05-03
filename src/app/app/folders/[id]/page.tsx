@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic";
 export default async function FolderDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return null;
+  if (!session) redirect("/login");
 
   const db = getDb();
   const [row] = await db

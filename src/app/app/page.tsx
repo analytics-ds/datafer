@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { getAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ import type { WorkflowStatus } from "./briefs/workflow-status";
 
 export default async function AppHome() {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return null;
+  if (!session) redirect("/login");
 
   const db = getDb();
   const startOfMonth = Math.floor(new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() / 1000);

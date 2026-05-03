@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { and, eq, isNull } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
@@ -11,7 +12,7 @@ import { ApiKeysForm } from "./api-keys-form";
 
 export default async function SettingsPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return null;
+  if (!session) redirect("/login");
 
   const db = getDb();
   const [me] = await db
