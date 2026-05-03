@@ -14,11 +14,17 @@ export function FolderSelect({
   value,
   onChange,
   name,
+  emptyLabel = "Aucun client",
+  emptyPlaceholder = "Aucun client (commence à taper pour rechercher)",
 }: {
   folders: FolderOption[];
   value: string;
   onChange: (v: string) => void;
   name: string;
+  /** Texte affiché pour la valeur vide (par défaut "Aucun client"). */
+  emptyLabel?: string;
+  /** Placeholder de l'input quand aucune valeur n'est sélectionnée. */
+  emptyPlaceholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -108,7 +114,7 @@ export function FolderSelect({
           }}
           onFocus={onFocus}
           onKeyDown={onKeyDown}
-          placeholder="Aucun client (commence à taper pour rechercher)"
+          placeholder={emptyPlaceholder}
           className="w-full pl-[40px] pr-9 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] outline-none text-[14px] bg-[var(--bg-card)] hover:border-[var(--border-strong)] focus:border-[var(--bg-black)] transition-colors placeholder:text-[var(--text-muted)]"
         />
         <button
@@ -136,7 +142,7 @@ export function FolderSelect({
       {open && (
         <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] shadow-[var(--shadow-lg)] max-h-[260px] overflow-y-auto py-1">
           <Option
-            label="Aucun client"
+            label={emptyLabel}
             selected={!value}
             active={activeIdx === 0}
             muted
