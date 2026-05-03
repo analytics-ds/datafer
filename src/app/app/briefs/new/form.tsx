@@ -83,6 +83,11 @@ function parseKeywords(raw: string): string[] {
   return out;
 }
 
+/** Clé de stockage des URLs : insensible à la casse pour suivre les keywords. */
+function urlKey(kw: string): string {
+  return kw.trim().toLowerCase();
+}
+
 export function NewBriefForm({
   folders,
   defaultFolderId,
@@ -94,7 +99,10 @@ export function NewBriefForm({
   const [keyword, setKeyword] = useState("");
   const [country, setCountry] = useState("fr");
   const [folderId, setFolderId] = useState(defaultFolderId ?? "");
-  const [myUrl, setMyUrl] = useState("");
+  // Stocké par keyword (lowercase) pour résister à un re-render quand
+  // l'utilisateur réordonne ses lignes : tant que le keyword est encore
+  // dans le textarea, on garde son URL.
+  const [urls, setUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
   const [progressLabel, setProgressLabel] = useState<string | null>(null);
@@ -103,7 +111,15 @@ export function NewBriefForm({
   const keywords = parseKeywords(keyword);
   const isBatch = keywords.length > 1;
 
+  function setUrlFor(kw: string, value: string) {
+    setUrls((prev) => ({ ...prev, [urlKey(kw)]: value }));
+  }
+  function getUrlFor(kw: string): string {
+    return urls[urlKey(kw)] ?? "";
+  }
+
   async function submitOne(kw: string): Promise<{ id: string } | { error: string }> {
+    const myUrl = getUrlFor(kw).trim() || null;
     const res = await fetch("/api/briefs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -111,8 +127,7 @@ export function NewBriefForm({
         keyword: kw,
         country,
         folderId: folderId || null,
-        // myUrl ignoré en mode batch : un seul URL ne peut pas correspondre à N keywords
-        myUrl: isBatch ? null : myUrl.trim() || null,
+        myUrl,
       }),
     });
     if (!res.ok) {
@@ -263,19 +278,44 @@ export function NewBriefForm({
         </div>
 
         <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
-          Mon URL existante (optionnel)
+          {isBatch ? "URLs existantes (optionnel, par mot-clé)" : "Mon URL existante (optionnel)"}
         </label>
-        <input
-          type="url"
-          value={myUrl}
-          disabled={isBatch}
-          onChange={(e) => setMyUrl(e.target.value)}
-          placeholder="https://exemple.fr/page-existante"
-          className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-[6px] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)] disabled:opacity-50 disabled:cursor-not-allowed"
-        />
+        {isBatch ? (
+          <div className="flex flex-col gap-[6px] mb-[6px]">
+            {keywords.map((kw) => (
+              <div
+                key={urlKey(kw)}
+                className="flex items-center gap-2 px-3 py-[8px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] bg-[var(--bg-card)] focus-within:border-[var(--bg-black)] transition-colors"
+              >
+                <span
+                  className="text-[12px] font-medium text-[var(--text-secondary)] truncate min-w-[110px] max-w-[180px]"
+                  title={kw}
+                >
+                  {kw}
+                </span>
+                <input
+                  type="url"
+                  value={getUrlFor(kw)}
+                  onChange={(e) => setUrlFor(kw, e.target.value)}
+                  placeholder="https://exemple.fr/page (optionnel)"
+                  className="flex-1 outline-none text-[13px] bg-transparent placeholder:text-[var(--text-muted)]"
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <input
+            type="url"
+            value={keywords[0] ? getUrlFor(keywords[0]) : ""}
+            onChange={(e) => setUrlFor(keywords[0] ?? "", e.target.value)}
+            disabled={keywords.length === 0}
+            placeholder="https://exemple.fr/page-existante"
+            className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-[6px] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)] disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+        )}
         <p className="text-[11px] text-[var(--text-muted)] mb-8">
           {isBatch
-            ? "Désactivé en mode batch (une seule URL ne peut pas correspondre à plusieurs mots-clés)."
+            ? "Pour chaque brief, tu peux coller l'URL existante de la page que tu veux scorer face à la SERP. Laisse vide pour analyser sans page de référence."
             : "Si tu colles une URL, on récupère le contenu pour l'injecter dans l'éditeur et te donner ton score initial face à la SERP."}
         </p>
 
