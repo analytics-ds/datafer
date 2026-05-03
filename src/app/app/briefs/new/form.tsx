@@ -73,9 +73,8 @@ export function NewBriefForm({
   const [mode, setMode] = useState<Mode>("simple");
 
   const [single, setSingle] = useState<BriefInput>(() => emptyRow(defaultFolderId, true));
-  const [rows, setRows] = useState<BriefInput[]>(() =>
-    Array.from({ length: MAX_BATCH }, (_, i) => emptyRow(defaultFolderId, i === 0)),
-  );
+  // Mode bulk : on démarre avec 1 seul row visible, l'utilisateur ajoute via le bouton "+ Ajouter".
+  const [rows, setRows] = useState<BriefInput[]>(() => [emptyRow(defaultFolderId, true)]);
 
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
@@ -89,6 +88,25 @@ export function NewBriefForm({
   }
   function patchRow(i: number, p: Partial<BriefInput>) {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...p } : r)));
+  }
+  function addRow() {
+    setRows((prev) => (prev.length >= MAX_BATCH ? prev : [...prev, emptyRow(defaultFolderId, false)]));
+  }
+  function removeRow(i: number) {
+    setRows((prev) => {
+      if (prev.length <= 1) return prev;
+      const next = prev.filter((_, idx) => idx !== i);
+      // Si on supprime le head, le nouveau head doit recevoir les valeurs par
+      // défaut s'il les avait laissées vides (sinon le bulk part en country="").
+      if (i === 0) {
+        next[0] = {
+          ...next[0],
+          country: next[0].country || "fr",
+          folderId: next[0].folderId || defaultFolderId || "",
+        };
+      }
+      return next;
+    });
   }
 
   async function postOne(input: BriefInput): Promise<{ id: string } | { error: string }> {
@@ -215,7 +233,13 @@ export function NewBriefForm({
             folders={folders}
           />
         ) : (
-          <BulkSection rows={rows} patch={patchRow} folders={folders} />
+          <BulkSection
+            rows={rows}
+            patch={patchRow}
+            folders={folders}
+            onAdd={addRow}
+            onRemove={removeRow}
+          />
         )}
 
         {error && (
@@ -430,12 +454,17 @@ function BulkSection({
   rows,
   patch,
   folders,
+  onAdd,
+  onRemove,
 }: {
   rows: BriefInput[];
   patch: (i: number, p: Partial<BriefInput>) => void;
   folders: FolderOption[];
+  onAdd: () => void;
+  onRemove: (i: number) => void;
 }) {
   const head = rows[0];
+  const canAdd = rows.length < MAX_BATCH;
   return (
     <div className="flex flex-col gap-3 mb-5">
       <div className="flex items-baseline justify-between">
@@ -443,7 +472,9 @@ function BulkSection({
           Briefs à lancer
         </label>
         <span className="text-[11px] text-[var(--text-muted)]">
-          Le pays/client du Brief 1 sert de défaut pour les suivants.
+          {rows.length === 1
+            ? "Ajoute jusqu'à 5 briefs. Pays/client du Brief 1 sert de défaut."
+            : `${rows.length}/${MAX_BATCH} briefs.`}
         </span>
       </div>
       {rows.map((row, i) => (
@@ -453,10 +484,20 @@ function BulkSection({
           row={row}
           head={head}
           patch={(p) => patch(i, p)}
+          onRemove={rows.length > 1 ? () => onRemove(i) : null}
           folders={folders}
-          autoFocus={i === 0}
+          autoFocus={i === 0 && rows.length === 1}
         />
       ))}
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={!canAdd}
+        className="self-start flex items-center gap-2 px-3 py-[7px] text-[12px] font-medium text-[var(--text-secondary)] border border-dashed border-[var(--border-strong)] rounded-[var(--radius-sm)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        <span className="text-[14px] leading-none">+</span>
+        {canAdd ? `Ajouter un brief (${rows.length}/${MAX_BATCH})` : `Maximum ${MAX_BATCH} briefs atteint`}
+      </button>
     </div>
   );
 }
@@ -466,6 +507,7 @@ function BulkRow({
   row,
   head,
   patch,
+  onRemove,
   folders,
   autoFocus,
 }: {
@@ -473,6 +515,7 @@ function BulkRow({
   row: BriefInput;
   head: BriefInput;
   patch: (p: Partial<BriefInput>) => void;
+  onRemove: (() => void) | null;
   folders: FolderOption[];
   autoFocus?: boolean;
 }) {
@@ -510,9 +553,20 @@ function BulkRow({
           autoFocus={autoFocus}
           value={row.keyword}
           onChange={(e) => patch({ keyword: e.target.value })}
-          placeholder={`Mot-clé ${index + 1}${isHead ? " (obligatoire)" : ""}`}
+          placeholder={`Mot-clé${isHead ? " (obligatoire)" : ""}`}
           className="flex-1 px-3 py-[9px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
         />
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`Supprimer le brief ${index + 1}`}
+            title="Supprimer ce brief"
+            className="w-[24px] h-[24px] rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition-colors text-[14px] leading-none shrink-0"
+          >
+            ×
+          </button>
+        )}
       </div>
       <div className="grid grid-cols-[1fr_110px_200px] gap-2 pl-[30px]">
         <input
