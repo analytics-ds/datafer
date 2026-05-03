@@ -65,6 +65,24 @@ function stepProgress(analysisStep: string | null): { done: number; total: numbe
   return { done: Number(m[1]), total: Number(m[2]) };
 }
 
+const MAX_BATCH = 5;
+
+/** Extrait jusqu'à 5 keywords distincts du textarea (1 par ligne). */
+function parseKeywords(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of raw.split("\n")) {
+    const kw = line.trim();
+    if (!kw) continue;
+    const key = kw.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(kw);
+    if (out.length >= MAX_BATCH) break;
+  }
+  return out;
+}
+
 export function NewBriefForm({
   folders,
   defaultFolderId,
@@ -82,12 +100,57 @@ export function NewBriefForm({
   const [progressLabel, setProgressLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const keywords = parseKeywords(keyword);
+  const isBatch = keywords.length > 1;
+
+  async function submitOne(kw: string): Promise<{ id: string } | { error: string }> {
+    const res = await fetch("/api/briefs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        keyword: kw,
+        country,
+        folderId: folderId || null,
+        // myUrl ignoré en mode batch : un seul URL ne peut pas correspondre à N keywords
+        myUrl: isBatch ? null : myUrl.trim() || null,
+      }),
+    });
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      return { error: j.error ?? `Erreur ${res.status}` };
+    }
+    return (await res.json()) as { id: string };
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     setStep(0);
 
+    if (keywords.length === 0) {
+      setError("Renseigne au moins un mot-clé");
+      setLoading(false);
+      return;
+    }
+
+    // Mode batch : créer N briefs en parallèle puis rediriger vers la liste.
+    // L'analyse tourne côté consumer Cloudflare (séquentielle, ~60-90s/brief
+    // car max_batch_size=1) — l'utilisateur voit la liste pour suivre.
+    if (isBatch) {
+      const results = await Promise.all(keywords.map(submitOne));
+      const failed = results.filter((r): r is { error: string } => "error" in r);
+      if (failed.length === results.length) {
+        setError(`Aucun brief n'a été créé : ${failed[0].error}`);
+        setLoading(false);
+        return;
+      }
+      const target = folderId ? `/app/folders/${folderId}` : "/app/briefs";
+      router.push(target);
+      return;
+    }
+
+    // Mode single : comportement historique avec polling de progression.
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
     const stopPolling = () => {
       if (pollTimer) {
@@ -97,26 +160,14 @@ export function NewBriefForm({
     };
 
     try {
-      // 1. POST → renvoie immédiatement l'id (l'analyse tourne en background)
-      const res = await fetch("/api/briefs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          keyword: keyword.trim(),
-          country,
-          folderId: folderId || null,
-          myUrl: myUrl.trim() || null,
-        }),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(j.error ?? `Erreur ${res.status}`);
+      const created = await submitOne(keywords[0]);
+      if ("error" in created) {
+        setError(created.error);
         setLoading(false);
         return;
       }
-      const { id } = (await res.json()) as { id: string };
+      const id = created.id;
 
-      // 2. Poll progress toutes les 1.5s
       const poll = async () => {
         try {
           const r = await fetch(`/api/briefs/${id}/progress`, { cache: "no-store" });
@@ -161,17 +212,24 @@ export function NewBriefForm({
       className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-8 shadow-[var(--shadow-sm)] relative"
     >
       <fieldset disabled={loading} className="contents">
-        <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
-          Mot-clé cible
-        </label>
-        <input
-          type="text"
+        <div className="flex items-baseline justify-between mb-[6px]">
+          <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)]">
+            Mot-clé cible
+          </label>
+          <span className="text-[11px] text-[var(--text-muted)]">
+            {keywords.length === 0
+              ? `1 mot-clé par ligne, jusqu'à ${MAX_BATCH}`
+              : `${keywords.length}/${MAX_BATCH} brief${keywords.length > 1 ? "s" : ""}`}
+          </span>
+        </div>
+        <textarea
           required
           autoFocus
+          rows={Math.max(1, Math.min(MAX_BATCH, keywords.length + 1))}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
-          placeholder="Ex. chaussures de running homme"
-          className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-5 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
+          placeholder={"Ex. chaussures de running homme\nbox repas\nsac à dos vintage"}
+          className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-5 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)] resize-y leading-[1.6]"
         />
 
         <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
@@ -210,12 +268,15 @@ export function NewBriefForm({
         <input
           type="url"
           value={myUrl}
+          disabled={isBatch}
           onChange={(e) => setMyUrl(e.target.value)}
           placeholder="https://exemple.fr/page-existante"
-          className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-[6px] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
+          className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-[6px] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)] disabled:opacity-50 disabled:cursor-not-allowed"
         />
         <p className="text-[11px] text-[var(--text-muted)] mb-8">
-          Si tu colles une URL, on récupère le contenu pour l&apos;injecter dans l&apos;éditeur et te donner ton score initial face à la SERP.
+          {isBatch
+            ? "Désactivé en mode batch (une seule URL ne peut pas correspondre à plusieurs mots-clés)."
+            : "Si tu colles une URL, on récupère le contenu pour l'injecter dans l'éditeur et te donner ton score initial face à la SERP."}
         </p>
 
         {error && (
@@ -226,18 +287,39 @@ export function NewBriefForm({
 
         <button
           type="submit"
-          disabled={loading || !keyword.trim()}
+          disabled={loading || keywords.length === 0}
           className="w-full bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] py-[13px] text-[14px] font-semibold hover:bg-[var(--bg-dark)] disabled:opacity-50 transition-colors"
         >
-          {loading ? "Analyse en cours…" : "Lancer l'analyse →"}
+          {loading
+            ? isBatch
+              ? `Création de ${keywords.length} briefs…`
+              : "Analyse en cours…"
+            : isBatch
+              ? `Lancer ${keywords.length} analyses →`
+              : "Lancer l'analyse →"}
         </button>
 
         <p className="text-[11px] text-[var(--text-muted)] mt-5 text-center">
-          L&apos;analyse prend environ 30-45 secondes (SERP + crawl résidentiel + NLP).
+          {isBatch
+            ? `Les ${keywords.length} briefs seront analysés en file d'attente (~60-90s chacun). Tu peux suivre leur état dans la liste.`
+            : "L'analyse prend environ 30-45 secondes (SERP + crawl résidentiel + NLP)."}
         </p>
       </fieldset>
 
-      {loading && (
+      {loading && isBatch && (
+        <div className="absolute inset-0 bg-[var(--bg-card)]/95 backdrop-blur-sm rounded-[var(--radius)] flex flex-col items-center justify-center gap-5 z-10 p-6">
+          <div className="w-10 h-10 border-[3px] border-[var(--border)] border-t-[var(--bg-black)] rounded-full animate-spin" />
+          <div className="font-[family-name:var(--font-display)] text-[22px] tracking-[-0.3px]">
+            Création de {keywords.length} briefs…
+          </div>
+          <p className="text-[13px] text-[var(--text-muted)] max-w-[340px] text-center">
+            Les briefs sont enfilés dans la queue d&apos;analyse.
+            Tu vas être redirigé vers la liste pour suivre leur progression individuelle.
+          </p>
+        </div>
+      )}
+
+      {loading && !isBatch && (
         <div className="absolute inset-0 bg-[var(--bg-card)]/95 backdrop-blur-sm rounded-[var(--radius)] flex flex-col items-center justify-center gap-5 z-10 p-6">
           <div className="w-10 h-10 border-[3px] border-[var(--border)] border-t-[var(--bg-black)] rounded-full animate-spin" />
           <div className="font-[family-name:var(--font-display)] text-[22px] tracking-[-0.3px]">

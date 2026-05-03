@@ -26,7 +26,7 @@ export default async function NewBriefPage({
     <div className="px-10 py-10 max-w-[720px]">
       <PageHeader
         title={<>Nouveau brief<span className="italic text-[var(--accent-dark)]">.</span></>}
-        subtitle="Renseigne le mot-clé cible et le marché. On analyse les top 10 Google, on extrait le champ sémantique et on te rend un éditeur optimisé en temps réel."
+        subtitle="Renseigne le mot-clé cible et le marché. Tu peux aussi mettre jusqu'à 5 mots-clés, un par ligne, pour lancer un batch d'analyses en file d'attente."
       />
 
       <NewBriefForm folders={folders} defaultFolderId={defaultFolderId} />
