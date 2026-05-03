@@ -7,6 +7,9 @@
  *     queue Cloudflare `datafer-analysis`.
  *   - Ce worker (datafer-analysis-consumer) consomme la queue, run l'analyse
  *     complète (SERP + crawl + NLP + Haloscan + scoring) et update la BDD.
+ *   - Un Cloudflare Cron Trigger (`* * * * *`) appelle aussi ce worker via
+ *     `scheduled()` pour purger les briefs zombies (depuis 2026-05-03 :
+ *     remplace le cron GH Actions trop flaky).
  *
  * Pourquoi un worker séparé du Next.js : isole le budget CPU/wall time.
  * Un brief sur SERP e-commerce lourde peut prendre 30-60s CPU + 60-90s wall.
@@ -16,6 +19,7 @@
  */
 
 import { completeBriefAnalysis } from "@/lib/briefs-service";
+import { cleanupStuckBriefs } from "@/lib/cleanup-stuck";
 import type { DataferEnv, AnalysisMessage } from "@/lib/datafer-env";
 
 export default {
@@ -34,6 +38,20 @@ export default {
         console.error("[analysis-consumer] uncaught error", { briefId, err: String(err) });
         msg.retry();
       }
+    }
+  },
+
+  /**
+   * Trigger Cloudflare Cron natif (cf. wrangler-analysis.toml [triggers]).
+   * Tourne toutes les minutes et purge les briefs `pending` au-delà de 2 min
+   * en `failed`. Source de vérité du cleanup (GH Actions reste en backup).
+   */
+  async scheduled(_controller: ScheduledController, env: DataferEnv): Promise<void> {
+    try {
+      const res = await cleanupStuckBriefs(env.DB as D1Database);
+      console.log("[analysis-consumer:cron] cleanup", res);
+    } catch (err) {
+      console.error("[analysis-consumer:cron] cleanup failed", { err: String(err) });
     }
   },
 };

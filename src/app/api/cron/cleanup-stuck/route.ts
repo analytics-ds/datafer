@@ -1,27 +1,25 @@
 import { NextResponse } from "next/server";
-import { and, eq, lt } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { getDb } from "@/db";
-import { brief } from "@/db/schema";
+import { cleanupStuckBriefs } from "@/lib/cleanup-stuck";
 
 export const dynamic = "force-dynamic";
 
-// Briefs en `pending` depuis plus de 2 minutes : on les force en `failed`.
-// ANALYSIS_DEADLINE_MS côté consumer = 90s, donc 2 min laisse 30s de marge
-// avant qu'on considère un brief comme zombie. Combiné avec un cron qui
-// tourne toutes les 1 min côté GH Actions, le worst-case d'attente côté
-// user passe de 8 min (cron 5 + seuil 3) à 3 min.
-const STUCK_THRESHOLD_MS = 2 * 60 * 1000;
-
+/**
+ * Endpoint HTTP de backup pour le cleanup, appelé par GH Actions cron.
+ * Source primaire depuis le 2026-05-03 : Cloudflare Cron Trigger natif sur
+ * le worker `datafer-analysis-consumer` (cf. wrangler-analysis.toml). GH
+ * Actions reste en backup au cas où le cron natif aurait un souci, mais sa
+ * latence est trop variable (~50-60min en pratique malgré "* * * * *") pour
+ * être la source primaire.
+ */
 export async function POST(req: Request) {
-  // Auth via Bearer = secret CRON_SECRET. On compare en constant-time pour
-  // éviter les timing attacks (faible enjeu mais c'est gratuit).
   const { env } = getCloudflareContext();
-  const e = env as unknown as Record<string, string | undefined>;
+  const e = env as unknown as Record<string, string | undefined> & { DB?: D1Database };
   const expected = e.CRON_SECRET;
   if (!expected) {
     return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
   }
+  // Auth Bearer en constant-time compare (faible enjeu mais c'est gratuit).
   const authHeader = req.headers.get("authorization") ?? "";
   const provided = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
   if (!provided || provided.length !== expected.length) {
@@ -35,34 +33,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const cutoff = new Date(Date.now() - STUCK_THRESHOLD_MS);
-  const db = getDb();
-  const stuck = await db
-    .select({ id: brief.id, keyword: brief.keyword, createdAt: brief.createdAt })
-    .from(brief)
-    .where(and(eq(brief.status, "pending"), lt(brief.createdAt, cutoff)));
-
-  if (stuck.length === 0) {
-    return NextResponse.json({ ok: true, cleaned: 0, ids: [] });
+  if (!e.DB) {
+    return NextResponse.json({ error: "DB binding missing" }, { status: 500 });
   }
-
-  await db
-    .update(brief)
-    .set({
-      status: "failed",
-      errorMessage: "analysis timed out (worker crashed before status update)",
-      updatedAt: new Date(),
-    })
-    .where(and(eq(brief.status, "pending"), lt(brief.createdAt, cutoff)));
-
-  console.log("[cron-cleanup] forced failed", {
-    count: stuck.length,
-    ids: stuck.map((s) => s.id),
-  });
-
-  return NextResponse.json({
-    ok: true,
-    cleaned: stuck.length,
-    ids: stuck.map((s) => ({ id: s.id, keyword: s.keyword, createdAt: s.createdAt })),
-  });
+  const result = await cleanupStuckBriefs(e.DB);
+  return NextResponse.json({ ok: true, ...result });
 }

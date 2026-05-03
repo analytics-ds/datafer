@@ -34,6 +34,13 @@ dead_letter_queue = "datafer-analysis-dlq"
 [vars]
 SERP_PROVIDER = "crazyserp"
 
+# Cron natif Cloudflare : tourne toutes les minutes pour purger les briefs
+# `pending` au-delà de 2 min. Remplace le cron GH Actions trop flaky
+# (latence reelle ~50-60min). GH Actions est gardé en backup mais Cloudflare
+# Cron Triggers est désormais la source primaire du cleanup.
+[triggers]
+crons = ["* * * * *"]
+
 # Secrets à set via :
 #   wrangler secret put <NAME> --config wrangler-analysis.toml
 #
