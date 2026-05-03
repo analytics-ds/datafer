@@ -6,6 +6,7 @@ import { brief, client } from "@/db/schema";
 import type { DataferEnv } from "@/lib/datafer-env";
 import {
   fetchSerp,
+  fetchCrazyserpTop100,
   fetchHaloscan,
   fetchHaloscanQuestions,
   fetchAllintitleCount,
@@ -429,7 +430,35 @@ async function createBriefAnalysisPayload(
       if (volume && volume > 0) kgr = Math.round((fallbackAllintitle / volume) * 1000) / 1000;
     }
   }
-  const position = findDomainPosition(allResults, folderWebsite);
+  let position = findDomainPosition(allResults, folderWebsite);
+  // Si le client a un site mais qu'on ne le trouve pas dans le top 10/17 servi
+  // par CrazySerp page=1+2, on déclenche un appel page=10 (top 100, 10 crédits
+  // FR) pour chercher la position au-delà. Pas fait pour SerpAPI : son fetch
+  // par défaut renvoie déjà le top 100.
+  if (
+    folderWebsite &&
+    position == null &&
+    provider === "crazyserp" &&
+    env.CRAZYSERP_KEY
+  ) {
+    console.log("[brief] client absent du top 10, recherche top 100 via CrazySerp page=10", {
+      keyword,
+      folderWebsite,
+    });
+    const extended = await fetchCrazyserpTop100(
+      keyword,
+      country,
+      env.CRAZYSERP_KEY,
+      env.CRAZYSERP_KEY_FALLBACK,
+    );
+    if (extended.length > allResults.length) {
+      position = findDomainPosition(extended, folderWebsite);
+      console.log("[brief] résultat top 100", {
+        position,
+        scannedResults: extended.length,
+      });
+    }
+  }
 
   const finalPaa = paa;
   if (haloscanKey && finalPaa.length < 5) {

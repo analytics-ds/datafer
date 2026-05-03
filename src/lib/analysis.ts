@@ -378,6 +378,34 @@ async function fetchSerpFromCrazyserp(
   return { results, allResults, paa };
 }
 
+/**
+ * Top 100 CrazySerp via `page=10` (cumulatif, 10 crédits).
+ * À n'utiliser que quand `findDomainPosition` a renvoyé null sur le top 10/17
+ * et qu'on a un site client à matcher : sinon on paie 10 crédits pour rien.
+ * Bascule sur la clé fallback en cas d'échec primaire.
+ */
+export async function fetchCrazyserpTop100(
+  keyword: string,
+  country: string,
+  apiKey: string,
+  apiKeyFallback?: string,
+): Promise<SerpResult[]> {
+  let extended = await fetchCrazyserpPage(keyword, country, apiKey, 10);
+  if (!extended && apiKeyFallback) {
+    console.log("[crazyserp] top100 primary key failed, trying fallback");
+    extended = await fetchCrazyserpPage(keyword, country, apiKeyFallback, 10);
+  }
+  if (!extended) return [];
+  const organic = extended.parsed_data?.organic ?? [];
+  return organic.map((r, i) => ({
+    position: r.position ?? i + 1,
+    title: r.title ?? "",
+    link: r.url ?? "",
+    snippet: r.description ?? "",
+    displayed_link: r.url_title ?? r.url ?? "",
+  }));
+}
+
 // ─── SerpAPI (fallback) ──────────────────────────────────────────────────────
 
 type SerpApiRaw = {
