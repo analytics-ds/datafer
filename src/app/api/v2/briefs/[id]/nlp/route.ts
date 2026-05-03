@@ -34,6 +34,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       avgParagraphs: nlp.avgParagraphs,
       minWordCount: nlp.minWordCount,
       maxWordCount: nlp.maxWordCount,
+      medianImages: nlp.medianImages,
     },
   });
 }

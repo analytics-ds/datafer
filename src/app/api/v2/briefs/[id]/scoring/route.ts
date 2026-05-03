@@ -37,6 +37,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       placement: breakdown.placement,
       structure: breakdown.structure,
       quality: breakdown.quality,
+      images: breakdown.images,
       geo: breakdown.geo,
     },
     competitors: computeCompetitorStats(row.serpJson),
