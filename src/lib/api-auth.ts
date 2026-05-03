@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { and, eq, isNull } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { apiKey } from "@/db/schema";
+import { apiKey, user as userTable } from "@/db/schema";
 
 const PREFIX = "dfk_";
 
@@ -32,15 +32,20 @@ export async function resolveUser(req: Request): Promise<AuthedUser | null> {
     const hash = await sha256(raw);
     const db = getDb();
     const [row] = await db
-      .select({ id: apiKey.id, userId: apiKey.userId })
+      .select({
+        id: apiKey.id,
+        userId: apiKey.userId,
+        email: userTable.email,
+      })
       .from(apiKey)
+      .innerJoin(userTable, eq(userTable.id, apiKey.userId))
       .where(and(eq(apiKey.keyHash, hash), isNull(apiKey.revokedAt)))
       .limit(1);
     if (!row) return null;
     try {
       await db.update(apiKey).set({ lastUsedAt: new Date() }).where(eq(apiKey.id, row.id));
     } catch {}
-    return { id: row.userId, email: "" };
+    return { id: row.userId, email: row.email };
   }
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) return null;

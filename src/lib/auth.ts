@@ -8,6 +8,15 @@ function buildAuth() {
   const { env } = getCloudflareContext();
   const db = drizzle(env.DB as D1Database, { schema });
 
+  // Fail-fast : sans secret, better-auth peut accepter une chaîne vide et
+  // signer des sessions avec une clé prévisible. Préférable de cracher au
+  // boot que de tourner avec une auth compromise. Rappel : le secret doit
+  // être set sur le worker `datafer` ET sur `datafer-analysis-consumer`.
+  const secret = (env as { BETTER_AUTH_SECRET?: string }).BETTER_AUTH_SECRET;
+  if (!secret) {
+    throw new Error("BETTER_AUTH_SECRET missing — set it via `wrangler secret put BETTER_AUTH_SECRET`");
+  }
+
   return betterAuth({
     database: drizzleAdapter(db, {
       provider: "sqlite",
@@ -18,7 +27,7 @@ function buildAuth() {
         verification: schema.verification,
       },
     }),
-    secret: (env as { BETTER_AUTH_SECRET?: string }).BETTER_AUTH_SECRET,
+    secret,
     baseURL: (env as { BETTER_AUTH_URL?: string }).BETTER_AUTH_URL,
     emailAndPassword: {
       enabled: true,

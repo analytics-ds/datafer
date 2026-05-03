@@ -5,7 +5,130 @@
  * Pas de sidebar SERP / NLP / score, ce sont des données internes.
  */
 
+import { Parser } from "htmlparser2";
+
 const SAFE_FILENAME_RE = /[^a-z0-9-_]/gi;
+
+// Whitelist stricte : ces tags sont rendus, tous les autres voient leur
+// contenu textuel conservé mais leurs balises supprimées (script/style
+// = contenu drop aussi, cf. VOID_DROP_CONTENT).
+const ALLOWED_TAGS = new Set([
+  "h1", "h2", "h3", "h4", "h5", "h6",
+  "p", "br", "hr",
+  "ul", "ol", "li",
+  "strong", "b", "em", "i", "u", "s", "sub", "sup",
+  "blockquote", "code", "pre",
+  "a",
+  "table", "thead", "tbody", "tfoot", "tr", "td", "th",
+  "span", "div",
+]);
+
+// Tags dont le contenu doit être supprimé entièrement (pas seulement les
+// balises). Sinon `<script>alert(1)</script>` produirait `alert(1)` en
+// texte brut, ce qui est inoffensif mais salit le rendu.
+const DROP_CONTENT_TAGS = new Set([
+  "script", "style", "iframe", "object", "embed", "noscript", "template",
+]);
+
+// Attributs autorisés par tag. Tout ce qui n'est pas listé est supprimé
+// (notamment tous les handlers `on*`, `style`, `class` arbitraire, etc).
+const ALLOWED_ATTRS: Record<string, Set<string>> = {
+  a: new Set(["href", "title", "target", "rel"]),
+  th: new Set(["colspan", "rowspan", "scope"]),
+  td: new Set(["colspan", "rowspan"]),
+};
+
+const SAFE_URL_RE = /^(https?:|mailto:|tel:|\/|#)/i;
+
+function isSafeUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  return SAFE_URL_RE.test(trimmed);
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function escapeText(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Sanitise un fragment HTML provenant de l'éditeur WYSIWYG avant
+ * insertion dans un document HTML/print partagé publiquement.
+ *
+ * - Whitelist de tags (cf. ALLOWED_TAGS) : les autres balises sont
+ *   strippées, leur contenu textuel conservé.
+ * - Whitelist d'attributs par tag (cf. ALLOWED_ATTRS) : tout le reste
+ *   (handlers on*, style, etc.) est supprimé.
+ * - Contenu des tags dangereux (script/style/iframe...) entièrement
+ *   supprimé.
+ * - href : on laisse passer http(s)://, mailto:, tel:, relatif, ancre.
+ *   javascript:, data: et compagnie sont remplacés par "#".
+ *
+ * Garanti sans accès DOM, donc compatible Cloudflare Workers.
+ */
+export function sanitizeHtml(input: string): string {
+  if (!input) return "";
+  const out: string[] = [];
+  let dropDepth = 0;
+
+  const parser = new Parser(
+    {
+      onopentag(name, attribs) {
+        const tag = name.toLowerCase();
+        if (DROP_CONTENT_TAGS.has(tag)) {
+          dropDepth++;
+          return;
+        }
+        if (dropDepth > 0) return;
+        if (!ALLOWED_TAGS.has(tag)) return;
+
+        const allowedForTag = ALLOWED_ATTRS[tag];
+        const parts: string[] = [tag];
+        if (allowedForTag) {
+          for (const [rawKey, rawValue] of Object.entries(attribs)) {
+            const key = rawKey.toLowerCase();
+            if (!allowedForTag.has(key)) continue;
+            let value = rawValue ?? "";
+            if (key === "href") {
+              if (!isSafeUrl(value)) value = "#";
+            }
+            if (tag === "a" && key === "target" && value !== "_blank") continue;
+            if (tag === "a" && key === "rel") {
+              value = value.replace(/[^a-z0-9 _-]/gi, "");
+            }
+            parts.push(`${key}="${escapeAttr(value)}"`);
+          }
+          if (tag === "a" && attribs.target === "_blank" && !attribs.rel) {
+            parts.push('rel="noopener noreferrer"');
+          }
+        }
+        out.push(`<${parts.join(" ")}>`);
+      },
+      ontext(text) {
+        if (dropDepth > 0) return;
+        out.push(escapeText(text));
+      },
+      onclosetag(name) {
+        const tag = name.toLowerCase();
+        if (DROP_CONTENT_TAGS.has(tag)) {
+          if (dropDepth > 0) dropDepth--;
+          return;
+        }
+        if (dropDepth > 0) return;
+        if (!ALLOWED_TAGS.has(tag)) return;
+        if (tag === "br" || tag === "hr") return;
+        out.push(`</${tag}>`);
+      },
+    },
+    { decodeEntities: true, lowerCaseTags: true, lowerCaseAttributeNames: true },
+  );
+  parser.write(input);
+  parser.end();
+  return out.join("");
+}
 
 export function safeFilename(keyword: string): string {
   const slug = keyword
@@ -25,7 +148,8 @@ export function safeFilename(keyword: string): string {
  */
 export function renderHtmlDocument(keyword: string, bodyHtml: string): string {
   const title = escapeHtml(keyword);
-  const body = bodyHtml || "<p><em>Contenu vide.</em></p>";
+  const safe = sanitizeHtml(bodyHtml);
+  const body = safe || "<p><em>Contenu vide.</em></p>";
   return `<!doctype html>
 <html lang="fr">
 <head>
@@ -58,7 +182,8 @@ ${body}
  */
 export function renderPrintDocument(keyword: string, bodyHtml: string): string {
   const title = escapeHtml(keyword);
-  const body = bodyHtml || "<p><em>Contenu vide.</em></p>";
+  const safe = sanitizeHtml(bodyHtml);
+  const body = safe || "<p><em>Contenu vide.</em></p>";
   return `<!doctype html>
 <html lang="fr">
 <head>

@@ -224,9 +224,13 @@ export async function completeBriefAnalysis(
       await db
         .update(brief)
         .set({ status: "failed", errorMessage: res.error, updatedAt: new Date() })
-        .where(eq(brief.id, briefId));
+        .where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
       return;
     }
+    // Filtrer sur status="pending" : si le cron cleanup-stuck a déjà
+    // basculé le brief en "failed" pendant qu'on calculait le payload,
+    // on ne veut pas écraser cet état avec un "ready" tardif (le user
+    // aurait vu un échec puis un succès qui apparaît comme par magie).
     await db
       .update(brief)
       .set({
@@ -247,13 +251,13 @@ export async function completeBriefAnalysis(
         errorMessage: null,
         updatedAt: new Date(),
       })
-      .where(eq(brief.id, briefId));
+      .where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown error";
     await db
       .update(brief)
       .set({ status: "failed", errorMessage: msg.slice(0, 500), updatedAt: new Date() })
-      .where(eq(brief.id, briefId));
+      .where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
   }
 }
 
