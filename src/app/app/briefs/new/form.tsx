@@ -350,8 +350,8 @@ function ModeToggle({
     <div className="flex gap-1 p-[3px] bg-[var(--bg-warm)] rounded-[var(--radius-sm)] mb-6 w-fit">
       {(
         [
-          { value: "simple", label: "1 brief" },
-          { value: "bulk", label: `Batch (jusqu'à ${MAX_BATCH})` },
+          { value: "simple", label: "Brief" },
+          { value: "bulk", label: "Batch" },
         ] as const
       ).map((opt) => (
         <button
