@@ -2101,30 +2101,36 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
 
       // Citations d'exemple : pour chaque concurrent (URL distincte), on garde
       // la phrase la plus lisible (≈ la plus courte) qui contient le terme.
-      // Match en frontière de mot strict via `sentenceMatchesAnyTerm` pour
-      // éviter "test" → "testeur". Pour les unigrammes on autorise aussi les
-      // variantes morphologiques (collectées dans `surfaceForms`).
-      const matchPatterns = isNgram
-        ? [displayTerm.toLowerCase()]
-        : Array.from(
-            new Set(
-              [displayTerm.toLowerCase(), ...((variants ?? []).map((v) => v.toLowerCase()))]
-                .filter((v) => v && v.length >= 2),
-            ),
-          );
-      const byUrl: Record<string, { url: string; sentence: string }> = {};
-      const SEEN_URLS_TARGET = 10;
-      for (const item of allSentences) {
-        if (!sentenceMatchesAnyTerm(item.sentence, matchPatterns)) continue;
-        const existing = byUrl[item.url];
-        if (!existing || item.sentence.length < existing.sentence.length) {
-          byUrl[item.url] = item;
+      // Pré-filtre CPU : on ne calcule les citations QUE pour les termes qui
+      // passeront le filtre downstream (df ≥ 2 && presence ≥ 25%). Sans ça,
+      // sur 5000+ termes bruts × 240 phrases on dépasse le budget CPU du
+      // consumer. Match en frontière de mot strict via
+      // `sentenceMatchesAnyTerm` pour éviter "test" → "testeur".
+      let sentences: Array<{ url: string; sentence: string }> | undefined;
+      if (df >= 2 && presence >= 0.25) {
+        const matchPatterns = isNgram
+          ? [displayTerm.toLowerCase()]
+          : Array.from(
+              new Set(
+                [displayTerm.toLowerCase(), ...((variants ?? []).map((v) => v.toLowerCase()))]
+                  .filter((v) => v && v.length >= 2),
+              ),
+            );
+        const byUrl: Record<string, { url: string; sentence: string }> = {};
+        const SEEN_URLS_TARGET = 10;
+        for (const item of allSentences) {
+          if (!sentenceMatchesAnyTerm(item.sentence, matchPatterns)) continue;
+          const existing = byUrl[item.url];
+          if (!existing || item.sentence.length < existing.sentence.length) {
+            byUrl[item.url] = item;
+          }
+          if (Object.keys(byUrl).length >= SEEN_URLS_TARGET) break;
         }
-        if (Object.keys(byUrl).length >= SEEN_URLS_TARGET) break;
+        const picked = Object.values(byUrl)
+          .sort((a, b) => a.sentence.length - b.sentence.length)
+          .slice(0, SEEN_URLS_TARGET);
+        if (picked.length > 0) sentences = picked;
       }
-      const sentences = Object.values(byUrl)
-        .sort((a, b) => a.sentence.length - b.sentence.length)
-        .slice(0, SEEN_URLS_TARGET);
 
       return {
         term: displayTerm,
@@ -2136,7 +2142,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
         minCount,
         maxCount,
         avgCount,
-        sentences: sentences.length > 0 ? sentences : undefined,
+        sentences,
         // Clé interne pour le filtre (stem pour les unigrammes, n-gram sinon)
         _key: key,
       };
