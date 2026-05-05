@@ -15,7 +15,11 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
 import { brief } from "@/db/schema";
 
-const STUCK_THRESHOLD_MS = 2 * 60 * 1000;
+// 15 min : marge confortable pour un bulk de 5 briefs (jusqu'à ~5 min de
+// queue séquentielle) + un brief lourd (1-2 min en pire cas). Trade-off
+// assumé : un worker qui crashe vraiment laissera son brief visible
+// `pending` jusqu'à 15 min côté UI avant qu'on le marque `failed`.
+const STUCK_THRESHOLD_MS = 15 * 60 * 1000;
 
 export type CleanupResult = {
   cleaned: number;
