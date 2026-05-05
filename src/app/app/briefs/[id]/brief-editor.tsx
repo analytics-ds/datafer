@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type {
   NlpResult,
   NlpTerm,
@@ -1296,35 +1297,356 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
                 : { background: bg, borderColor: border, color };
 
           return (
-            <button
+            <KeywordChip
               key={k.term}
-              onClick={() => onInsert(k.term)}
-              title={
-                hasRange
-                  ? `Fourchette concurrents : ${k.minCount}-${k.maxCount} occurrences (moyenne ${k.avgCount}). Actuel : ${currentCount}.`
-                  : "Cliquer pour insérer"
-              }
-              className="inline-flex items-center gap-[5px] px-[10px] py-[4px] rounded-full text-[11px] font-medium border hover:scale-[1.03] transition-transform"
+              term={k.term}
+              variants={k.variants}
+              sentences={k.sentences}
               style={style}
-            >
-              {k.term}
-              {rangeLabel && (
-                <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
-                  {currentCount > 0 ? `${currentCount}/${rangeLabel}` : rangeLabel}
-                  {hasTarget && k.minCount !== k.maxCount && (
-                    <span className="opacity-60"> (~{k.avgCount})</span>
-                  )}
-                </span>
-              )}
-              {!rangeLabel && currentCount > 0 && (
-                <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
-                  {currentCount}
-                </span>
-              )}
-            </button>
+              onInsert={onInsert}
+              currentCount={currentCount}
+              rangeLabel={rangeLabel}
+              hasTarget={hasTarget}
+              minCount={k.minCount}
+              maxCount={k.maxCount}
+              avgCount={k.avgCount}
+            />
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ─── Popover citations NLP au survol d'un chip ───────────────────────────
+type Citation = { url: string; sentence: string };
+
+function normalizeCitations(
+  raw: NlpTerm["sentences"] | string[] | undefined,
+): Citation[] {
+  if (!raw || raw.length === 0) return [];
+  return raw.map((s) =>
+    typeof s === "string" ? { url: "", sentence: s } : s,
+  );
+}
+
+function hostFromUrl(url: string): string {
+  if (!url) return "";
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+// Surligne le terme (et ses variantes morpho) dans la phrase. Match en
+// frontière de mot pour éviter les sous-chaînes parasites ("test" ne doit
+// pas surligner "test" à l'intérieur de "testeur").
+function highlightTerm(
+  sentence: string,
+  patterns: string[],
+): React.ReactNode {
+  if (patterns.length === 0) return sentence;
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const cleaned = patterns
+    .map((p) => p.toLowerCase().trim())
+    .filter((p) => p.length > 0);
+  if (cleaned.length === 0) return sentence;
+  let rx: RegExp;
+  try {
+    rx = new RegExp(
+      `(?<![\\p{L}\\p{N}])(?:${cleaned.map(escape).join("|")})(?![\\p{L}\\p{N}])`,
+      "giu",
+    );
+  } catch {
+    return sentence;
+  }
+  type Range = { start: number; end: number };
+  const ranges: Range[] = [];
+  for (const m of sentence.matchAll(rx)) {
+    if (m.index == null) continue;
+    ranges.push({ start: m.index, end: m.index + m[0].length });
+  }
+  if (ranges.length === 0) return sentence;
+  ranges.sort((a, b) => a.start - b.start);
+  const merged: Range[] = [];
+  for (const r of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end) {
+      last.end = Math.max(last.end, r.end);
+    } else {
+      merged.push({ ...r });
+    }
+  }
+  const out: React.ReactNode[] = [];
+  let cursor = 0;
+  merged.forEach((r, i) => {
+    if (cursor < r.start) out.push(sentence.slice(cursor, r.start));
+    out.push(
+      <mark
+        key={i}
+        className="bg-[var(--orange-bg)] text-[var(--text)] font-semibold rounded-[2px] px-[2px]"
+      >
+        {sentence.slice(r.start, r.end)}
+      </mark>,
+    );
+    cursor = r.end;
+  });
+  if (cursor < sentence.length) out.push(sentence.slice(cursor));
+  return out;
+}
+
+// Chip d'un terme NLP : clic = insertion dans l'éditeur, hover = popover qui
+// liste les citations chez les concurrents (URL + phrase) avec navigation
+// prev / next. Le popover est rendu en portail pour ne pas être tronqué par
+// l'overflow du sidebar. Délai 280 ms à l'ouverture pour éviter le flicker
+// quand la souris traverse plusieurs chips.
+function KeywordChip({
+  term,
+  variants,
+  sentences,
+  style,
+  onInsert,
+  currentCount,
+  rangeLabel,
+  hasTarget,
+  minCount,
+  maxCount,
+  avgCount,
+}: {
+  term: string;
+  variants?: string[];
+  sentences?: NlpTerm["sentences"];
+  style: React.CSSProperties;
+  onInsert: (term: string) => void;
+  currentCount: number;
+  rangeLabel: string | null;
+  hasTarget: boolean;
+  minCount: number;
+  maxCount: number;
+  avgCount: number;
+}) {
+  const cites = useMemo(() => normalizeCitations(sentences), [sentences]);
+  const hasCites = cites.length > 0;
+  const matchPatterns = useMemo(
+    () =>
+      term.includes(" ")
+        ? [term]
+        : [term, ...((variants ?? []).filter((v) => v && v !== term))],
+    [term, variants],
+  );
+
+  const [open, setOpen] = useState(false);
+  const [idx, setIdx] = useState(0);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+
+  const cancelClose = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+  const cancelOpen = () => {
+    if (openTimer.current) {
+      clearTimeout(openTimer.current);
+      openTimer.current = null;
+    }
+  };
+  const scheduleClose = () => {
+    cancelClose();
+    cancelOpen();
+    closeTimer.current = setTimeout(() => setOpen(false), 140);
+  };
+
+  if (!hasCites) {
+    return (
+      <button
+        onClick={() => onInsert(term)}
+        className="inline-flex items-center gap-[5px] px-[10px] py-[4px] rounded-full text-[11px] font-medium border hover:scale-[1.03] transition-transform"
+        style={style}
+      >
+        {term}
+        {rangeLabel && (
+          <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+            {currentCount > 0 ? `${currentCount}/${rangeLabel}` : rangeLabel}
+            {hasTarget && minCount !== maxCount && (
+              <span className="opacity-60"> (~{avgCount})</span>
+            )}
+          </span>
+        )}
+        {!rangeLabel && currentCount > 0 && (
+          <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+            {currentCount}
+          </span>
+        )}
+      </button>
+    );
+  }
+
+  const onEnter = () => {
+    cancelClose();
+    cancelOpen();
+    openTimer.current = setTimeout(() => {
+      if (btnRef.current) {
+        setAnchorRect(btnRef.current.getBoundingClientRect());
+      }
+      setIdx(0);
+      setOpen(true);
+    }, 280);
+  };
+
+  const cite = cites[idx] ?? cites[0];
+  const host = hostFromUrl(cite.url);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={() => onInsert(term)}
+        onMouseEnter={onEnter}
+        onMouseLeave={scheduleClose}
+        onFocus={onEnter}
+        onBlur={scheduleClose}
+        className="inline-flex items-center gap-[5px] px-[10px] py-[4px] rounded-full text-[11px] font-medium border hover:scale-[1.03] transition-transform"
+        style={style}
+      >
+        {term}
+        {rangeLabel && (
+          <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+            {currentCount > 0 ? `${currentCount}/${rangeLabel}` : rangeLabel}
+            {hasTarget && minCount !== maxCount && (
+              <span className="opacity-60"> (~{avgCount})</span>
+            )}
+          </span>
+        )}
+        {!rangeLabel && currentCount > 0 && (
+          <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+            {currentCount}
+          </span>
+        )}
+      </button>
+      {open && anchorRect && typeof document !== "undefined" &&
+        createPortal(
+          <CitationPopover
+            anchorRect={anchorRect}
+            cite={cite}
+            host={host}
+            idx={idx}
+            total={cites.length}
+            term={term}
+            patterns={matchPatterns}
+            onPrev={() =>
+              setIdx((i) => (i - 1 + cites.length) % cites.length)
+            }
+            onNext={() => setIdx((i) => (i + 1) % cites.length)}
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
+          />,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function CitationPopover({
+  anchorRect,
+  cite,
+  host,
+  idx,
+  total,
+  term,
+  patterns,
+  onPrev,
+  onNext,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  anchorRect: DOMRect;
+  cite: Citation;
+  host: string;
+  idx: number;
+  total: number;
+  term: string;
+  patterns: string[];
+  onPrev: () => void;
+  onNext: () => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}) {
+  const POPOVER_W = 340;
+  const margin = 8;
+  const vw =
+    typeof window !== "undefined" ? window.innerWidth : POPOVER_W + 2 * margin;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  let left = anchorRect.left;
+  if (left + POPOVER_W + margin > vw) left = vw - POPOVER_W - margin;
+  if (left < margin) left = margin;
+  const spaceBelow = vh - anchorRect.bottom;
+  const placeBelow = spaceBelow > 180 || spaceBelow >= anchorRect.top;
+  const top = placeBelow ? anchorRect.bottom + 6 : Math.max(margin, anchorRect.top - 6);
+  const transform = placeBelow ? undefined : "translateY(-100%)";
+
+  return (
+    <div
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      className="fixed z-50 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border-strong)] shadow-lg text-[12px] leading-[1.5]"
+      style={{ top, left, width: POPOVER_W, transform }}
+    >
+      <div className="flex items-center justify-between gap-2 px-3 py-[7px] border-b border-[var(--border)]">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.6px] text-[var(--text-muted)]">
+          « {term} » chez les concurrents
+        </div>
+        <div className="text-[10px] font-[family-name:var(--font-mono)] text-[var(--text-muted)]">
+          {idx + 1}/{total}
+        </div>
+      </div>
+      <div className="px-3 py-[10px]">
+        {host ? (
+          <a
+            href={cite.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="block text-[11px] font-semibold text-[var(--accent)] hover:underline truncate mb-[6px]"
+            title={cite.url}
+          >
+            {host}
+          </a>
+        ) : (
+          <div className="text-[11px] font-semibold text-[var(--text-muted)] mb-[6px]">
+            Source non disponible
+          </div>
+        )}
+        <div className="text-[var(--text)]">
+          « {highlightTerm(cite.sentence, patterns)} »
+        </div>
+      </div>
+      {total > 1 && (
+        <div className="flex items-center justify-between gap-2 px-2 py-[6px] border-t border-[var(--border)] bg-[var(--bg)]">
+          <button
+            type="button"
+            onClick={onPrev}
+            aria-label="Citation précédente"
+            className="px-2 py-[3px] rounded-[var(--radius-xs)] text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] transition-colors"
+          >
+            ←
+          </button>
+          <span className="text-[10px] text-[var(--text-muted)]">
+            {total} citation{total > 1 ? "s" : ""}
+          </span>
+          <button
+            type="button"
+            onClick={onNext}
+            aria-label="Citation suivante"
+            className="px-2 py-[3px] rounded-[var(--radius-xs)] text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] transition-colors"
+          >
+            →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

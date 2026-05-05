@@ -45,6 +45,11 @@ export type Paa = { question: string; snippet: string; link: string };
 
 export type PageContent = {
   text: string;
+  // Texte du corps uniquement (paragraphes, listes, cellules de tableau) sans
+  // les titres H1/H2/H3. Utilisé pour extraire les phrases d'exemple du
+  // popover NLP : on ne veut pas montrer un H2 comme "comment les concurrents
+  // emploient le terme en contexte".
+  bodyText?: string;
   h1: string[];
   h2: string[];
   h3: string[];
@@ -60,6 +65,10 @@ export type PageContent = {
   // l'ordre du document original (H1, P, H2, P, H3, P…) pour qu'on
   // puisse l'afficher en éditeur ou faire des comparaisons concurrentielles.
   structuredHtml: string;
+  // URL d'origine du contenu crawlé. Utilisée pour attribuer chaque phrase
+  // d'exemple NLP à son concurrent source (popover citations dans l'éditeur).
+  // Optionnelle pour les fallbacks snippet où l'URL n'est pas pertinente.
+  url?: string;
 };
 
 export type NlpTerm = {
@@ -84,6 +93,11 @@ export type NlpTerm = {
   // a été exécuté (binding AI dispo). Permet de re-ranker les termes par
   // pertinence sémantique réelle plutôt que juste par fréquence.
   semanticScore?: number;
+  // Échantillon de citations extraites des pages concurrentes qui contiennent
+  // ce terme. Chaque citation porte l'URL du concurrent + la phrase, pour que
+  // l'UI puisse afficher au survol du chip "comment chaque concurrent
+  // l'utilise en contexte" avec navigation prev/next entre les sources.
+  sentences?: Array<{ url: string; sentence: string }>;
 };
 
 /**
@@ -761,7 +775,7 @@ export async function crawlPage(
         // partiel ou tronqué (page non hydratée, contenu lazy-loaded, WAF
         // qui sert une version dégradée). Dans ce cas on bascule sur BD
         // pour récupérer le vrai contenu hydraté.
-        if (parsed.wordCount >= 200) return parsed;
+        if (parsed.wordCount >= 200) return { ...parsed, url };
       }
     }
   } catch {
@@ -775,7 +789,7 @@ export async function crawlPage(
     // Seuil 100 mots : on accepte un seuil plus bas qu'au niveau fetch
     // direct car BD est notre dernier recours, pas la peine de jeter une
     // page à 150 mots de contenu utile.
-    if (parsed.wordCount >= 100) return parsed;
+    if (parsed.wordCount >= 100) return { ...parsed, url };
   }
 
   // 3. Bright Data Scraping Browser via CDP raw (vrai Chromium headless).
@@ -785,7 +799,7 @@ export async function crawlPage(
   const browserHtml = await crawlWithBrightDataBrowser(url, env);
   if (browserHtml && !looksLikeChallengePage(browserHtml)) {
     const parsed = parseHTML(browserHtml);
-    if (parsed.wordCount >= 100) return parsed;
+    if (parsed.wordCount >= 100) return { ...parsed, url };
   }
 
   return null;
@@ -1588,6 +1602,31 @@ export function parseHTML(html: string): PageContent {
   const text = paragraphs.join(" ").replace(/\s+/g, " ").trim();
   const wordCount = text.split(/\s+/).filter(Boolean).length;
 
+  // Texte "corps" : paragraphes + items de liste + cellules de tableau, sans
+  // les titres Hn. C'est la source utilisée pour extraire les phrases
+  // d'exemple du popover NLP afin d'éviter de citer un H2 comme phrase.
+  const bodyParts: string[] = [];
+  for (const b of blocks) {
+    if (b.tag === "ul" || b.tag === "ol") {
+      for (const it of b.items) {
+        const t = it.text.replace(/\s+/g, " ").trim();
+        if (t) bodyParts.push(t);
+      }
+    } else if (b.tag === "table") {
+      for (const r of b.rows) {
+        for (const c of r.cells) {
+          const t = c.text.replace(/\s+/g, " ").trim();
+          if (t) bodyParts.push(t);
+        }
+      }
+    } else if (b.tag === "p" || b.tag === "blockquote" || b.tag === "pre") {
+      const t = (b as ParagraphBlock).text.replace(/\s+/g, " ").trim();
+      if (t) bodyParts.push(t);
+    }
+    // Hn (h1-h6) volontairement ignorés.
+  }
+  const bodyText = bodyParts.join(" ").replace(/\s+/g, " ").trim();
+
   const renderTable = (t: TableBlock): string => {
     const rowsHtml = t.rows
       .map((row) => {
@@ -1615,6 +1654,7 @@ export function parseHTML(html: string): PageContent {
 
   return {
     text,
+    bodyText,
     h1,
     h2,
     h3,
@@ -1730,6 +1770,40 @@ const SECTION_NOISE = new Set(
  * Limites : pas de gestion des genres (beau/belle), pas des verbes
  * irréguliers (être, avoir) — déjà filtrés via STOPWORDS.
  */
+// Vrai si `sentence` contient l'un des `patterns` en mot complet (frontières
+// de mot ASCII + accents FR). Évite « test » match « testeur ». Indexation
+// linéaire pour rester sous le budget CPU Workers.
+function sentenceMatchesAnyTerm(sentence: string, patterns: string[]): boolean {
+  if (patterns.length === 0) return false;
+  const text = sentence.toLowerCase();
+  const tlen = text.length;
+  for (const p of patterns) {
+    const plen = p.length;
+    if (plen === 0 || plen > tlen) continue;
+    let from = 0;
+    while (from <= tlen - plen) {
+      const i = text.indexOf(p, from);
+      if (i === -1) break;
+      const before = i > 0 ? text.charCodeAt(i - 1) : 0;
+      const after = i + plen < tlen ? text.charCodeAt(i + plen) : 0;
+      if (!isWordChar(before) && !isWordChar(after)) return true;
+      from = i + 1;
+    }
+  }
+  return false;
+}
+
+// True pour [a-z0-9] et accents latins courants (Latin-1 supplement +
+// ligatures FR Œ/œ U+0152/U+0153). Tiret `-` reste séparateur.
+function isWordChar(code: number): boolean {
+  if (code === 0) return false;
+  if (code >= 48 && code <= 57) return true;
+  if (code >= 97 && code <= 122) return true;
+  if (code >= 224 && code <= 255) return true;
+  if (code === 0x152 || code === 0x153) return true;
+  return false;
+}
+
 function frenchStem(w: string): string {
   let word = w.toLowerCase();
   if (word.length <= 4) return word;
@@ -1846,9 +1920,24 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
   const headingStems = new Set<string>();
   // Map stem → surface-form → count total (tous docs confondus)
   const surfaceForms: Record<string, Record<string, number>> = {};
+  // Pool global des phrases extraites des pages valides. Chaque entrée porte
+  // l'URL source pour qu'on puisse afficher dans le popover NLP "ce
+  // concurrent emploie le terme dans cette phrase". Fenêtre [50, 280] chars
+  // pour filtrer les bullets trop courts et les paragraphes hachés.
+  const allSentences: Array<{ url: string; sentence: string }> = [];
 
   contents.forEach((c) => {
     if (!c || !c.text) return;
+    // Phrases d'exemple : on les extrait du `bodyText` (sans Hn) pour ne pas
+    // citer un titre. Fallback sur `c.text` si bodyText absent.
+    const corpus = (c.bodyText && c.bodyText.length > 0 ? c.bodyText : c.text);
+    const sents = corpus
+      .replace(/\s+/g, " ")
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 50 && s.length <= 280);
+    const sourceUrl = c.url ?? "";
+    for (const s of sents.slice(0, 30)) allSentences.push({ url: sourceUrl, sentence: s });
     // Tokens des titres : stemmés, pour le boost en scoring.
     // Apostrophes remplacées par espace AVANT le strip non-alphanum, sinon
     // "d'un" devient "dun" (idem rawWords/ngramWords ci-dessous).
@@ -2010,6 +2099,33 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
         if (avgCount > maxCount) maxCount = avgCount;
       }
 
+      // Citations d'exemple : pour chaque concurrent (URL distincte), on garde
+      // la phrase la plus lisible (≈ la plus courte) qui contient le terme.
+      // Match en frontière de mot strict via `sentenceMatchesAnyTerm` pour
+      // éviter "test" → "testeur". Pour les unigrammes on autorise aussi les
+      // variantes morphologiques (collectées dans `surfaceForms`).
+      const matchPatterns = isNgram
+        ? [displayTerm.toLowerCase()]
+        : Array.from(
+            new Set(
+              [displayTerm.toLowerCase(), ...((variants ?? []).map((v) => v.toLowerCase()))]
+                .filter((v) => v && v.length >= 2),
+            ),
+          );
+      const byUrl: Record<string, { url: string; sentence: string }> = {};
+      const SEEN_URLS_TARGET = 10;
+      for (const item of allSentences) {
+        if (!sentenceMatchesAnyTerm(item.sentence, matchPatterns)) continue;
+        const existing = byUrl[item.url];
+        if (!existing || item.sentence.length < existing.sentence.length) {
+          byUrl[item.url] = item;
+        }
+        if (Object.keys(byUrl).length >= SEEN_URLS_TARGET) break;
+      }
+      const sentences = Object.values(byUrl)
+        .sort((a, b) => a.sentence.length - b.sentence.length)
+        .slice(0, SEEN_URLS_TARGET);
+
       return {
         term: displayTerm,
         variants,
@@ -2020,6 +2136,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
         minCount,
         maxCount,
         avgCount,
+        sentences: sentences.length > 0 ? sentences : undefined,
         // Clé interne pour le filtre (stem pour les unigrammes, n-gram sinon)
         _key: key,
       };
