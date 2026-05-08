@@ -27,9 +27,13 @@ import { brief } from "@/db/schema";
 //     (fetching_serp → crawling:N/10 → analyzing_nlp → scoring → saving),
 //     ce qui rafraîchit `updatedAt` toutes les 5-30s. Si `updatedAt` est
 //     figé > 90s, le worker est mort (CPU exceeded, OOM, kill silencieux).
-//   - 90s est confortable : la step la plus longue (`crawling:N/10`)
-//     bouge à chaque crawl terminé (~10-30s par site).
-const HEARTBEAT_STALE_MS = 90 * 1000;
+//   - 180s : la step la plus longue (`crawling:N/10`) peut traîner sur un
+//     site Cloudflare-protected qui passe en fallback Bright Data Browser
+//     CDP (jusqu'à 60-90s pour un site JS-heavy comme Nike Snkrs ou un
+//     site finance). Bumpé de 90s → 180s le 2026-05-08 après faux positifs
+//     observés sur "comment investir en bourse", "plombier paris",
+//     "chaussures running femme" qui mettent légitimement 100-150s.
+const HEARTBEAT_STALE_MS = 180 * 1000;
 
 export type CleanupResult = {
   cleaned: number;

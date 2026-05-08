@@ -9,6 +9,15 @@ compatibility_date = "2026-04-14"
 compatibility_flags = ["nodejs_compat"]
 main = "src/worker-analysis/index.ts"
 
+# Workers Paid : par défaut 30s CPU active. Bumpé à 60s (60000ms) le
+# 2026-05-08 pour absorber les analyses lourdes (NLP intensif sur 10
+# pages + embeddings bge-m3 par paragraphe pour le centroïde sémantique).
+# Sans ça, certains briefs dépassaient le quota CPU et étaient tués
+# silencieusement par CF, le cron cleanup les ramassant comme failed.
+# Max possible sur Workers Paid = 5 min (300000ms).
+[limits]
+cpu_ms = 60000
+
 [[d1_databases]]
 binding = "DB"
 database_name = "datafer"
