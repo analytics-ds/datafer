@@ -6,6 +6,7 @@ import { getDb } from "@/db";
 import { brief, client } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
+import { ensureCompetitorScores } from "@/lib/scoring";
 import { BriefEditor } from "./brief-editor";
 import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "../workflow-status";
@@ -28,6 +29,10 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
   const b = row.brief;
   const nlp = b.nlpJson ? (JSON.parse(b.nlpJson) as NlpResult) : null;
   const serp = b.serpJson ? (JSON.parse(b.serpJson) as SerpResult[]) : [];
+  // Lazy backfill des scores concurrents pour les briefs antérieurs à
+  // l'itération 7. Mutation in-memory ; la persistance D1 a lieu au
+  // prochain save (rescoreBrief sérialise le NlpResult complet).
+  if (nlp) ensureCompetitorScores(nlp, b.serpJson);
   const paa = b.paaJson ? (JSON.parse(b.paaJson) as Paa[]) : [];
   const haloscan = b.haloscanJson ? (JSON.parse(b.haloscanJson) as HaloscanOverview) : null;
 

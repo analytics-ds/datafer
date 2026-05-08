@@ -5,14 +5,15 @@
  * GEO valorise les patterns appréciés par les LLMs (table, listes, TL;DR,
  * FAQ, données chiffrées). Exécuté côté client à chaque édition.
  */
-import type { NlpResult, NlpTerm } from "./analysis";
-import { computeGeoScore, EMPTY_GEO_SIGNALS, type GeoScore, type GeoSignals } from "./geo-scoring";
+import type { NlpResult, NlpTerm, SerpResult } from "./analysis";
+import { computeGeoScore, EMPTY_GEO_SIGNALS, geoSignalsFromHtml, type GeoScore, type GeoSignals } from "./geo-scoring";
 
-// GEO = simple checklist d'optimisation pour les LLMs, pèse 5 points sur 100.
-// Avant : 10 pts. Pierre a trouvé ça trop gros le 2026-05-02 — le SEO
-// reste l'essentiel à 95%, GEO est un bonus léger.
-const SEO_WEIGHT = 0.95;
-const GEO_WEIGHT = 0.05;
+// GEO pèse 8 points sur 100 (avant 5 pts, itération 2026-05-08). Le poids
+// remonte légèrement parce que les top 10 réels exploitent souvent la
+// structure GEO sans la nommer (listes, tableaux, FAQ, données chiffrées),
+// donc l'ignorer fait perdre du discriminant entre concurrents.
+const SEO_WEIGHT = 0.92;
+const GEO_WEIGHT = 0.08;
 
 // Mots non significatifs pour le matching "soft" du keyword sur les longues
 // expressions ("meilleur moto cross 125 fiable" → on ne va pas exiger que
@@ -144,9 +145,19 @@ export type ScoreCriterion = {
 };
 
 export type DetailedScore = {
-  total: number;       // /100, combiné SEO+GEO
-  seoTotal: number;    // /100, juste SEO
-  geoTotal: number;    // /100, juste GEO
+  // `total` est le score AFFICHE à l'utilisateur. Si `competitorScores` est
+  // fourni à computeDetailedScore, ce total est *relatif* à la médiane des
+  // top 10 (médiane = 50, médiane × 1.5 = 100). Sinon c'est le brut.
+  total: number;
+  // Score absolu (brut) : combiné SEO + GEO sur 100 sans relativisation.
+  // Toujours rempli même quand le total est relatif. Utile pour debug, API
+  // V2, et pour comparer avec la médiane des concurrents.
+  rawTotal: number;
+  // Médiane des scores bruts des concurrents top 10 utilisée pour la
+  // relativisation. 0 si aucun concurrent fourni.
+  competitorMedian: number;
+  seoTotal: number;    // /100, juste SEO (brut)
+  geoTotal: number;    // /100, juste GEO (brut)
   keyword: ScoreCriterion;
   nlpCoverage: ScoreCriterion;
   contentLength: ScoreCriterion;
@@ -160,50 +171,169 @@ export type DetailedScore = {
 
 const EMPTY: DetailedScore = {
   total: 0,
+  rawTotal: 0,
+  competitorMedian: 0,
   seoTotal: 0,
   geoTotal: 0,
   keyword: { score: 0, max: 15, details: {} },
-  nlpCoverage: { score: 0, max: 25, details: {} },
-  contentLength: { score: 0, max: 12, details: {} },
-  headings: { score: 0, max: 15, details: {} },
-  placement: { score: 0, max: 15, details: {} },
-  structure: { score: 0, max: 9, details: {} },
-  quality: { score: 0, max: 6, details: {} },
-  images: { score: 0, max: 3, details: {} },
+  nlpCoverage: { score: 0, max: 35, details: {} },
+  contentLength: { score: 0, max: 8, details: {} },
+  headings: { score: 0, max: 13, details: {} },
+  placement: { score: 0, max: 14, details: {} },
+  structure: { score: 0, max: 6, details: {} },
+  quality: { score: 0, max: 5, details: {} },
+  images: { score: 0, max: 4, details: {} },
   geo: computeGeoScore(EMPTY_GEO_SIGNALS),
 };
+
+/**
+ * Score relatif à la médiane des top 10 concurrents.
+ *
+ *   brut < médiane    : 50 × brut / médiane           (médiane = 50)
+ *   brut >= médiane   : 50 + 50 × min(1, (brut - médiane) / (médiane × 0.5))
+ *                                                     (médiane × 1.5 = 100)
+ *
+ * Validé avec Pierre via le bench scripts/score-bench.ts (2026-05-08).
+ * L'objectif est de rendre le score comparable d'un KW à l'autre : taper
+ * 50 sur un KW à concu faible (médiane 40) ou à concu forte (médiane 75)
+ * veut dire la même chose : "je suis au niveau de la concurrence". Pour
+ * dépasser 80, il faut écraser le top 10.
+ */
+export function relativizeScore(rawTotal: number, competitorMedian: number): number {
+  if (competitorMedian <= 0) return rawTotal; // pas de concu mesurée
+  if (rawTotal < competitorMedian) {
+    return Math.round(50 * (rawTotal / competitorMedian));
+  }
+  return Math.min(
+    100,
+    Math.round(
+      50 + 50 * Math.min(1, (rawTotal - competitorMedian) / (competitorMedian * 0.5)),
+    ),
+  );
+}
+
+/**
+ * Calcule (ou récupère) les scores bruts des concurrents top 10 pour un
+ * brief. Sert le lazy backfill : briefs créés avant l'itération 7 n'ont
+ * pas `nlp.competitorScores` ; on les calcule à la volée depuis serpJson.
+ *
+ * Pour les briefs récents (analysis pipeline mis à jour), `nlp.competitorScores`
+ * est déjà rempli au moment de l'analyse et on retourne directement.
+ *
+ * Cette fonction est *pure* : elle ne persiste rien en BDD. La persistance
+ * a lieu naturellement à la prochaine sauvegarde du brief (rescoreBrief
+ * sérialise le NlpResult complet).
+ */
+export function ensureCompetitorScores(
+  nlp: NlpResult,
+  serpJson: string | null,
+): number[] {
+  if (nlp.competitorScores && nlp.competitorScores.length > 0) {
+    return nlp.competitorScores;
+  }
+  if (!serpJson) return [];
+  let serp: Record<string, SerpResult> | SerpResult[];
+  try {
+    serp = JSON.parse(serpJson);
+  } catch {
+    return [];
+  }
+  const results = Array.isArray(serp)
+    ? serp
+    : Object.keys(serp)
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => (serp as Record<string, SerpResult>)[k]);
+  const scores: number[] = [];
+  for (const r of results) {
+    if (!r || !r.text || (r.wordCount ?? 0) < 50) continue;
+    const geoSignals = r.structuredHtml ? geoSignalsFromHtml(r.structuredHtml) : undefined;
+    const breakdown = computeDetailedScore(
+      {
+        text: r.text,
+        h1s: r.h1 ?? [],
+        h2s: r.h2 ?? [],
+        h3s: r.h3 ?? [],
+        imageCount: r.imageCount ?? 0,
+      },
+      nlp,
+      geoSignals,
+      // Pas de competitorScores ici : on calcule le score brut absolu.
+    );
+    scores.push(breakdown.rawTotal);
+  }
+  // Cache en mémoire sur l'objet nlp pour les appels suivants dans la même
+  // requête (évite de re-scorer 10 concurrents pour chaque computeDetailedScore).
+  nlp.competitorScores = scores;
+  return scores;
+}
+
+/**
+ * Médiane d'une liste de scores. Filtre les valeurs aberrantes (< 25)
+ * qui correspondent quasi systématiquement à des pages mal scrapées
+ * (parser cassé, contenu majoritairement bloqué, page produit sans
+ * texte éditorial). Sans ce filtre, ces outliers tirent la médiane vers
+ * le bas et rendent l'objectif relatif trop facile à atteindre.
+ */
+export function medianCompetitorScore(scores: number[]): number {
+  const valid = scores.filter((s) => s >= 25);
+  if (valid.length === 0) return 0;
+  const sorted = [...valid].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+    : sorted[mid];
+}
 
 export function computeDetailedScore(
   ed: EditorData,
   nlp: NlpResult | null,
   geoSignals: GeoSignals = EMPTY_GEO_SIGNALS,
+  // Scores bruts des top 10 concurrents (mêmes que ceux retournés par
+  // computeDetailedScore appliqué à chaque concurrent). Si fourni, le
+  // `total` retourné est relatif à la médiane des concurrents (cf.
+  // relativizeScore). Sinon, `total` = score brut.
+  competitorScores?: number[],
 ): DetailedScore {
   const geo = computeGeoScore(geoSignals);
-  // Pondération SEO sur 100 :
-  //   keyword 15 + nlpCoverage 25 + contentLength 12 + headings 15 +
-  //   placement 15 + structure 9 + quality 6 + images 3 = 100.
-  // Itération 6 (2026-05-03) : ajout du critère images (3 pts). Quality
-  // descend de 9 à 6 pour rester sur 100. Le critère images compare le
-  // nombre d'<img> dans le contenu rédigé à la médiane des concurrents
-  // (`nlp.medianImages`), barème linéaire.
+  // Pondération SEO sur 100 (itération 7, 2026-05-08) :
+  //   keyword 15 + nlpCoverage 35 + contentLength 8 + headings 13 +
+  //   placement 14 + structure 6 + quality 5 + images 4 = 100.
+  //
+  // Pourquoi : Pierre a remonté que le score grimpait trop vite à 80 puis
+  // bloquait à 90. Bench `scripts/score-bench.ts` a confirmé : un brouillon
+  // synthétique zéro NLP (juste H1 + 3 H2 + KW dans first 100) tapait 55/100,
+  // soit la médiane des top 10 réels. Donc 75% des points venaient de
+  // critères "structurels gratuits". On rééquilibre :
+  //   - nlpCoverage 25 → 35 : le vrai discriminant SEO entre concurrents
+  //   - contentLength 12 → 8, headings 15 → 13, placement 15 → 14, structure
+  //     9 → 6, quality 6 → 5 : critères trop tolérants, on resserre
+  //   - images 3 → 4 : ne plus donner 3 pts gratos quand médiane = 0
+  //
+  // Les paliers internes de chaque critère sont aussi durcis (cf. sections
+  // ci-dessous). Cible vérifiée par le bench : top 10 médiane 55-70,
+  // brouillon synth 30-45, optim sérieux 80-92.
+  const competitorMedian = competitorScores ? medianCompetitorScore(competitorScores) : 0;
   const r: DetailedScore = {
     total: 0,
+    rawTotal: 0,
+    competitorMedian,
     seoTotal: 0,
     geoTotal: geo.total,
     keyword: { score: 0, max: 15, details: {} },
-    nlpCoverage: { score: 0, max: 25, details: {} },
-    contentLength: { score: 0, max: 12, details: {} },
-    headings: { score: 0, max: 15, details: {} },
-    placement: { score: 0, max: 15, details: {} },
-    structure: { score: 0, max: 9, details: {} },
-    quality: { score: 0, max: 6, details: {} },
-    images: { score: 0, max: 3, details: {} },
+    nlpCoverage: { score: 0, max: 35, details: {} },
+    contentLength: { score: 0, max: 8, details: {} },
+    headings: { score: 0, max: 13, details: {} },
+    placement: { score: 0, max: 14, details: {} },
+    structure: { score: 0, max: 6, details: {} },
+    quality: { score: 0, max: 5, details: {} },
+    images: { score: 0, max: 4, details: {} },
     geo,
   };
   if (!nlp?.nlpTerms) {
     // Sans NLP on ne peut pas calculer le SEO ; on remonte quand même
     // le score GEO car il dépend uniquement du contenu rédigé.
-    r.total = Math.round(geo.total * GEO_WEIGHT);
+    r.rawTotal = Math.round(geo.total * GEO_WEIGHT);
+    r.total = competitorMedian > 0 ? relativizeScore(r.rawTotal, competitorMedian) : r.rawTotal;
     return r;
   }
 
@@ -258,18 +388,18 @@ export function computeDetailedScore(
     exactBonus,
   };
 
-  // 2. NLP /25 — split par tier (cohérent avec l'UI brief-view/editor).
-  // Essentiels (presence ≥ 70) : 15 pts linéaire → 100% requis pour le max.
-  // Importants (40 ≤ presence < 70) : 10 pts linéaire.
+  // 2. NLP /35 — split par tier (cohérent avec l'UI brief-view/editor).
+  // Essentiels (presence ≥ 70) : 22 pts linéaire → 100% requis pour le max.
+  // Importants (40 ≤ presence < 70) : 13 pts linéaire.
   // Opportunités (< 40) ignorées : ce sont des bonus, pas des termes
   // obligatoires.
-  // Pourquoi le split : avant on faisait round(cov × 25) sur top30 mélangé.
-  // Du coup avec 4/5 essentiels + 18/32 importants (≈60% coverage globale)
-  // on obtenait 15/25 NLP, mais comme keyword/headings/placement
-  // peuvent être à fond ailleurs, le seoTotal grimpait quand même fort
-  // alors qu'il manquait 1 essentiel + 14 importants. Le split punit
-  // proportionnellement chaque tier et reflète l'importance réelle des
-  // termes que l'utilisateur voit dans l'éditeur.
+  //
+  // Itération 7 (2026-05-08) : nlpCoverage passe de 25 à 35. C'est la grosse
+  // décision du rebalance. Le NLP est le vrai discriminant entre un
+  // brouillon et un contenu sérieux ; doubler son poids relatif pousse les
+  // contenus zéro-NLP vers 35-45 (au lieu de 55), tout en laissant
+  // accessibles les 80+ pour les contenus qui couvrent essentiels +
+  // importants.
   const top40 = nlp.nlpTerms.slice(0, 40);
   const essentials = top40.filter((t) => t.presence >= 70);
   const importants = top40.filter((t) => t.presence >= 40 && t.presence < 70);
@@ -284,8 +414,8 @@ export function computeDetailedScore(
   // Si pas de termes dans le tier, coverage = 1 (rien à plomber).
   const essCov = essentials.length > 0 ? essUsed / essentials.length : 1;
   const impCov = importants.length > 0 ? impUsed / importants.length : 1;
-  const essScore = Math.min(15, Math.round(essCov * 15));
-  const impScore = Math.min(10, Math.round(impCov * 10));
+  const essScore = Math.min(22, Math.round(essCov * 22));
+  const impScore = Math.min(13, Math.round(impCov * 13));
   r.nlpCoverage.score = essScore + impScore;
   r.nlpCoverage.details = {
     essentialsUsed: essUsed,
@@ -299,22 +429,39 @@ export function computeDetailedScore(
     // Champs legacy conservés pour rétro-compat (UI/API consommateurs).
     used: essUsed + impUsed,
     total: essentials.length + importants.length,
-    coverage: Math.round(((essCov * 15 + impCov * 10) / 25) * 100),
+    coverage: Math.round(((essCov * 22 + impCov * 13) / 35) * 100),
   };
 
-  // 3. LENGTH /12
-  if (wc >= nlp.minWordCount && wc <= nlp.maxWordCount) r.contentLength.score = 12;
-  else if (wc < nlp.minWordCount)
-    r.contentLength.score = Math.round((wc / nlp.minWordCount) * 10);
-  else
-    r.contentLength.score = Math.max(
-      7,
-      12 - Math.round(((wc - nlp.maxWordCount) / nlp.maxWordCount) * 8),
-    );
-  r.contentLength.score = Math.min(12, r.contentLength.score);
-  r.contentLength.details = { wc };
+  // 3. LENGTH /8 (durci itération 7, 2026-05-08)
+  // Avant : être dans [min, max] suffisait pour 12/12. Trop tolérant — un
+  // brouillon de 1500 mots sur une fourchette 1383-2568 cochait le max.
+  // Maintenant on récompense vraiment de viser la médiane des concurrents.
+  //   - 4 pts : wc dans [min, max]
+  //   - +2 pts : wc à ±20 % de avgWordCount (effort de viser la cible)
+  //   - +2 pts : wc >= avgWordCount (être au moins dans la moitié haute)
+  //   - en dessous de min : ratio linéaire vers 4 pts max
+  //   - au dessus de max : on garde 4 pts (pénalité légère, on ne punit
+  //     pas le contenu trop long si le reste est solide)
+  {
+    let s = 0;
+    if (wc >= nlp.minWordCount && wc <= nlp.maxWordCount) s += 4;
+    else if (wc < nlp.minWordCount) s += Math.round((wc / nlp.minWordCount) * 4);
+    else s += 4; // au dessus de max, on garde le palier de base
+    if (nlp.avgWordCount > 0) {
+      const dev = Math.abs(wc - nlp.avgWordCount) / nlp.avgWordCount;
+      if (dev <= 0.2) s += 2;
+      if (wc >= nlp.avgWordCount) s += 2;
+    }
+    r.contentLength.score = Math.min(8, s);
+    r.contentLength.details = { wc, target: nlp.avgWordCount };
+  }
 
-  // 4. HEADINGS /18
+  // 4. HEADINGS /13 (durci itération 7, 2026-05-08)
+  // Avant : un H1 unique donnait 6/15 (40 % du critère) sans rien d'autre.
+  // Trop. Maintenant chaque sous-score est un peu plus exigeant : H1 unique
+  // pèse 4, KW exact dans H1 pèse 3, H2 count vs concurrent pèse 3 max
+  // (seuil 70 % de avgHeadings au lieu de 60 %), KW dans H2 pèse 2, H3 pèse
+  // 1 mais demande au moins 2 H3 (avant : 1 seul H3 suffisait).
   {
     let s = 0;
     const h1sNorm = ed.h1s.map(normalize);
@@ -322,14 +469,13 @@ export function computeDetailedScore(
     // `rx` est en mode global → on le clone par test pour éviter que
     // lastIndex ne pollue les itérations suivantes.
     const matchesKw = (h: string) => buildKeywordRegex(ek.keyword).test(h);
-    if (ed.h1s.length === 1) s += 6;
-    else if (ed.h1s.length > 1) s += 2;
-    if (h1sNorm.some(matchesKw)) s += 5;
-    else if (h1sNorm.some((h) => variationsNorm.some((v) => h.includes(v)))) s += 2;
-    const h2T = Math.max(2, Math.round(nlp.avgHeadings * 0.6));
-    if (ed.h2s.length >= h2T) s += 4;
-    else if (ed.h2s.length >= h2T * 0.5) s += 2;
-    else if (ed.h2s.length > 0) s += 1;
+    if (ed.h1s.length === 1) s += 4;
+    else if (ed.h1s.length > 1) s += 1;
+    if (h1sNorm.some(matchesKw)) s += 3;
+    else if (h1sNorm.some((h) => variationsNorm.some((v) => h.includes(v)))) s += 1;
+    const h2T = Math.max(2, Math.round(nlp.avgHeadings * 0.7));
+    if (ed.h2s.length >= h2T) s += 3;
+    else if (ed.h2s.length >= h2T * 0.5) s += 1;
     if (
       h2sNorm.some(
         (h) =>
@@ -338,12 +484,8 @@ export function computeDetailedScore(
       )
     )
       s += 2;
-    if (ed.h3s.length > 0) s += 1;
-    // Plafond 15 (avant 18, redistribué vers nlpCoverage le 2026-05-02).
-    // Tous les sous-scores intermédiaires restent identiques mais on cap
-    // à 15 — un contenu qui coche tous les critères headings touchait 18,
-    // maintenant il touche 15 avec la même pondération relative.
-    r.headings.score = Math.min(15, s);
+    if (ed.h3s.length >= 2) s += 1;
+    r.headings.score = Math.min(13, s);
     r.headings.details = {
       h1: ed.h1s.length,
       h2: ed.h2s.length,
@@ -352,11 +494,12 @@ export function computeDetailedScore(
     };
   }
 
-  // 5. PLACEMENT /15
+  // 5. PLACEMENT /14 (durci itération 7, 2026-05-08)
   // Soft (couverture ≥ 60% des tokens significatifs) ou exact match dans les
-  // segments-clés. Exact donne plus de points pour garder l'avantage à ceux
-  // qui écrivent le KW pile, mais le soft permet aux pages qui couvrent le
-  // sujet (sans la phrase exacte) de marquer aussi.
+  // segments-clés. Le palier "first 100 mots" passe de 5 à 4 pts en exact,
+  // "1ère phrase" de 3 à 2 pts. La distribution sur les 4 quarts demande
+  // maintenant au moins 3 quarts en KW exact pour le max (avant : 2 quarts
+  // exact + soft suffisaient).
   {
     let s = 0;
     const matchesExact = (segment: string) => buildKeywordRegex(ek.keyword).test(segment);
@@ -364,12 +507,12 @@ export function computeDetailedScore(
       kwTokens.length > 0 && tokenCoverage(segNorm, kwTokens) >= 0.6;
 
     const f100 = normalize(words.slice(0, 100).join(" "));
-    if (matchesExact(f100)) s += 5;
+    if (matchesExact(f100)) s += 4;
     else if (matchesSoft(f100)) s += 2;
     else if (variationsNorm.some((v) => f100.includes(v))) s += 1;
 
     const firstSent = normalize(text.split(/[.!?]\s/)[0]);
-    if (matchesExact(firstSent)) s += 3;
+    if (matchesExact(firstSent)) s += 2;
     else if (matchesSoft(firstSent)) s += 1;
 
     const last100 = normalize(words.slice(-100).join(" "));
@@ -384,77 +527,81 @@ export function computeDetailedScore(
       if (matchesExact(seg)) qExact++;
       else if (matchesSoft(seg)) qSoft++;
     }
-    // Score distribution : exact pèse plein (1.25), soft beaucoup moins
-    // (0.35) — sans kw exact dans aucun quart, on ne dépasse pas 2 points
-    // ici. Pondération resserrée le 2026-05-02 (Pierre).
-    const qScore = qExact * 1.25 + qSoft * 0.35;
-    if (qScore >= 5) s += 5;
-    else if (qScore >= 3.5) s += 4;
-    else if (qScore >= 2) s += 2;
-    else if (qScore >= 1) s += 1;
+    // Distribution durcie : pour le max 6 pts il faut 3+ quarts en exact.
+    // Soft compte moitié moins. Sans aucun kw exact, on plafonne à 2 pts ici.
+    const qScore = qExact * 1.3 + qSoft * 0.3;
+    if (qScore >= 4) s += 6;
+    else if (qScore >= 2.5) s += 4;
+    else if (qScore >= 1.5) s += 2;
+    else if (qScore >= 0.5) s += 1;
 
-    r.placement.score = Math.min(15, s);
+    r.placement.score = Math.min(14, s);
     r.placement.details = {
       distribution: `${qExact}/4 exact, ${qSoft}/4 soft`,
     };
   }
 
-  // 6. STRUCTURE /10
+  // 6. STRUCTURE /6 (durci itération 7, 2026-05-08)
+  // Avant : ratio paragraphes [0.5, 1.5] → 5/9 facile (texte avec 30
+  // paragraphes pour une médiane à 60 cochait le max). Maintenant fenêtre
+  // [0.7, 1.4] = vraiment proche de la médiane des concurrents. Longueur
+  // moyenne paragraphes resserrée [40, 140]. Le bonus "wc >= 200" disparait
+  // (déjà couvert par contentLength).
   {
     let s = 0;
     const pC = text.split(/\n\s*\n/).filter((p) => p.trim().length > 20).length;
     const pR = nlp.avgParagraphs > 0 ? pC / nlp.avgParagraphs : 0;
-    if (pR >= 0.5 && pR <= 1.5) s += 5;
-    else if (pR > 0) s += Math.min(5, Math.round(pR * 3));
+    if (pR >= 0.7 && pR <= 1.4) s += 3;
+    else if (pR >= 0.4 && pR < 0.7) s += 1;
+    else if (pR > 1.4 && pR <= 2.0) s += 1;
     const aP = pC > 0 ? wc / pC : wc;
-    if (aP >= 30 && aP <= 160) s += 3;
-    else if (aP > 15) s += 1;
-    if (wc >= 200) s += 1;
+    if (aP >= 40 && aP <= 140) s += 2;
+    else if (aP >= 25 && aP <= 200) s += 1;
     if (wc >= 500) s += 1;
-    // Plafond 9 (avant 10, redistribué vers nlpCoverage le 2026-05-02).
-    r.structure.score = Math.min(9, s);
-    r.structure.details = { paragraphs: pC };
+    r.structure.score = Math.min(6, s);
+    r.structure.details = { paragraphs: pC, ratio: Math.round(pR * 100) / 100 };
   }
 
-  // 7. QUALITY /6
-  // Plafond passé de 9 à 6 le 2026-05-03 pour libérer 3 pts au profit du
-  // nouveau critère images. Diversité lexicale + longueur des phrases +
-  // contrôle keyword stuffing restent les 3 sous-axes.
+  // 7. QUALITY /5 (durci itération 7, 2026-05-08)
+  // Avant : seuil diversité lexicale ≥ 0.4 → un brouillon répétitif touchait
+  // 2/2. Maintenant ≥ 0.45 pour 1 pt et ≥ 0.55 pour 2 pts. Phrases moy
+  // resserrées [12, 22]. Le bonus "wc ≥ 300" disparait (déjà dans
+  // contentLength).
   {
     let s = 0;
     const sents = text.split(/[.!?]+/).filter((x) => x.trim().length > 10);
     const aS = sents.length > 0 ? wc / sents.length : wc;
-    if (aS >= 10 && aS <= 25) s += 2;
-    else if (aS > 5 && aS < 35) s += 1;
+    if (aS >= 12 && aS <= 22) s += 2;
+    else if (aS >= 8 && aS <= 30) s += 1;
     // density est déjà calculé en section keyword ; on le réutilise pour
     // pénaliser le keyword stuffing.
-    if (density <= 3) s += 1;
+    if (density <= 2.5) s += 1;
     const uniq = new Set(words.map((w) => w.toLowerCase()));
     const div = uniq.size / words.length;
-    if (div >= 0.4) s += 2;
-    else if (div >= 0.3) s += 1;
-    if (wc >= 300) s += 1;
-    r.quality.score = Math.min(6, s);
+    if (div >= 0.55) s += 2;
+    else if (div >= 0.45) s += 1;
+    r.quality.score = Math.min(5, s);
     r.quality.details = { diversity: Math.round(div * 100) };
   }
 
-  // 8. IMAGES /3
-  // Compare le nb d'images du contenu rédigé à la médiane des concurrents.
-  // Cible = médiane (sans pénalité au-dessus, on plafonne à 3 dès qu'on
-  // atteint la médiane). Linéaire en dessous : si médiane=4 et user=2,
-  // score = round(2/4 × 3) = 2/3.
-  // Si la médiane = 0 (cas rare où aucun concurrent n'a d'image dans son
-  // contenu), on neutralise le critère : 3/3 par défaut, pas de pénalité.
+  // 8. IMAGES /4 (durci itération 7, 2026-05-08)
+  // Avant : si médiane = 0 → 3/3 free pass. Maintenant le critère est
+  // neutralisé en passant à 0/0 (pas dans le total) plutôt que d'offrir 3
+  // pts gratos. Sinon linéaire vers la médiane des concurrents, max 4.
   {
     const userImg = ed.imageCount ?? 0;
     const target = nlp.medianImages ?? 0;
     let s: number;
     if (target <= 0) {
-      s = 3;
+      // Pas de cible : on neutralise le critère (0 sur 0 effectif).
+      // On retire aussi 4 pts du max pour ne pas pénaliser ; rééquilibrage
+      // proportionnel sur le seoTotal final via re-normalisation.
+      s = 0;
+      r.images.max = 0;
     } else if (userImg >= target) {
-      s = 3;
+      s = 4;
     } else {
-      s = Math.max(0, Math.round((userImg / target) * 3));
+      s = Math.max(0, Math.round((userImg / target) * 4));
     }
     r.images.score = s;
     r.images.details = {
@@ -463,20 +610,33 @@ export function computeDetailedScore(
     };
   }
 
-  r.seoTotal = Math.min(
-    100,
+  // Re-normalisation sur 100 : si un critère a été neutralisé (images
+  // quand médiane=0, son `.max` passe à 0), le total sur 96 doit être
+  // ramené sur 100 pour ne pas pénaliser injustement le contenu.
+  const sumScore =
     r.keyword.score +
-      r.nlpCoverage.score +
-      r.contentLength.score +
-      r.headings.score +
-      r.placement.score +
-      r.structure.score +
-      r.quality.score +
-      r.images.score,
-  );
-  r.total = Math.min(
+    r.nlpCoverage.score +
+    r.contentLength.score +
+    r.headings.score +
+    r.placement.score +
+    r.structure.score +
+    r.quality.score +
+    r.images.score;
+  const sumMax =
+    r.keyword.max +
+    r.nlpCoverage.max +
+    r.contentLength.max +
+    r.headings.max +
+    r.placement.max +
+    r.structure.max +
+    r.quality.max +
+    r.images.max;
+  r.seoTotal = sumMax > 0 ? Math.min(100, Math.round((sumScore / sumMax) * 100)) : 0;
+  r.rawTotal = Math.min(
     100,
     Math.round(r.seoTotal * SEO_WEIGHT + r.geoTotal * GEO_WEIGHT),
   );
+  // Score affiché : relatif à la concu si on a la médiane, sinon brut.
+  r.total = competitorMedian > 0 ? relativizeScore(r.rawTotal, competitorMedian) : r.rawTotal;
   return r;
 }

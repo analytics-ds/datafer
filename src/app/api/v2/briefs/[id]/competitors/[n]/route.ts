@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
 import { computeDetailedScore } from "@/lib/scoring";
+import { geoSignalsFromHtml } from "@/lib/geo-scoring";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,12 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
   // benchmark concurrent.
   let breakdown: ReturnType<typeof computeDetailedScore> | null = null;
   if (nlp && competitor.text && competitor.text.length > 0) {
+    const geoSignals = competitor.structuredHtml
+      ? geoSignalsFromHtml(competitor.structuredHtml)
+      : undefined;
+    // Pas de competitorScores ici : on veut le score brut absolu du
+    // concurrent, pas un score relatif (n'aurait pas de sens : un
+    // concurrent comparé à lui-même).
     breakdown = computeDetailedScore(
       {
         text: competitor.text,
@@ -41,6 +48,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
         imageCount: competitor.imageCount ?? 0,
       },
       nlp,
+      geoSignals,
     );
   }
 
@@ -70,8 +78,9 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
       // pour calculer (briefs anciens sans text persisté).
       breakdown: breakdown
         ? {
-            // Total concurrent = 95 % SEO + 5 % GEO (cf. briefs-service.ts).
-            competitorTotal: Math.round(breakdown.seoTotal * 0.95 + breakdown.geoTotal * 0.05),
+            // Total concurrent = score brut (cf. SEO_WEIGHT/GEO_WEIGHT
+            // dans scoring.ts, depuis itération 7 : 0.92 / 0.08).
+            competitorTotal: breakdown.rawTotal,
             seoTotal: breakdown.seoTotal,
             geoTotal: breakdown.geoTotal,
             keyword: breakdown.keyword,

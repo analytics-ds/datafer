@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
 import { htmlToEditorData, computeCompetitorStats } from "@/lib/briefs-service";
-import { computeDetailedScore } from "@/lib/scoring";
+import { computeDetailedScore, ensureCompetitorScores } from "@/lib/scoring";
+import { geoSignalsFromHtml } from "@/lib/geo-scoring";
 
 export const dynamic = "force-dynamic";
 
@@ -21,12 +22,16 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 
   const editorHtml = row.editorHtml ?? "";
   const ed = htmlToEditorData(editorHtml);
-  const breakdown = computeDetailedScore(ed, nlp);
+  const competitorScores = ensureCompetitorScores(nlp, row.serpJson);
+  const geoSignals = geoSignalsFromHtml(editorHtml);
+  const breakdown = computeDetailedScore(ed, nlp, geoSignals, competitorScores);
 
   return NextResponse.json({
     id: row.id,
     keyword: row.keyword,
     total: breakdown.total,
+    rawTotal: breakdown.rawTotal,
+    competitorMedian: breakdown.competitorMedian,
     seoTotal: breakdown.seoTotal,
     geoTotal: breakdown.geoTotal,
     breakdown: {

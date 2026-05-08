@@ -189,6 +189,62 @@ export const EMPTY_GEO_SIGNALS: GeoSignals = {
   numericMentionsCount: 0,
 };
 
+/**
+ * Variante de extractGeoSignals qui marche sans DOM (pour usage server-side
+ * dans Cloudflare Workers où on n'a pas de document/HTMLElement). Utilise
+ * des regex sur le HTML brut. Cohérent avec extractGeoSignals (mêmes seuils,
+ * même logique de quick summary / FAQ / stats), à la précision regex près.
+ *
+ * Utilisé pour scorer les concurrents au moment de l'analyse (top 10 SERP
+ * crawlés → structuredHtml → signaux GEO → score relatif).
+ */
+export function geoSignalsFromHtml(html: string): GeoSignals {
+  const hasTable = /<table[^>]*>[\s\S]*?<td/i.test(html);
+  const liMatches = html.match(/<li[\s>]/gi) ?? [];
+  const bulletItemsCount = liMatches.length;
+
+  const earlyBlocks = (html.match(/<(p|h\d|ul|ol|table|blockquote)[^>]*>[\s\S]*?<\/\1>/gi) ?? []).slice(0, 3);
+  let hasQuickSummary = earlyBlocks.some((b) => {
+    if (!/^<p[\s>]/i.test(b)) return false;
+    if (!/<(em|i)[\s>]/i.test(b)) return false;
+    return stripHtmlTags(b).trim().length > 30;
+  });
+  if (!hasQuickSummary) {
+    const summaryKw = ["résumé", "resume", "tldr", "tl;dr", "tl ; dr", "en bref", "synthèse", "synthese", "à retenir", "a retenir"];
+    const headings = html.match(/<h[23][^>]*>([\s\S]*?)<\/h[23]>/gi) ?? [];
+    hasQuickSummary = headings.some((h) => {
+      const t = stripHtmlTags(h).toLowerCase();
+      return summaryKw.some((k) => t.includes(k));
+    });
+  }
+
+  const allHeadings = html.match(/<h[23][^>]*>([\s\S]*?)<\/h[23]>/gi) ?? [];
+  let questionHeadings = 0;
+  let faqSection = false;
+  for (const h of allHeadings) {
+    const txt = stripHtmlTags(h).trim();
+    if (txt.endsWith("?") || txt.endsWith(" ?")) questionHeadings++;
+    if (/<h2/i.test(h) && /(\bfaq\b|questions)/i.test(txt)) faqSection = true;
+  }
+  const faqQuestionsCount = faqSection && questionHeadings < 2 ? 2 : questionHeadings;
+
+  const text = stripHtmlTags(html);
+  const numericRegex = /\b\d+(?:[.,]\d+)?\s*(?:%|€|\$|km|kg|cm|mm|m²|m2|ans?|jours?|paires?|fois|mots?|heures?|minutes?)(?![a-zA-Zé])/gi;
+  const numericMentionsCount = (text.match(numericRegex) ?? []).length;
+
+  return {
+    hasTable,
+    bulletItemsCount,
+    hasQuickSummary,
+    faqQuestionsCount,
+    numericMentionsCount,
+  };
+}
+
+function stripHtmlTags(html: string): string {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+}
+
 export const GEO_LABELS = {
   table: "Tableau structuré",
   bulletList: "Liste à puces (≥3 items)",

@@ -193,7 +193,10 @@ export function BriefEditor(props: BriefEditorProps) {
   }, []);
 
   const score: DetailedScore = useMemo(
-    () => computeDetailedScore(editorData, nlp, geoSignals),
+    // nlp.competitorScores est rempli côté serveur (pipeline analyse) ou
+    // via lazy backfill (rescoreBrief / api scoring). Si absent, le score
+    // calculé est brut (rétro-compat) au lieu de relatif.
+    () => computeDetailedScore(editorData, nlp, geoSignals, nlp?.competitorScores),
     [editorData, nlp, geoSignals],
   );
 

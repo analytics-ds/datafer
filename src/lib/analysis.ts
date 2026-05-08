@@ -224,6 +224,13 @@ export type NlpResult = {
   // (un listing produits qui pousse la moyenne à 25 alors que la majorité
   // des concurrents sont à 4-6 images).
   medianImages: number;
+  // Scores bruts (0-100) calculés via computeDetailedScore appliqué à
+  // chaque concurrent du top 10 (sans relativisation). Utilisé pour
+  // calibrer le score affiché de l'utilisateur sur la concurrence
+  // (cf. relativizeScore dans scoring.ts). Optionnel pour rétro-compat
+  // avec les briefs anciens : si absent, le score affiché est le brut
+  // jusqu'au lazy backfill au 1er chargement.
+  competitorScores?: number[];
 };
 
 // ─── SERP providers (CrazySerp + SerpAPI) ────────────────────────────────────

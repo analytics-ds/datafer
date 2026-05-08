@@ -20,7 +20,8 @@ import {
   type SerpResult,
   type NlpResult,
 } from "@/lib/analysis";
-import { computeDetailedScore, type DetailedScore, type EditorData } from "@/lib/scoring";
+import { computeDetailedScore, ensureCompetitorScores, type DetailedScore, type EditorData } from "@/lib/scoring";
+import { geoSignalsFromHtml } from "@/lib/geo-scoring";
 
 export type CompetitorStats = {
   avg: number;
@@ -127,11 +128,22 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
   if (!nlp) return { ok: false, status: 500, error: "brief has no NLP data" };
 
   const ed = htmlToEditorData(editorHtml);
-  const breakdown = computeDetailedScore(ed, nlp);
+  const competitorScores = ensureCompetitorScores(nlp, row.serpJson);
+  const geoSignals = geoSignalsFromHtml(editorHtml);
+  const breakdown = computeDetailedScore(ed, nlp, geoSignals, competitorScores);
+
+  // Si on vient de lazy-backfill competitorScores, on persiste pour ne pas
+  // refaire le calcul à la prochaine sauvegarde.
+  const nlpJsonToWrite = nlp.competitorScores ? JSON.stringify(nlp) : row.nlpJson;
 
   await db
     .update(brief)
-    .set({ editorHtml, score: breakdown.total, updatedAt: new Date() })
+    .set({
+      editorHtml,
+      score: breakdown.total,
+      nlpJson: nlpJsonToWrite,
+      updatedAt: new Date(),
+    })
     .where(eq(brief.id, briefId));
 
   return {
@@ -405,20 +417,26 @@ async function createBriefAnalysisPayload(
   nlp.intent = detectIntent(keyword, results);
   const aiBinding = (env as unknown as { AI?: Ai }).AI;
   nlp = await enrichWithSemantic(nlp, keyword, aiBinding);
+  // Scores bruts des concurrents : utilisés pour la relativisation du
+  // score user (cf. relativizeScore dans scoring.ts). On stocke aussi
+  // chaque score sur enrichedResults[i].score pour l'affichage SERP.
+  const competitorScores: number[] = [];
   for (let i = 0; i < enrichedResults.length; i++) {
     const c = crawled[i];
     if (!c || c.wordCount < 50) continue;
+    // Signaux GEO du concurrent extraits depuis structuredHtml (variante
+    // sans DOM, utilisable côté worker). Permet au score brut concurrent
+    // d'inclure le GEO comme côté user, donc cohérent à comparer.
+    const geoSignals = c.structuredHtml ? geoSignalsFromHtml(c.structuredHtml) : undefined;
     const breakdown = computeDetailedScore(
       { text: c.text, h1s: c.h1, h2s: c.h2, h3s: c.h3, imageCount: c.imageCount },
       nlp,
+      geoSignals,
     );
-    // Score concurrent = 95 % SEO + 5 % GEO. Les patterns GEO (table, FAQ,
-    // quick summary, bullet list, statistiques) sont surtout une checklist
-    // d'optimisation pour le contenu rédigé du user, mais on garde un petit
-    // poids (5 pts max) côté concurrent pour valoriser ceux qui les ont
-    // déjà en place sans pour autant les pénaliser quand ils ne les ont pas.
-    enrichedResults[i].score = Math.round(breakdown.seoTotal * 0.95 + breakdown.geoTotal * 0.05);
+    enrichedResults[i].score = breakdown.rawTotal;
+    competitorScores.push(breakdown.rawTotal);
   }
+  nlp.competitorScores = competitorScores;
 
   await setStep("scoring");
   const haloscan = haloscanKey ? await fetchHaloscan(keyword, country, haloscanKey) : null;
@@ -511,9 +529,12 @@ async function createBriefAnalysisPayload(
         blocks.push(`<p>${escapeHtml(myPage.text)}</p>`);
         initialEditorHtml = blocks.join("\n");
       }
+      const myGeoSignals = myPage.structuredHtml ? geoSignalsFromHtml(myPage.structuredHtml) : undefined;
       const breakdown = computeDetailedScore(
-        { text: myPage.text, h1s: myPage.h1, h2s: myPage.h2, h3s: myPage.h3 },
+        { text: myPage.text, h1s: myPage.h1, h2s: myPage.h2, h3s: myPage.h3, imageCount: myPage.imageCount },
         nlp,
+        myGeoSignals,
+        nlp.competitorScores,
       );
       myInitialScore = breakdown.total;
     }
