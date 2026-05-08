@@ -26,10 +26,20 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   const geoSignals = geoSignalsFromHtml(editorHtml);
   const breakdown = computeDetailedScore(ed, nlp, geoSignals, competitorScores);
 
+  // Le critère sémantique paragraphe est calculé côté client (live editor)
+  // car il nécessite des appels bge-m3 par paragraphe. Côté serveur on
+  // n'a pas les scores → critère neutralisé. Mais l'utilisateur a sauvegardé
+  // un score qui les inclut. On retourne donc :
+  //   - total = brief.score (le vrai score affiché dans l'éditeur, persisté)
+  //   - breakdown = recalculé sans sémantique (info pédagogique)
+  // Sans persistance (`row.score == null`), on retombe sur le breakdown.
+  const displayedTotal = row.score ?? breakdown.total;
+
   return NextResponse.json({
     id: row.id,
     keyword: row.keyword,
-    total: breakdown.total,
+    total: displayedTotal,
+    breakdownTotal: breakdown.total,
     rawTotal: breakdown.rawTotal,
     competitorMedian: breakdown.competitorMedian,
     seoTotal: breakdown.seoTotal,

@@ -759,6 +759,20 @@ function EditorSidebar({
       tip: score.geo.total < 60
         ? "↑ Ajoutez tableau / FAQ / liste / résumé / chiffre pour citation IA"
         : "✓ Bons signaux GEO" },
+    // Sémantique paragraphe (itération 8) : critère neutralisé (max=0) si
+    // brief antérieur ou si le debounce live n'a pas encore scoré les paras.
+    ...(score.semantic.max > 0
+      ? [{
+          label: "Sémantique Google", s: score.semantic, color: "var(--accent)",
+          tip: (() => {
+            const avg = Number(score.semantic.details.avgCosine ?? 0);
+            const n = Number(score.semantic.details.paragraphsScored ?? 0);
+            if (avg >= 0.75) return `✓ Excellente proximité sémantique (${n} paragraphes, cosinus moyen ${avg.toFixed(2)})`;
+            if (avg >= 0.55) return `↑ Bonne proximité (${avg.toFixed(2)}). Renforcez les paragraphes en jaune/rouge`;
+            return `↑ Proximité sémantique faible (${avg.toFixed(2)}). Recentrez le contenu sur le sujet du KW`;
+          })(),
+        }]
+      : []),
   ];
 
   const essential: NlpTerm[] = [];
@@ -847,6 +861,56 @@ function EditorSidebar({
 
       {/* Comparaison avec la concurrence SERP */}
       <CompetitorScoreRow scoreTotal={scoreTotal} serp={serp} />
+
+      {/* Proximité sémantique Google (itération 8, 2026-05-08).
+          Jauge dédiée + bench vs concurrent #1 (cosinus). Affichée
+          uniquement si le centroïde a été calculé pour ce brief
+          ET qu'au moins 1 paragraphe a été scoré côté live. */}
+      {score.semantic.max > 0 && (() => {
+        const avgCosine = Number(score.semantic.details.avgCosine ?? 0);
+        const userPct = Math.round(avgCosine * 100);
+        const top1Cosine = nlp?.competitorSemanticScores?.[0] ?? 0;
+        const top1Pct = Math.round(top1Cosine * 100);
+        const gaugeColor = userPct >= 75 ? "var(--green)" : userPct >= 55 ? "var(--orange)" : "var(--red)";
+        const nbScored = Number(score.semantic.details.paragraphsScored ?? 0);
+        return (
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-4 mb-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
+                Proximité sémantique Google
+              </span>
+              <span className="text-[10px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+                {nbScored} paragraphe{nbScored > 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2 mb-3">
+              <span
+                className="font-[family-name:var(--font-display)] text-[28px] leading-none"
+                style={{ color: gaugeColor }}
+              >
+                {userPct}
+              </span>
+              <span className="text-[10px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+                / 100
+              </span>
+            </div>
+            <div className="w-full h-[6px] rounded-full bg-[var(--border)] overflow-hidden mb-3">
+              <div
+                className="h-full transition-all duration-500"
+                style={{ width: `${Math.min(100, userPct)}%`, background: gaugeColor }}
+              />
+            </div>
+            {top1Cosine > 0 && (
+              <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                <span>vs concurrent #1</span>
+                <span className="font-[family-name:var(--font-mono)] font-semibold">
+                  {top1Pct} / 100
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Stats clés du mot-clé */}
       <KeywordStatsRow
