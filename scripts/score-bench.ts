@@ -277,9 +277,10 @@ function scoreRow(
  * Cohérent avec ce qu'a validé Pierre via le preview AskUserQuestion.
  */
 function relativizeScore(raw: number, medianTop10: number): number {
-  if (medianTop10 <= 0) return raw; // pas de concu mesurée, on garde brut
-  if (raw < medianTop10) return Math.round(50 * (raw / medianTop10));
-  return Math.min(100, Math.round(50 + 50 * Math.min(1, (raw - medianTop10) / (medianTop10 * 0.5))));
+  if (medianTop10 <= 0) return raw;
+  const ref = Math.max(60, medianTop10); // floor pour KW à concu faible
+  if (raw < ref) return Math.round(50 * (raw / ref));
+  return Math.min(100, Math.round(50 + 50 * Math.min(1, (raw - ref) / (ref * 0.5))));
 }
 
 function median(values: number[]): number {

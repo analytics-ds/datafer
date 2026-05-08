@@ -186,29 +186,36 @@ const EMPTY: DetailedScore = {
   geo: computeGeoScore(EMPTY_GEO_SIGNALS),
 };
 
+// Plancher de médiane utilisé par relativizeScore. Sur les KW à concu
+// faible (médiane top 10 < 60), on calibre "comme si" la concu était à 60,
+// soit le niveau d'un contenu correctement optimisé. Évite que l'utilisateur
+// tape 92-98 juste parce que les top 10 sont moyens : sur "costume homme
+// beige" (médiane 53), un brut 72 affichait 92 avant le floor (Pierre
+// 2026-05-08 : "pas cohérent"). Avec floor à 60, ça affiche 70.
+const RELATIVE_MEDIAN_FLOOR = 60;
+
 /**
  * Score relatif à la médiane des top 10 concurrents.
  *
- *   brut < médiane    : 50 × brut / médiane           (médiane = 50)
- *   brut >= médiane   : 50 + 50 × min(1, (brut - médiane) / (médiane × 0.5))
- *                                                     (médiane × 1.5 = 100)
+ *   ref = max(60, competitorMedian)     (floor pour KW à concu faible)
+ *   brut < ref    : 50 × brut / ref     (ref = 50)
+ *   brut >= ref   : 50 + 50 × min(1, (brut - ref) / (ref × 0.5))
+ *                                       (ref × 1.5 = 100)
  *
  * Validé avec Pierre via le bench scripts/score-bench.ts (2026-05-08).
- * L'objectif est de rendre le score comparable d'un KW à l'autre : taper
- * 50 sur un KW à concu faible (médiane 40) ou à concu forte (médiane 75)
- * veut dire la même chose : "je suis au niveau de la concurrence". Pour
- * dépasser 80, il faut écraser le top 10.
+ * L'objectif est de rendre le score comparable d'un KW à l'autre tout en
+ * gardant un sens absolu : pour dépasser 70-80, il faut un vrai contenu
+ * solide, pas juste écraser des concurrents médiocres.
  */
 export function relativizeScore(rawTotal: number, competitorMedian: number): number {
   if (competitorMedian <= 0) return rawTotal; // pas de concu mesurée
-  if (rawTotal < competitorMedian) {
-    return Math.round(50 * (rawTotal / competitorMedian));
+  const ref = Math.max(RELATIVE_MEDIAN_FLOOR, competitorMedian);
+  if (rawTotal < ref) {
+    return Math.round(50 * (rawTotal / ref));
   }
   return Math.min(
     100,
-    Math.round(
-      50 + 50 * Math.min(1, (rawTotal - competitorMedian) / (competitorMedian * 0.5)),
-    ),
+    Math.round(50 + 50 * Math.min(1, (rawTotal - ref) / (ref * 0.5))),
   );
 }
 
