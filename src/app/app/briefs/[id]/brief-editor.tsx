@@ -863,16 +863,22 @@ function EditorSidebar({
       <CompetitorScoreRow scoreTotal={scoreTotal} serp={serp} />
 
       {/* Proximité sémantique Google (itération 8, 2026-05-08).
-          Jauge dédiée + bench vs concurrent #1 (cosinus). Affichée
-          uniquement si le centroïde a été calculé pour ce brief
-          ET qu'au moins 1 paragraphe a été scoré côté live. */}
+          Jauge dédiée + cible 70-85. Le bench "vs concurrent #1" a été
+          retiré car biaisé : les concurrents tapent 0.95+ vs centroïde
+          par construction (le centroïde est leur moyenne), démotivant
+          pour l'utilisateur. La cible 70-85 (validée Pierre 2026-05-06)
+          est plus actionnable. */}
       {score.semantic.max > 0 && (() => {
         const avgCosine = Number(score.semantic.details.avgCosine ?? 0);
         const userPct = Math.round(avgCosine * 100);
-        const top1Cosine = nlp?.competitorSemanticScores?.[0] ?? 0;
-        const top1Pct = Math.round(top1Cosine * 100);
         const gaugeColor = userPct >= 75 ? "var(--green)" : userPct >= 55 ? "var(--orange)" : "var(--red)";
         const nbScored = Number(score.semantic.details.paragraphsScored ?? 0);
+        const inTarget = userPct >= 70 && userPct <= 85;
+        const targetHint = inTarget
+          ? "✓ Dans la cible Google"
+          : userPct < 70
+            ? "↑ Recentrez sur le sujet (cible 70-85)"
+            : "Excellent (cible 70-85)";
         return (
           <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-4 mb-5">
             <div className="flex items-center justify-between mb-2">
@@ -894,20 +900,25 @@ function EditorSidebar({
                 / 100
               </span>
             </div>
-            <div className="w-full h-[6px] rounded-full bg-[var(--border)] overflow-hidden mb-3">
+            {/* Barre avec zone cible 70-85 surlignée */}
+            <div className="relative w-full h-[8px] rounded-full bg-[var(--border)] overflow-hidden mb-2">
+              {/* Zone cible 70-85 */}
               <div
-                className="h-full transition-all duration-500"
-                style={{ width: `${Math.min(100, userPct)}%`, background: gaugeColor }}
+                className="absolute top-0 h-full bg-[var(--green-bg)] opacity-50"
+                style={{ left: "70%", width: "15%" }}
+              />
+              {/* Curseur user */}
+              <div
+                className="absolute top-0 h-full transition-all duration-500"
+                style={{
+                  left: 0,
+                  width: `${Math.min(100, userPct)}%`,
+                  background: gaugeColor,
+                  opacity: 0.85,
+                }}
               />
             </div>
-            {top1Cosine > 0 && (
-              <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
-                <span>vs concurrent #1</span>
-                <span className="font-[family-name:var(--font-mono)] font-semibold">
-                  {top1Pct} / 100
-                </span>
-              </div>
-            )}
+            <div className="text-[11px] text-[var(--text-secondary)]">{targetHint}</div>
           </div>
         );
       })()}
