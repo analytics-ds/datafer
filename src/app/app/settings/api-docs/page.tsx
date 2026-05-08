@@ -43,7 +43,8 @@ export default function ApiDocsPage() {
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/print</Code>, page imprimable d&apos;un concurrent (Save as PDF côté navigateur)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/nlp</Code>, NLP complet (termes, clusters, sections, entités, opportunités, intent)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/paa</Code>, People Also Ask seuls</li>
-          <li><Code>GET /api/v2/briefs/&#123;id&#125;/scoring</Code>, breakdown détaillé du score (7 critères SEO + GEO)</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/scoring</Code>, breakdown détaillé du score (8 critères SEO + sémantique + GEO, scoring relatif vs concu)</li>
+          <li><Code>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</Code>, embed un paragraphe et retourne sa proximité sémantique vs le centroïde top 10</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/haloscan</Code>, payload Haloscan brut + summary</li>
         </ul>
         <p className="text-[var(--text-muted)]">
@@ -220,13 +221,18 @@ export default function ApiDocsPage() {
   "score": 73,
   "breakdown": {
     "total": 73,
+    "rawTotal": 78,
+    "competitorMedian": 62,
     "keyword":      { "score": 12, "max": 15, "details": { "count": 6,  "density": 1.24 } },
-    "nlpCoverage":  { "score": 14, "max": 20, "details": { "used": 23, "total": 30, "coverage": 76 } },
-    "contentLength":{ "score": 10, "max": 12, "details": { "wc": 1083 } },
-    "headings":     { "score": 15, "max": 18, "details": { "h1": 1, "h2": 6, "h3": 3, "h1HasKw": true } },
-    "placement":    { "score": 11, "max": 15, "details": { "distribution": "4/4" } },
-    "structure":    { "score":  6, "max": 10, "details": { "paragraphs": 12 } },
-    "quality":      { "score":  5, "max": 10, "details": { "diversity": 62 } }
+    "nlpCoverage":  { "score": 22, "max": 27, "details": { "essentialsUsed": 14, "essentialsTotal": 14, "essentialsCoverage": 100, "essentialsScore": 17, "importantsUsed": 6, "importantsTotal": 18, "importantsScore": 5 } },
+    "contentLength":{ "score":  6, "max":  7, "details": { "wc": 1083, "target": 1450 } },
+    "headings":     { "score": 11, "max": 13, "details": { "h1": 1, "h2": 6, "h3": 3, "h1HasKw": true } },
+    "placement":    { "score": 11, "max": 13, "details": { "distribution": "3/4 exact, 1/4 soft" } },
+    "structure":    { "score":  4, "max":  6, "details": { "paragraphs": 12, "ratio": 0.85 } },
+    "quality":      { "score":  4, "max":  5, "details": { "diversity": 52 } },
+    "images":       { "score":  3, "max":  4, "details": { "count": 4, "target": 5 } },
+    "semantic":     { "score":  7, "max": 10, "details": { "paragraphsScored": 12, "avgCosine": 0.74 } },
+    "geo": { "total": 80, "table": {...}, "bulletList": {...}, "quickSummary": {...}, "faq": {...}, "statistics": {...} }
   },
   "competitors": {
     "avg": 47,
@@ -236,10 +242,14 @@ export default function ApiDocsPage() {
   }
 }`}</Pre>
 
-        <H4>Lecture du résultat</H4>
+        <H4>Lecture du résultat (itération 8, 2026-05-08)</H4>
         <ul className="list-disc pl-5 mb-3 text-[var(--text-muted)]">
+          <li><Code>score</Code> et <Code>breakdown.total</Code> : score affiché 0-100, <strong>relatif à la médiane des concurrents top 10</strong>. Médiane top 10 = 50, médiane × 1.5 = 100. Floor médiane à 60 (si concu faible, on calibre comme si la médiane était 60).</li>
+          <li><Code>rawTotal</Code> : score absolu sur 100 (sans relativisation), pour debug ou comparaison cross-KW.</li>
+          <li><Code>competitorMedian</Code> : médiane des scores bruts du top 10, sert de référence pour la relativisation.</li>
           <li>Compare <Code>score</Code> à <Code>competitors.avg</Code> : si tu es au-dessus, tu fais mieux que la moyenne SERP.</li>
-          <li>Compare <Code>score</Code> à <Code>competitors.best</Code> : objectif pour dépasser la meilleure page.</li>
+          <li>Pondération SEO sur 100 : keyword 15 + nlpCoverage 27 + contentLength 7 + headings 13 + placement 13 + structure 6 + quality 5 + images 4 + semantic 10 = 100. SEO_WEIGHT 0.92, GEO_WEIGHT 0.08.</li>
+          <li><Code>breakdown.semantic</Code> : critère sémantique paragraphe (cosinus moyen vs centroïde top 10 via bge-m3). Calculé côté éditeur via l&apos;endpoint <Code>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</Code>. Neutralisé (max=0) si pas de paragraphes scorés.</li>
           <li>Regarde <Code>breakdown</Code> pour identifier les axes faibles (mot-clé, couverture NLP, structure…) et itérer.</li>
         </ul>
       </Section>
@@ -459,24 +469,72 @@ GET /api/v2/briefs/{id}/competitors/3/download?format=docx
         <H4>GET /api/v2/briefs/&#123;id&#125;/scoring</H4>
         <p className="mb-2 text-[var(--text-muted)]">
           Breakdown détaillé du score, recalculé sur le HTML actuellement stocké dans le brief
-          (mis à jour par chaque <Code>POST /content</Code>). 7 critères SEO + bloc GEO.
+          (mis à jour par chaque <Code>POST /content</Code>). 8 critères SEO + sémantique + bloc GEO.
+          Le <Code>total</Code> est <strong>relatif à la médiane des concurrents top 10</strong>
+          (médiane = 50, médiane × 1.5 = 100, floor médiane à 60).
         </p>
         <Pre>{`{
   "id": "...", "keyword": "...",
-  "total": 78, "seoTotal": 82, "geoTotal": 70,
+  "total": 78,
+  "rawTotal": 76,
+  "breakdownTotal": 73,
+  "competitorMedian": 62,
+  "seoTotal": 82, "geoTotal": 70,
   "breakdown": {
     "keyword":      { "score": 13, "max": 15, "details": { ... } },
-    "nlpCoverage":  { "score": 16, "max": 20, "details": { ... } },
-    "contentLength":{ "score": 11, "max": 12, "details": { ... } },
-    "headings":     { "score": 14, "max": 18, "details": { ... } },
-    "placement":    { "score": 12, "max": 15, "details": { ... } },
-    "structure":    { "score":  8, "max": 10, "details": { ... } },
-    "quality":      { "score":  8, "max": 10, "details": { ... } },
+    "nlpCoverage":  { "score": 22, "max": 27, "details": {
+      "essentialsUsed": 14, "essentialsTotal": 14, "essentialsScore": 17,
+      "importantsUsed": 7, "importantsTotal": 18, "importantsScore": 5
+    } },
+    "contentLength":{ "score":  6, "max":  7, "details": { "wc": 1840, "target": 2100 } },
+    "headings":     { "score": 11, "max": 13, "details": { ... } },
+    "placement":    { "score": 11, "max": 13, "details": { ... } },
+    "structure":    { "score":  4, "max":  6, "details": { ... } },
+    "quality":      { "score":  4, "max":  5, "details": { ... } },
+    "images":       { "score":  3, "max":  4, "details": { "count": 4, "target": 5 } },
     "geo":          { "total": 70, ... }
   },
   "competitors": { "avg": 71, "best": 85, "bestUrl": "...", "count": 9 },
   "editorWordCount": 1840
 }`}</Pre>
+        <p className="text-[var(--text-muted)] mb-2 text-[12px]">
+          <strong>Notes :</strong> <Code>total</Code> est le score affiché à l&apos;utilisateur
+          (préserve le score persisté côté éditeur incluant le critère sémantique calculé
+          live). <Code>breakdownTotal</Code> est le total recalculé côté serveur sans le
+          sémantique (ce critère étant calculé côté client via l&apos;endpoint
+          <Code>/semantic-paragraph</Code>). Pour des consommateurs API qui veulent inclure
+          le sémantique programmatiquement, embedder leurs paragraphes via cet endpoint et
+          appliquer la formule cosinus → score (0.85 → 10, 0.65 → 5, 0.45 → 2).
+        </p>
+
+        <H4>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Embed un paragraphe via Workers AI bge-m3 et retourne le cosinus vs le centroïde
+          sémantique top 10 du brief. Sert à scorer chaque paragraphe individuellement et
+          identifier ceux qui dévient du sujet. Utilisé en live par l&apos;éditeur Datafer
+          (debounce 2s par paragraphe modifié).
+        </p>
+        <Pre>{`POST /api/v2/briefs/{id}/semantic-paragraph
+Content-Type: application/json
+
+{
+  "paragraph": "Le thé matcha est riche en antioxydants et en catéchines..."
+}`}</Pre>
+        <H4>Réponse (200, centroïde présent)</H4>
+        <Pre>{`{
+  "centroidAvailable": true,
+  "score": 0.903,
+  "color": "green"
+}`}</Pre>
+        <H4>Réponse (200, brief antérieur à l&apos;iter 8 sans centroïde)</H4>
+        <Pre>{`{
+  "centroidAvailable": false
+}`}</Pre>
+        <p className="text-[var(--text-muted)] mb-2 text-[12px]">
+          <strong>Couleurs :</strong> vert ≥ 0.75, jaune 0.55-0.75, rouge &lt; 0.55. Le
+          paragraphe doit faire au moins 5 mots significatifs sinon retour 400. Centroïde
+          disponible uniquement pour les briefs créés après le 2026-05-08 (iter sémantique).
+        </p>
 
         <H4>GET /api/v2/briefs/&#123;id&#125;/haloscan</H4>
         <p className="mb-2 text-[var(--text-muted)]">
