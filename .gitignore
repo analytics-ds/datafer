@@ -49,3 +49,11 @@ cloudflare-env.d.ts
 # local legacy files (original single-file tool with exposed keys)
 .backup/
 
+# backups locaux ad-hoc (snapshots avant gros refactor)
+.backups/
+
+# data dump du bench scoring : briefs JSON ~250-500 KB chacun, regenerable
+# via scripts/bench-data/dump-briefs.sh. On garde le .sh tracked, pas les
+# .json ni les snapshots de runs (baseline-v1.txt, iter7-v2.txt, etc.).
+scripts/bench-data/*.json
+scripts/bench-data/*.txt
