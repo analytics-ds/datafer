@@ -153,6 +153,13 @@ export function BriefEditor(props: BriefEditorProps) {
   const [currentTag, setCurrentTag] = useState<"h1" | "h2" | "h3" | "p" | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cache des scores cosinus paragraphe (clé = hash du textContent), alimenté
+  // par le debounce semantic ci-dessous. Sert à : (a) calculer le critère
+  // semantic /10 du scoring, (b) appliquer la bordure colorée gauche sur
+  // chaque <p> de l'éditeur. Itération 8 (2026-05-08, validée Pierre).
+  const [paragraphScores, setParagraphScores] = useState<Map<string, { score: number; color: "green" | "yellow" | "red" }>>(new Map());
+  const semanticDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const semanticInflight = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (editorRef.current && !editorRef.current.innerHTML && initialHtml) {
@@ -192,12 +199,116 @@ export function BriefEditor(props: BriefEditorProps) {
     setCurrentTag(tag as "h1" | "h2" | "h3" | "p" | null);
   }, []);
 
+  // Hash très court (200 caractères normalisés) pour identifier un paragraphe
+  // sans payer le coût d'un vrai hash. Suffisant pour le cache : si 2 paras
+  // ont les mêmes 200 premiers caractères normalisés, leur cosinus sera
+  // quasi identique de toute façon.
+  const hashParagraph = useCallback((text: string): string => {
+    return text.replace(/\s+/g, " ").trim().slice(0, 200);
+  }, []);
+
+  // Debounce semantic : 2s après chaque modif éditeur, on récupère les
+  // scores cosinus de chaque paragraphe ≥5 mots qui n'est pas encore en
+  // cache. Max 5 fetchs par batch pour éviter d'inonder l'endpoint.
+  // Désactivé si nlp.semanticCentroid absent (briefs antérieurs à l'iter 8).
+  useEffect(() => {
+    if (!nlp?.semanticCentroid || nlp.semanticCentroid.length === 0) return;
+    if (!editorRef.current) return;
+    if (semanticDebounce.current) clearTimeout(semanticDebounce.current);
+    semanticDebounce.current = setTimeout(async () => {
+      const el = editorRef.current;
+      if (!el) return;
+      const paragraphs = Array.from(el.querySelectorAll("p"));
+      const toFetch: string[] = [];
+      for (const p of paragraphs) {
+        const text = (p.textContent || "").trim();
+        if (text.split(/\s+/).filter(Boolean).length < 5) continue;
+        const hash = hashParagraph(text);
+        if (paragraphScores.has(hash)) continue;
+        if (semanticInflight.current.has(hash)) continue;
+        toFetch.push(text);
+        if (toFetch.length >= 5) break;
+      }
+      if (toFetch.length === 0) return;
+      for (const t of toFetch) semanticInflight.current.add(hashParagraph(t));
+      const newScores = new Map(paragraphScores);
+      await Promise.all(
+        toFetch.map(async (paragraph) => {
+          try {
+            const r = await fetch(`/api/v2/briefs/${id}/semantic-paragraph`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ paragraph }),
+            });
+            const j = (await r.json()) as {
+              centroidAvailable?: boolean;
+              score?: number;
+              color?: "green" | "yellow" | "red";
+            };
+            if (j.centroidAvailable && typeof j.score === "number" && j.color) {
+              newScores.set(hashParagraph(paragraph), { score: j.score, color: j.color });
+            }
+          } catch {
+            // Silencieux : un échec ponctuel n'empêche pas l'éditeur de
+            // fonctionner ; on retentera au prochain debounce.
+          } finally {
+            semanticInflight.current.delete(hashParagraph(paragraph));
+          }
+        }),
+      );
+      setParagraphScores(newScores);
+    }, 2000);
+    return () => {
+      if (semanticDebounce.current) clearTimeout(semanticDebounce.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorData.text, id, nlp?.semanticCentroid, paragraphScores]);
+
+  // Applique la bordure colorée gauche sur chaque <p> en fonction de son
+  // score sémantique en cache. Vert > 0.75, jaune 0.55-0.75, rouge < 0.55
+  // (seuils validés Pierre 2026-05-06).
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const colorMap = { green: "#10b981", yellow: "#f59e0b", red: "#ef4444" } as const;
+    const paragraphs = editorRef.current.querySelectorAll("p");
+    for (const p of paragraphs) {
+      const text = (p.textContent || "").trim();
+      const hash = hashParagraph(text);
+      const s = paragraphScores.get(hash);
+      const el = p as HTMLElement;
+      if (s) {
+        el.style.borderLeft = `3px solid ${colorMap[s.color]}`;
+        el.style.paddingLeft = "12px";
+        el.title = `Proximité sémantique : ${Math.round(s.score * 100)} / 100 (${s.color})`;
+      } else {
+        el.style.borderLeft = "";
+        el.style.paddingLeft = "";
+        el.removeAttribute("title");
+      }
+    }
+  }, [paragraphScores, editorData.text, hashParagraph]);
+
+  // Tableau plat des scores sémantiques pour computeDetailedScore.
+  // Re-render uniquement quand la map change (pas à chaque frappe).
+  const semanticParagraphScores = useMemo(
+    () => Array.from(paragraphScores.values()).map((s) => ({ score: s.score })),
+    [paragraphScores],
+  );
+
   const score: DetailedScore = useMemo(
     // nlp.competitorScores est rempli côté serveur (pipeline analyse) ou
     // via lazy backfill (rescoreBrief / api scoring). Si absent, le score
     // calculé est brut (rétro-compat) au lieu de relatif.
-    () => computeDetailedScore(editorData, nlp, geoSignals, nlp?.competitorScores),
-    [editorData, nlp, geoSignals],
+    // semanticParagraphScores est alimenté par le debounce ci-dessus.
+    () =>
+      computeDetailedScore(
+        editorData,
+        nlp,
+        geoSignals,
+        nlp?.competitorScores,
+        semanticParagraphScores.length > 0 ? semanticParagraphScores : undefined,
+      ),
+    [editorData, nlp, geoSignals, semanticParagraphScores],
   );
 
   // Premier save : on rattrape les briefs avec un score obsolète en BDD

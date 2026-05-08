@@ -166,8 +166,17 @@ export type DetailedScore = {
   structure: ScoreCriterion;
   quality: ScoreCriterion;
   images: ScoreCriterion;
+  // Sémantique : moyenne des scores cosinus paragraphe vs centroïde top 10.
+  // Sur 10 pts. Calculé côté client (live editor) à partir des scores
+  // récupérés via /api/v2/briefs/[id]/semantic-paragraph et passés en
+  // input à computeDetailedScore. max=0 si aucun score fourni (brief sans
+  // semanticCentroid ou éditeur n'ayant pas encore appelé l'endpoint).
+  semantic: ScoreCriterion;
   geo: GeoScore;
 };
+
+/** Scores cosinus 0-1 par paragraphe utilisateur, dans l'ordre de l'éditeur. */
+export type ParagraphSemanticScore = { score: number };
 
 const EMPTY: DetailedScore = {
   total: 0,
@@ -176,13 +185,14 @@ const EMPTY: DetailedScore = {
   seoTotal: 0,
   geoTotal: 0,
   keyword: { score: 0, max: 15, details: {} },
-  nlpCoverage: { score: 0, max: 35, details: {} },
-  contentLength: { score: 0, max: 8, details: {} },
+  nlpCoverage: { score: 0, max: 27, details: {} },
+  contentLength: { score: 0, max: 7, details: {} },
   headings: { score: 0, max: 13, details: {} },
-  placement: { score: 0, max: 14, details: {} },
+  placement: { score: 0, max: 13, details: {} },
   structure: { score: 0, max: 6, details: {} },
   quality: { score: 0, max: 5, details: {} },
   images: { score: 0, max: 4, details: {} },
+  semantic: { score: 0, max: 10, details: {} },
   geo: computeGeoScore(EMPTY_GEO_SIGNALS),
 };
 
@@ -300,6 +310,12 @@ export function computeDetailedScore(
   // `total` retourné est relatif à la médiane des concurrents (cf.
   // relativizeScore). Sinon, `total` = score brut.
   competitorScores?: number[],
+  // Scores cosinus 0-1 de chaque paragraphe utilisateur vs centroïde
+  // sémantique top 10. Calculé côté client via debounce sur l'éditeur,
+  // récupéré via /api/v2/briefs/[id]/semantic-paragraph. Si absent (brief
+  // antérieur à l'iter sémantique ou éditeur n'ayant pas encore appelé),
+  // le critère sémantique est neutralisé (max=0, renormalisation).
+  paragraphSemanticScores?: ParagraphSemanticScore[],
 ): DetailedScore {
   const geo = computeGeoScore(geoSignals);
   // Pondération SEO sur 100 (itération 7, 2026-05-08) :
@@ -327,13 +343,14 @@ export function computeDetailedScore(
     seoTotal: 0,
     geoTotal: geo.total,
     keyword: { score: 0, max: 15, details: {} },
-    nlpCoverage: { score: 0, max: 35, details: {} },
-    contentLength: { score: 0, max: 8, details: {} },
+    nlpCoverage: { score: 0, max: 27, details: {} },
+    contentLength: { score: 0, max: 7, details: {} },
     headings: { score: 0, max: 13, details: {} },
-    placement: { score: 0, max: 14, details: {} },
+    placement: { score: 0, max: 13, details: {} },
     structure: { score: 0, max: 6, details: {} },
     quality: { score: 0, max: 5, details: {} },
     images: { score: 0, max: 4, details: {} },
+    semantic: { score: 0, max: 10, details: {} },
     geo,
   };
   if (!nlp?.nlpTerms) {
@@ -421,8 +438,11 @@ export function computeDetailedScore(
   // Si pas de termes dans le tier, coverage = 1 (rien à plomber).
   const essCov = essentials.length > 0 ? essUsed / essentials.length : 1;
   const impCov = importants.length > 0 ? impUsed / importants.length : 1;
-  const essScore = Math.min(22, Math.round(essCov * 22));
-  const impScore = Math.min(13, Math.round(impCov * 13));
+  // Itération 8 (2026-05-08) : nlpCoverage 35→27 pour libérer 8 pts au
+  // profit du critère sémantique paragraphe (validé Pierre option A).
+  // Essentiels 17 + Importants 10. Ratio préservé.
+  const essScore = Math.min(17, Math.round(essCov * 17));
+  const impScore = Math.min(10, Math.round(impCov * 10));
   r.nlpCoverage.score = essScore + impScore;
   r.nlpCoverage.details = {
     essentialsUsed: essUsed,
@@ -436,30 +456,23 @@ export function computeDetailedScore(
     // Champs legacy conservés pour rétro-compat (UI/API consommateurs).
     used: essUsed + impUsed,
     total: essentials.length + importants.length,
-    coverage: Math.round(((essCov * 22 + impCov * 13) / 35) * 100),
+    coverage: Math.round(((essCov * 17 + impCov * 10) / 27) * 100),
   };
 
-  // 3. LENGTH /8 (durci itération 7, 2026-05-08)
-  // Avant : être dans [min, max] suffisait pour 12/12. Trop tolérant — un
-  // brouillon de 1500 mots sur une fourchette 1383-2568 cochait le max.
-  // Maintenant on récompense vraiment de viser la médiane des concurrents.
-  //   - 4 pts : wc dans [min, max]
-  //   - +2 pts : wc à ±20 % de avgWordCount (effort de viser la cible)
-  //   - +2 pts : wc >= avgWordCount (être au moins dans la moitié haute)
-  //   - en dessous de min : ratio linéaire vers 4 pts max
-  //   - au dessus de max : on garde 4 pts (pénalité légère, on ne punit
-  //     pas le contenu trop long si le reste est solide)
+  // 3. LENGTH /7 (durci itération 7, recalibré itération 8 2026-05-08)
+  // Itération 8 : passe de 8 à 7 pour faire de la place au sémantique.
+  // Paliers proportionnels : 3 / +2 / +2.
   {
     let s = 0;
-    if (wc >= nlp.minWordCount && wc <= nlp.maxWordCount) s += 4;
-    else if (wc < nlp.minWordCount) s += Math.round((wc / nlp.minWordCount) * 4);
-    else s += 4; // au dessus de max, on garde le palier de base
+    if (wc >= nlp.minWordCount && wc <= nlp.maxWordCount) s += 3;
+    else if (wc < nlp.minWordCount) s += Math.round((wc / nlp.minWordCount) * 3);
+    else s += 3;
     if (nlp.avgWordCount > 0) {
       const dev = Math.abs(wc - nlp.avgWordCount) / nlp.avgWordCount;
       if (dev <= 0.2) s += 2;
       if (wc >= nlp.avgWordCount) s += 2;
     }
-    r.contentLength.score = Math.min(8, s);
+    r.contentLength.score = Math.min(7, s);
     r.contentLength.details = { wc, target: nlp.avgWordCount };
   }
 
@@ -534,15 +547,16 @@ export function computeDetailedScore(
       if (matchesExact(seg)) qExact++;
       else if (matchesSoft(seg)) qSoft++;
     }
-    // Distribution durcie : pour le max 6 pts il faut 3+ quarts en exact.
+    // Distribution durcie : pour le max 5 pts il faut 3+ quarts en exact.
     // Soft compte moitié moins. Sans aucun kw exact, on plafonne à 2 pts ici.
+    // Itération 8 : palier max 6→5 pour absorber le rebalance placement 14→13.
     const qScore = qExact * 1.3 + qSoft * 0.3;
-    if (qScore >= 4) s += 6;
-    else if (qScore >= 2.5) s += 4;
+    if (qScore >= 4) s += 5;
+    else if (qScore >= 2.5) s += 3;
     else if (qScore >= 1.5) s += 2;
     else if (qScore >= 0.5) s += 1;
 
-    r.placement.score = Math.min(14, s);
+    r.placement.score = Math.min(13, s);
     r.placement.details = {
       distribution: `${qExact}/4 exact, ${qSoft}/4 soft`,
     };
@@ -591,6 +605,41 @@ export function computeDetailedScore(
     r.quality.details = { diversity: Math.round(div * 100) };
   }
 
+  // 9. SÉMANTIQUE PARAGRAPHE /10 (itération 8, 2026-05-08)
+  // Moyenne des scores cosinus paragraphe vs centroïde top 10. Calculé côté
+  // client (live editor) et passé en `paragraphSemanticScores`. Si absent,
+  // critère neutralisé (max=0, renormalisation comme images).
+  //
+  // Mapping cosinus → 10 pts :
+  //   cosinus moyen = 0.85 (excellent) → 10/10
+  //   cosinus moyen = 0.65 (médian) → 5/10
+  //   cosinus moyen = 0.45 (faible) → 2/10
+  //   cosinus moyen ≤ 0.30 → 0/10
+  //
+  // Choix d'une mapping non linéaire car les scores bge-m3 sur du contenu
+  // français français se concentrent dans la zone 0.40-0.85 ; un seuil
+  // linéaire 0→1 rendrait quasi impossible d'atteindre 10/10.
+  if (paragraphSemanticScores && paragraphSemanticScores.length > 0) {
+    const avg =
+      paragraphSemanticScores.reduce((acc, p) => acc + p.score, 0) /
+      paragraphSemanticScores.length;
+    let s: number;
+    if (avg >= 0.85) s = 10;
+    else if (avg >= 0.65) s = Math.round(5 + ((avg - 0.65) / 0.2) * 5);
+    else if (avg >= 0.45) s = Math.round(2 + ((avg - 0.45) / 0.2) * 3);
+    else if (avg > 0.3) s = Math.round(((avg - 0.3) / 0.15) * 2);
+    else s = 0;
+    r.semantic.score = Math.max(0, Math.min(10, s));
+    r.semantic.details = {
+      paragraphsScored: paragraphSemanticScores.length,
+      avgCosine: Math.round(avg * 1000) / 1000,
+    };
+  } else {
+    // Critère neutralisé (cf. images quand médiane=0).
+    r.semantic.max = 0;
+    r.semantic.details = { paragraphsScored: 0 };
+  }
+
   // 8. IMAGES /4 (durci itération 7, 2026-05-08)
   // Avant : si médiane = 0 → 3/3 free pass. Maintenant le critère est
   // neutralisé en passant à 0/0 (pas dans le total) plutôt que d'offrir 3
@@ -618,7 +667,8 @@ export function computeDetailedScore(
   }
 
   // Re-normalisation sur 100 : si un critère a été neutralisé (images
-  // quand médiane=0, son `.max` passe à 0), le total sur 96 doit être
+  // quand médiane=0, semantic quand pas de centroïde / pas de scores
+  // par paragraphe), son `.max` passe à 0. Le total partiel doit être
   // ramené sur 100 pour ne pas pénaliser injustement le contenu.
   const sumScore =
     r.keyword.score +
@@ -628,7 +678,8 @@ export function computeDetailedScore(
     r.placement.score +
     r.structure.score +
     r.quality.score +
-    r.images.score;
+    r.images.score +
+    r.semantic.score;
   const sumMax =
     r.keyword.max +
     r.nlpCoverage.max +
@@ -637,7 +688,8 @@ export function computeDetailedScore(
     r.placement.max +
     r.structure.max +
     r.quality.max +
-    r.images.max;
+    r.images.max +
+    r.semantic.max;
   r.seoTotal = sumMax > 0 ? Math.min(100, Math.round((sumScore / sumMax) * 100)) : 0;
   r.rawTotal = Math.min(
     100,

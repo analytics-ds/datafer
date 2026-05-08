@@ -16,6 +16,7 @@ import {
   detectIntent,
   detectOpportunities,
   enrichWithSemantic,
+  computeSemanticCentroid,
   type PageContent,
   type SerpResult,
   type NlpResult,
@@ -429,6 +430,15 @@ async function createBriefAnalysisPayload(
   nlp.intent = detectIntent(keyword, results);
   const aiBinding = (env as unknown as { AI?: Ai }).AI;
   nlp = await enrichWithSemantic(nlp, keyword, aiBinding);
+  // Centroïde sémantique top 10 : embed les paragraphes ≥40 mots de chaque
+  // concurrent, calcule le vecteur moyen. Sert au scoring "Proximité
+  // sémantique Google" côté éditeur (cosinus paragraphe user vs centroïde).
+  // Itération 8 (2026-05-08, validée Pierre option A : blendé dans le 100).
+  const semantic = await computeSemanticCentroid(pageContents, aiBinding);
+  if (semantic) {
+    nlp.semanticCentroid = semantic.centroid;
+    nlp.competitorSemanticScores = semantic.competitorScores;
+  }
   // Scores bruts des concurrents : utilisés pour la relativisation du
   // score user (cf. relativizeScore dans scoring.ts). On stocke aussi
   // chaque score sur enrichedResults[i].score pour l'affichage SERP.

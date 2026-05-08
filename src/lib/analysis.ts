@@ -231,6 +231,18 @@ export type NlpResult = {
   // avec les briefs anciens : si absent, le score affiché est le brut
   // jusqu'au lazy backfill au 1er chargement.
   competitorScores?: number[];
+  // Centroïde sémantique (vecteur bge-m3 1024 dim) calculé à partir des
+  // paragraphes ≥40 mots de chaque concurrent du top 10. Représente
+  // "le sujet idéal vu par Google" pour ce KW. Utilisé live côté éditeur
+  // pour scorer chaque paragraphe utilisateur (cosinus vs centroïde).
+  // Présent uniquement pour les briefs créés après l'itération sémantique
+  // (2026-05-08+). Pour les briefs antérieurs : critère sémantique
+  // neutralisé dans le scoring.
+  semanticCentroid?: number[];
+  // Score cosinus (0-1) de chaque concurrent du top 10 vs le centroïde
+  // top 10. Permet le bench "tes paragraphes 0.68 vs concurrent #1 0.81".
+  // Aligné avec l'ordre des résultats SERP (index 0 = position 1, etc.).
+  competitorSemanticScores?: number[];
 };
 
 // ─── SERP providers (CrazySerp + SerpAPI) ────────────────────────────────────
@@ -3055,4 +3067,115 @@ function clusterTermsByEmbedding(
     .sort((a, b) => b.terms.length - a.terms.length)
     .slice(0, 10)
     .map(({ label, terms }) => ({ label, terms }));
+}
+
+// ─── Centroïde sémantique paragraphe (Cloudflare Workers AI / bge-m3) ────────
+
+/**
+ * Extrait les paragraphes d'un HTML ≥minWords mots. Ignore les paragraphes
+ * trop courts (souvent du bruit : navigation résiduelle, captions, footer).
+ * Strip les balises et normalise les espaces.
+ *
+ * Utilisé côté server pour préparer les inputs bge-m3 du centroïde top 10,
+ * et côté client (via embedParagraphForUser) pour scorer chaque paragraphe
+ * du contenu rédigé.
+ */
+export function extractParagraphsFromHtml(html: string, minWords = 40): string[] {
+  const matches = html.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) ?? [];
+  return matches
+    .map((m) => m.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())
+    .filter((t) => t.split(/\s+/).filter(Boolean).length >= minWords);
+}
+
+/** Moyenne vectorielle (centroïde) d'une liste d'embeddings de même dimension. */
+function avgVector(vectors: number[][]): number[] {
+  if (vectors.length === 0) return [];
+  const dim = vectors[0].length;
+  const out = new Array(dim).fill(0);
+  for (const v of vectors) {
+    for (let i = 0; i < dim; i++) out[i] += v[i];
+  }
+  for (let i = 0; i < dim; i++) out[i] /= vectors.length;
+  return out;
+}
+
+/**
+ * Cosinus exposé pour usage external (endpoint live semantic-paragraph).
+ * Délègue à la version interne déjà utilisée par enrichWithSemantic.
+ */
+export function cosineSim(a: number[], b: number[]): number {
+  return cosineSimilarity(a, b);
+}
+
+/**
+ * Calcule le centroïde sémantique du top 10 concurrents pour un brief :
+ *   1. Pour chaque concurrent, extrait ses paragraphes ≥40 mots
+ *   2. Embed tous les paragraphes en batch via bge-m3
+ *   3. Calcule un centroïde par concurrent (moyenne de ses paragraphes)
+ *   4. Calcule le centroïde top 10 (moyenne des centroïdes)
+ *   5. Calcule le score cosinus de chaque concurrent vs centroïde top 10
+ *      (sert au bench "tes paragraphes vs concurrent #1")
+ *
+ * Coût : ~300 paragraphes × 1024 dim, ~6 batches de 50 inputs bge-m3.
+ * Sous le free tier Workers AI (10k neurons/jour), ~1500 neurons par brief.
+ *
+ * Renvoie null si AI binding absent, aucun paragraphe valide, ou erreur API.
+ */
+export async function computeSemanticCentroid(
+  contents: PageContent[],
+  ai: Ai | undefined,
+): Promise<{ centroid: number[]; competitorScores: number[] } | null> {
+  if (!ai || contents.length === 0) return null;
+
+  const competitorParagraphs: string[][] = contents.map((c) =>
+    extractParagraphsFromHtml(c.structuredHtml ?? "", 40),
+  );
+  const allParagraphs = competitorParagraphs.flat();
+  if (allParagraphs.length === 0) return null;
+
+  // Batch par 50 pour rester sous le timeout Workers AI (~30s par run).
+  const batchSize = 50;
+  const allEmbeddings: number[][] = [];
+  for (let i = 0; i < allParagraphs.length; i += batchSize) {
+    const batch = allParagraphs.slice(i, i + batchSize);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = (await ai.run("@cf/baai/bge-m3" as any, { text: batch })) as {
+        data?: number[][];
+      };
+      if (!result.data || result.data.length !== batch.length) {
+        console.warn(
+          `[ai] semantic centroid batch mismatch: ${result.data?.length} vs ${batch.length}`,
+        );
+        return null;
+      }
+      allEmbeddings.push(...result.data);
+    } catch (err) {
+      console.error("[ai] semantic centroid batch failed:", err);
+      return null;
+    }
+  }
+
+  // Reconstruit les centroïdes par concurrent, dans l'ordre.
+  const competitorCentroids: number[][] = [];
+  let cursor = 0;
+  for (const paragraphs of competitorParagraphs) {
+    if (paragraphs.length === 0) {
+      competitorCentroids.push([]);
+      continue;
+    }
+    const embs = allEmbeddings.slice(cursor, cursor + paragraphs.length);
+    cursor += paragraphs.length;
+    competitorCentroids.push(avgVector(embs));
+  }
+
+  const validCentroids = competitorCentroids.filter((c) => c.length > 0);
+  if (validCentroids.length === 0) return null;
+
+  const centroid = avgVector(validCentroids);
+  const competitorScores = competitorCentroids.map((c) =>
+    c.length > 0 ? cosineSimilarity(c, centroid) : 0,
+  );
+
+  return { centroid, competitorScores };
 }
