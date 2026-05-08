@@ -16,9 +16,9 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { computeDetailedScore, type EditorData } from "../src/lib/scoring";
+import { computeDetailedScore, relativizeScore, type EditorData } from "../src/lib/scoring";
 import { parseHTML, type NlpResult, type NlpTerm } from "../src/lib/analysis";
-import type { GeoSignals } from "../src/lib/geo-scoring";
+import { geoSignalsFromHtml, type GeoSignals } from "../src/lib/geo-scoring";
 
 const BENCH_DIR = path.join(__dirname, "bench-data");
 const BRIEFS = [
@@ -54,59 +54,6 @@ type SerpResult = {
 function loadBrief(slug: string): BriefRow {
   const raw = fs.readFileSync(path.join(BENCH_DIR, `${slug}.json`), "utf8");
   return JSON.parse(raw);
-}
-
-/**
- * Extraction GEO signals depuis HTML brut (regex). Pas idéal vs DOM mais
- * suffisant pour le bench. Cohérent avec extractGeoSignals() côté UI.
- */
-function geoSignalsFromHtml(html: string): GeoSignals {
-  const lower = html.toLowerCase();
-  const hasTable = /<table[^>]*>[\s\S]*?<td/i.test(html);
-  const liMatches = html.match(/<li[\s>]/gi) ?? [];
-  const bulletItemsCount = liMatches.length;
-
-  // Quick summary : <em>/<i> dans un des 3 premiers <p>, ou heading déclaratif
-  const earlyP = html.match(/<p[^>]*>[\s\S]*?<\/p>/gi)?.slice(0, 3) ?? [];
-  let hasQuickSummary = earlyP.some(
-    (p) => /<(em|i)[\s>]/i.test(p) && stripTags(p).trim().length > 30,
-  );
-  if (!hasQuickSummary) {
-    const headings = html.match(/<h[23][^>]*>([\s\S]*?)<\/h[23]>/gi) ?? [];
-    const summaryKw = ["résumé", "resume", "tldr", "tl;dr", "en bref", "synthèse", "synthese", "à retenir", "a retenir"];
-    hasQuickSummary = headings.some((h) => {
-      const t = stripTags(h).toLowerCase();
-      return summaryKw.some((k) => t.includes(k));
-    });
-  }
-
-  // FAQ : H2/H3 finissant par ?, ou H2 contenant FAQ/questions avec ≥2 H3 sub
-  const allHeadings = html.match(/<h[23][^>]*>([\s\S]*?)<\/h[23]>/gi) ?? [];
-  let questionHeadings = 0;
-  let faqSection = false;
-  for (const h of allHeadings) {
-    const txt = stripTags(h).trim();
-    if (txt.endsWith("?") || txt.endsWith(" ?")) questionHeadings++;
-    if (/<h2/i.test(h) && /(\bfaq\b|questions)/i.test(txt)) faqSection = true;
-  }
-  const faqQuestionsCount = faqSection && questionHeadings < 2 ? 2 : questionHeadings;
-
-  // Stats chiffrées : nombre + unité, identique à extractGeoSignals
-  const text = stripTags(html);
-  const numericRegex = /\b\d+(?:[.,]\d+)?\s*(?:%|€|\$|km|kg|cm|mm|m²|m2|ans?|jours?|paires?|fois|mots?|heures?|minutes?)(?![a-zA-Zé])/gi;
-  const numericMentionsCount = (text.match(numericRegex) ?? []).length;
-
-  return {
-    hasTable,
-    bulletItemsCount,
-    hasQuickSummary,
-    faqQuestionsCount,
-    numericMentionsCount,
-  };
-}
-
-function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 }
 
 function imageCountFromHtml(html: string): number {
@@ -268,20 +215,9 @@ function scoreRow(
   };
 }
 
-/**
- * Score relatif vs médiane top 10 concurrents.
- *  - brut < médiane : 50 × brut / médiane (médiane = 50)
- *  - brut >= médiane : 50 + 50 × min(1, (brut - médiane) / (médiane × 0.5))
- *    (médiane × 1.5 = 100)
- *
- * Cohérent avec ce qu'a validé Pierre via le preview AskUserQuestion.
- */
-function relativizeScore(raw: number, medianTop10: number): number {
-  if (medianTop10 <= 0) return raw;
-  const ref = Math.max(60, medianTop10); // floor pour KW à concu faible
-  if (raw < ref) return Math.round(50 * (raw / ref));
-  return Math.min(100, Math.round(50 + 50 * Math.min(1, (raw - ref) / (ref * 0.5))));
-}
+// `relativizeScore` est maintenant importé depuis src/lib/scoring (review
+// 2026-05-08, M2). Avant on en avait une copie locale qui pouvait diverger
+// silencieusement de la prod.
 
 function median(values: number[]): number {
   if (values.length === 0) return 0;

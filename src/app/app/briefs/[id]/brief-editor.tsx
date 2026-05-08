@@ -13,7 +13,7 @@ import type {
   Section as NlpSection,
   Entity,
 } from "@/lib/analysis";
-import { buildKeywordRegex, computeDetailedScore, type DetailedScore } from "@/lib/scoring";
+import { buildKeywordRegex, computeDetailedScore, type DetailedScore, type ParagraphSemanticScore } from "@/lib/scoring";
 import {
   extractGeoSignals,
   EMPTY_GEO_SIGNALS,
@@ -203,7 +203,7 @@ export function BriefEditor(props: BriefEditorProps) {
   // sans payer le coût d'un vrai hash. Suffisant pour le cache : si 2 paras
   // ont les mêmes 200 premiers caractères normalisés, leur cosinus sera
   // quasi identique de toute façon.
-  const hashParagraph = useCallback((text: string): string => {
+  const paragraphCacheKey = useCallback((text: string): string => {
     return text.replace(/\s+/g, " ").trim().slice(0, 200);
   }, []);
 
@@ -223,14 +223,14 @@ export function BriefEditor(props: BriefEditorProps) {
       for (const p of paragraphs) {
         const text = (p.textContent || "").trim();
         if (text.split(/\s+/).filter(Boolean).length < 5) continue;
-        const hash = hashParagraph(text);
+        const hash = paragraphCacheKey(text);
         if (paragraphScores.has(hash)) continue;
         if (semanticInflight.current.has(hash)) continue;
         toFetch.push(text);
         if (toFetch.length >= 5) break;
       }
       if (toFetch.length === 0) return;
-      for (const t of toFetch) semanticInflight.current.add(hashParagraph(t));
+      for (const t of toFetch) semanticInflight.current.add(paragraphCacheKey(t));
       const newScores = new Map(paragraphScores);
       await Promise.all(
         toFetch.map(async (paragraph) => {
@@ -246,13 +246,13 @@ export function BriefEditor(props: BriefEditorProps) {
               color?: "green" | "yellow" | "red";
             };
             if (j.centroidAvailable && typeof j.score === "number" && j.color) {
-              newScores.set(hashParagraph(paragraph), { score: j.score, color: j.color });
+              newScores.set(paragraphCacheKey(paragraph), { score: j.score, color: j.color });
             }
           } catch {
             // Silencieux : un échec ponctuel n'empêche pas l'éditeur de
             // fonctionner ; on retentera au prochain debounce.
           } finally {
-            semanticInflight.current.delete(hashParagraph(paragraph));
+            semanticInflight.current.delete(paragraphCacheKey(paragraph));
           }
         }),
       );
@@ -273,7 +273,7 @@ export function BriefEditor(props: BriefEditorProps) {
     const paragraphs = editorRef.current.querySelectorAll("p");
     for (const p of paragraphs) {
       const text = (p.textContent || "").trim();
-      const hash = hashParagraph(text);
+      const hash = paragraphCacheKey(text);
       const s = paragraphScores.get(hash);
       const el = p as HTMLElement;
       if (s) {
@@ -286,14 +286,28 @@ export function BriefEditor(props: BriefEditorProps) {
         el.removeAttribute("title");
       }
     }
-  }, [paragraphScores, editorData.text, hashParagraph]);
+  }, [paragraphScores, editorData.text, paragraphCacheKey]);
 
-  // Tableau plat des scores sémantiques pour computeDetailedScore.
-  // Re-render uniquement quand la map change (pas à chaque frappe).
-  const semanticParagraphScores = useMemo(
-    () => Array.from(paragraphScores.values()).map((s) => ({ score: s.score })),
-    [paragraphScores],
-  );
+  // Tableau plat des scores sémantiques pour computeDetailedScore. Review
+  // 2026-05-08 (M3) : on filtre les scores en croisant avec les paragraphes
+  // actuellement présents dans le DOM. Sinon des paragraphes supprimés
+  // (mais encore en cache) faussent la moyenne sémantique. Recalculé à
+  // chaque modif de editorData.text.
+  const semanticParagraphScores = useMemo(() => {
+    if (!editorRef.current) return [];
+    const liveKeys = new Set<string>();
+    for (const p of editorRef.current.querySelectorAll("p")) {
+      const text = (p.textContent || "").trim();
+      if (text.split(/\s+/).filter(Boolean).length < 5) continue;
+      liveKeys.add(paragraphCacheKey(text));
+    }
+    const out: ParagraphSemanticScore[] = [];
+    for (const [key, val] of paragraphScores) {
+      if (liveKeys.has(key)) out.push({ score: val.score });
+    }
+    return out;
+    // editorData.text déclenche la re-évaluation à chaque modif éditeur.
+  }, [paragraphScores, editorData.text, paragraphCacheKey]);
 
   const score: DetailedScore = useMemo(
     // nlp.competitorScores est rempli côté serveur (pipeline analyse) ou

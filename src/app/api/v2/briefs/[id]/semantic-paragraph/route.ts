@@ -45,6 +45,16 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   if (!paragraph || paragraph.split(/\s+/).filter(Boolean).length < 5) {
     return NextResponse.json({ error: "paragraph too short" }, { status: 400 });
   }
+  // Cap dur à 2000 caractères (~400 mots, largement au-dessus d'un
+  // paragraphe normal). Évite qu'un paragraphe trop long vide le quota
+  // Workers AI : sur Free, chaque appel bge-m3 consomme des neurons
+  // proportionnels à la longueur de l'input. Review 2026-05-08 (H3).
+  if (paragraph.length > 2000) {
+    return NextResponse.json(
+      { error: "paragraph too long (max 2000 characters)" },
+      { status: 400 },
+    );
+  }
 
   const { nlp } = loadBrief(row);
   if (!nlp?.semanticCentroid || nlp.semanticCentroid.length === 0) {

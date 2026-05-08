@@ -3135,7 +3135,13 @@ export async function computeSemanticCentroid(
 
   // Batch par 50 pour rester sous le timeout Workers AI (~30s par run).
   const batchSize = 50;
-  const allEmbeddings: number[][] = [];
+  // Robustesse (review 2026-05-08, H2) : un échec de batch ne doit pas
+  // annuler tous les batches précédents. On marque les indices manquants
+  // comme `null` dans `allEmbeddings` et on les exclut du centroïde.
+  // Garantit qu'un timeout/429 transient sur un batch n'invalide pas le
+  // brief entier (cas réaliste sur Workers Free, quota neurons limité).
+  const allEmbeddings: (number[] | null)[] = [];
+  let failedBatches = 0;
   for (let i = 0; i < allParagraphs.length; i += batchSize) {
     const batch = allParagraphs.slice(i, i + batchSize);
     try {
@@ -3147,16 +3153,24 @@ export async function computeSemanticCentroid(
         console.warn(
           `[ai] semantic centroid batch mismatch: ${result.data?.length} vs ${batch.length}`,
         );
-        return null;
+        for (let k = 0; k < batch.length; k++) allEmbeddings.push(null);
+        failedBatches++;
+      } else {
+        allEmbeddings.push(...result.data);
       }
-      allEmbeddings.push(...result.data);
     } catch (err) {
       console.error("[ai] semantic centroid batch failed:", err);
-      return null;
+      for (let k = 0; k < batch.length; k++) allEmbeddings.push(null);
+      failedBatches++;
     }
   }
+  // Si TOUS les batches ont planté, on ne peut rien construire.
+  if (failedBatches > 0 && allEmbeddings.every((e) => e === null)) return null;
 
-  // Reconstruit les centroïdes par concurrent, dans l'ordre.
+  // Reconstruit les centroïdes par concurrent, dans l'ordre. Ignore les
+  // embeddings manquants (batches plantés). Si un concurrent n'a aucun
+  // embedding valide (tous ses paragraphes étaient dans des batches
+  // plantés), son centroïde reste vide.
   const competitorCentroids: number[][] = [];
   let cursor = 0;
   for (const paragraphs of competitorParagraphs) {
@@ -3164,18 +3178,24 @@ export async function computeSemanticCentroid(
       competitorCentroids.push([]);
       continue;
     }
-    const embs = allEmbeddings.slice(cursor, cursor + paragraphs.length);
+    const slice = allEmbeddings.slice(cursor, cursor + paragraphs.length);
     cursor += paragraphs.length;
-    competitorCentroids.push(avgVector(embs));
+    const validEmbs = slice.filter((e): e is number[] => e !== null);
+    competitorCentroids.push(validEmbs.length > 0 ? avgVector(validEmbs) : []);
   }
 
   const validCentroids = competitorCentroids.filter((c) => c.length > 0);
   if (validCentroids.length === 0) return null;
 
   const centroid = avgVector(validCentroids);
-  const competitorScores = competitorCentroids.map((c) =>
-    c.length > 0 ? cosineSimilarity(c, centroid) : 0,
-  );
+  // Review 2026-05-08 (M4) : on filtre les centroïdes vides pour ne pas
+  // polluer competitorScores avec des 0 qui ne signifient pas "score 0"
+  // mais "pas de donnée". Les consommateurs (UI bench, dashboards) auront
+  // une liste de longueur variable correspondant aux concurrents
+  // exploitables uniquement.
+  const competitorScores = competitorCentroids
+    .filter((c) => c.length > 0)
+    .map((c) => cosineSimilarity(c, centroid));
 
   return { centroid, competitorScores };
 }

@@ -126,37 +126,46 @@ Doc API CrazySerp : skill projet `.claude/skills/crazyserp-api/SKILL.md`.
 
 ## Scoring SEO
 
-Pondération sur 100 (depuis 2026-05-02, itération 5) :
+Pondération sur 100 (depuis 2026-05-08, itération 8) :
 
 | Critère | Max | Notes |
 |---|---|---|
 | keyword | 15 | softScore (couverture tokens) max 7 + bonus exact max 8 |
-| **nlpCoverage** | **25** | Split par tier (cf. ci-dessous) |
-| contentLength | 12 | wc dans `[minWordCount, maxWordCount]` → 12 |
-| headings | 15 | H1/H2/H3 + keyword dans H1/H2 |
-| placement | 15 | KW exact ou soft dans first 100 mots / 1ère phrase / H1 / H2 |
-| structure | 9 | Listes, tableau, FAQ, etc. |
-| quality | 9 | Diversité lexicale, longueur phrases, density |
+| **nlpCoverage** | **27** | Essentiels 17 + Importants 10 (split par tier) |
+| contentLength | 7 | wc dans `[min,max]` (3) + ±20% avg (2) + ≥avg (2) |
+| headings | 13 | H1 unique (4) + KW H1 (3) + H2 count (3) + KW H2 (2) + ≥2 H3 (1) |
+| placement | 13 | KW exact first 100 (4) + 1ère phrase (2) + last 100 (2) + distribution (5) |
+| structure | 6 | Ratio paragraphes (3) + longueur paragraphes (2) + wc≥500 (1) |
+| quality | 5 | Phrases moy (2) + density (1) + diversité ≥0.55 (2) |
+| images | 4 | Linéaire vers médiane concurrents, neutralisé si médiane=0 |
+| **semantic** | **10** | Cosinus moyen paragraphe vs centroïde top 10 (mapping non linéaire) |
 
-Total SEO weight = 0.95, GEO weight = 0.05 (le SEO classique reste l'essentiel, GEO en bonus).
+Total SEO weight = 0.92, GEO weight = 0.08.
+
+**Score relatif vs concurrents** (depuis iter 7) : le `total` retourné est calibré sur la médiane des scores bruts des top 10 concurrents (`competitorScores` stocké dans `nlp_json`). Médiane = 50, médiane × 1.5 = 100. Floor médiane à 60 (sur KW à concu faible, on calibre comme si la médiane était 60). Le `rawTotal` reste accessible pour debug/comparaison cross-KW.
 
 ### Split nlpCoverage par tier
 
 Le scoring NLP suit les tiers que voit l'utilisateur dans l'éditeur (`brief-view.tsx` / `brief-editor.tsx`) :
 
-- **Essentiels** (presence ≥ 70 chez les concurrents) : 15 pts linéaire, faut **100%** pour 15/15
+- **Essentiels** (presence ≥ 70 chez les concurrents) : 17 pts linéaire, faut **100%** pour 17/17
 - **Importants** (40 ≤ presence < 70) : 10 pts linéaire
 - **Opportunités** (< 40) : ignorées du scoring (bonus, pas obligatoires)
 
-Pris sur top40 termes pour aligner avec `slice(0, 40)` côté UI. Détails exposés dans `nlpCoverage.details` : `essentialsUsed/Total/Coverage/Score` + `importantsUsed/Total/Coverage/Score`.
+Pris sur top40 termes pour aligner avec `slice(0, 40)` côté UI.
+
+### Critère sémantique paragraphe (iter 8)
+
+`computeSemanticCentroid` (analysis.ts) embed les paragraphes ≥40 mots de chaque concurrent top 10 via Workers AI bge-m3 (1024 dim), calcule le centroïde top 10, le stocke dans `nlp.semanticCentroid`. Côté éditeur, debounce 2s : pour chaque paragraphe modifié, fetch `POST /api/v2/briefs/[id]/semantic-paragraph` qui retourne le cosinus + couleur (vert ≥ 0.75, jaune 0.55-0.75, rouge < 0.55). Mapping cosinus → score sémantique : 0.85 → 10, 0.65 → 5, 0.45 → 2. Critère neutralisé (max=0, renormalisation) si centroïde absent ou aucun paragraphe scoré.
 
 ### Historique des itérations scoring
 
-- **iter 1 (2026-05-01)** : remontée du bonus exact KW (4 → 8 pts) parce que des contenus sans KW exact tombaient à des scores trop hauts
-- **iter 2 (2026-05-01)** : softScore KW tightened à 7 max (avant pas de cap) → un contenu sans KW exact plafonne à 7/15
-- **iter 3 (2026-05-02)** : reverted (Pierre : "score beaucoup beaucoup trop dur")
-- **iter 4 (2026-05-02)** : GEO 10 → 5 pts, nlpCoverage 20 → 25 (linéaire `round(cov × 25)` au lieu de paliers). Rééquilibrage : headings 18→15, structure 10→9, quality 10→9.
-- **iter 5 (2026-05-02)** : split nlpCoverage par tier (Essentiels 15 + Importants 10). Avant on avait `round(cov_top30 × 25)` qui mélangeait tous les tiers. Pierre : "4/5 essentiels + 18/32 importants j'ai un score de fou c'est pas normal".
+- **iter 1-3 (2026-05-01/02)** : ajustements KW (bonus exact 4→8, softScore cap à 7).
+- **iter 4 (2026-05-02)** : GEO 10 → 5 pts, nlpCoverage 20 → 25 linéaire.
+- **iter 5 (2026-05-02)** : split nlpCoverage par tier (Essentiels 15 + Importants 10).
+- **iter 6 (2026-05-03)** : ajout images /3, quality 9 → 6.
+- **iter 7 (2026-05-08)** : rebalance complet + scoring relatif vs concu. nlpCoverage 25→35, contentLength 12→8, headings 15→13, placement 15→14, structure 9→6, quality 6→5, images 3→4. SEO 0.95 → 0.92, GEO 0.05 → 0.08. Floor médiane à 60.
+- **iter 8 (2026-05-08)** : ajout critère sémantique paragraphe /10. nlpCoverage 35→27, placement 14→13, contentLength 8→7 pour libérer les 10 pts.
 
 ## Briefs Pierre cite régulièrement pour tester
 

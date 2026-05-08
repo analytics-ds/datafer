@@ -146,8 +146,13 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
   const breakdown = computeDetailedScore(ed, nlp, geoSignals, competitorScores);
 
   // Si on vient de lazy-backfill competitorScores, on persiste pour ne pas
-  // refaire le calcul à la prochaine sauvegarde.
-  const nlpJsonToWrite = nlp.competitorScores ? JSON.stringify(nlp) : row.nlpJson;
+  // refaire le calcul à la prochaine sauvegarde. `ensureCompetitorScores`
+  // mute `nlp.competitorScores` en place dès qu'elle a calculé quelque
+  // chose (même un tableau vide quand serpJson n'a aucun concurrent
+  // exploitable). Donc `nlp.competitorScores !== undefined` ⇔ on a fait
+  // un calcul et il faut persister. `serpJson` null laisse `nlp` intact
+  // et on conserve `row.nlpJson` original.
+  const nlpJsonToWrite = nlp.competitorScores !== undefined ? JSON.stringify(nlp) : row.nlpJson;
 
   await db
     .update(brief)
@@ -224,9 +229,15 @@ export async function completeBriefAnalysis(
   // /api/briefs/[id]/progress) puisse l'afficher en live.
   const setStep = async (step: string) => {
     try {
+      // Met à jour analysisStep ET updatedAt : le cron cleanup-stuck se
+      // base sur updatedAt pour décider qu'un brief est stuck (cf.
+      // HEARTBEAT_STALE_MS dans cleanup-stuck.ts). Sans ça, un crawl long
+      // (Bright Data Browser ~90s sur un site JS-heavy) ne rafraîchit
+      // pas le heartbeat et le brief peut être tué malgré le worker
+      // vivant. Review 2026-05-08 (L3).
       await db
         .update(brief)
-        .set({ analysisStep: step })
+        .set({ analysisStep: step, updatedAt: new Date() })
         .where(eq(brief.id, briefId));
     } catch {
       // best-effort : si l'update échoue (race / DB indisponible) on

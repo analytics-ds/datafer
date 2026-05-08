@@ -318,23 +318,25 @@ export function computeDetailedScore(
   paragraphSemanticScores?: ParagraphSemanticScore[],
 ): DetailedScore {
   const geo = computeGeoScore(geoSignals);
-  // Pondération SEO sur 100 (itération 7, 2026-05-08) :
-  //   keyword 15 + nlpCoverage 35 + contentLength 8 + headings 13 +
-  //   placement 14 + structure 6 + quality 5 + images 4 = 100.
+  // Pondération SEO sur 100 (itération 8, 2026-05-08) :
+  //   keyword 15 + nlpCoverage 27 + contentLength 7 + headings 13 +
+  //   placement 13 + structure 6 + quality 5 + images 4 + semantic 10 = 100.
+  // SEO_WEIGHT 0.92 + GEO_WEIGHT 0.08.
   //
-  // Pourquoi : Pierre a remonté que le score grimpait trop vite à 80 puis
-  // bloquait à 90. Bench `scripts/score-bench.ts` a confirmé : un brouillon
-  // synthétique zéro NLP (juste H1 + 3 H2 + KW dans first 100) tapait 55/100,
-  // soit la médiane des top 10 réels. Donc 75% des points venaient de
-  // critères "structurels gratuits". On rééquilibre :
-  //   - nlpCoverage 25 → 35 : le vrai discriminant SEO entre concurrents
-  //   - contentLength 12 → 8, headings 15 → 13, placement 15 → 14, structure
-  //     9 → 6, quality 6 → 5 : critères trop tolérants, on resserre
-  //   - images 3 → 4 : ne plus donner 3 pts gratos quand médiane = 0
+  // Itération 7 : rebalance complet (Pierre : "le score monte trop vite à
+  // 80 puis bloque à 90"). Bench scripts/score-bench.ts a confirmé qu'un
+  // brouillon zéro NLP tapait 55/100 (= médiane top 10) avec l'ancienne
+  // pondération. On a réduit les critères "gratuits" (length, headings,
+  // structure, quality) au profit de nlpCoverage (vrai discriminant).
   //
-  // Les paliers internes de chaque critère sont aussi durcis (cf. sections
-  // ci-dessous). Cible vérifiée par le bench : top 10 médiane 55-70,
-  // brouillon synth 30-45, optim sérieux 80-92.
+  // Itération 8 : ajout du critère sémantique (embedding paragraphe vs
+  // centroïde top 10). nlpCoverage 35→27 + placement 14→13 + length 8→7
+  // pour libérer 10 pts. Critère neutralisé (max=0, renormalisation) si
+  // brief antérieur sans semanticCentroid ou éditeur sans paragraphes
+  // scorés.
+  //
+  // Cible bench : top 10 médiane 55-70, brouillon synth 30-45, optim
+  // sérieux 80-92.
   const competitorMedian = competitorScores ? medianCompetitorScore(competitorScores) : 0;
   const r: DetailedScore = {
     total: 0,
@@ -412,18 +414,16 @@ export function computeDetailedScore(
     exactBonus,
   };
 
-  // 2. NLP /35 — split par tier (cohérent avec l'UI brief-view/editor).
-  // Essentiels (presence ≥ 70) : 22 pts linéaire → 100% requis pour le max.
-  // Importants (40 ≤ presence < 70) : 13 pts linéaire.
+  // 2. NLP /27 — split par tier (cohérent avec l'UI brief-view/editor).
+  // Essentiels (presence ≥ 70) : 17 pts linéaire → 100% requis pour le max.
+  // Importants (40 ≤ presence < 70) : 10 pts linéaire.
   // Opportunités (< 40) ignorées : ce sont des bonus, pas des termes
   // obligatoires.
   //
-  // Itération 7 (2026-05-08) : nlpCoverage passe de 25 à 35. C'est la grosse
-  // décision du rebalance. Le NLP est le vrai discriminant entre un
-  // brouillon et un contenu sérieux ; doubler son poids relatif pousse les
-  // contenus zéro-NLP vers 35-45 (au lieu de 55), tout en laissant
-  // accessibles les 80+ pour les contenus qui couvrent essentiels +
-  // importants.
+  // Historique : iter 5 25 pts, iter 7 35 pts (rebalance vers NLP), iter 8
+  // 27 pts (8 pts redistribués vers le critère sémantique paragraphe).
+  // Le NLP reste le critère discriminant principal entre un brouillon et
+  // un contenu sérieux.
   const top40 = nlp.nlpTerms.slice(0, 40);
   const essentials = top40.filter((t) => t.presence >= 70);
   const importants = top40.filter((t) => t.presence >= 40 && t.presence < 70);
@@ -514,7 +514,7 @@ export function computeDetailedScore(
     };
   }
 
-  // 5. PLACEMENT /14 (durci itération 7, 2026-05-08)
+  // 5. PLACEMENT /13 (durci itération 7, recalibré /14→/13 itération 8)
   // Soft (couverture ≥ 60% des tokens significatifs) ou exact match dans les
   // segments-clés. Le palier "first 100 mots" passe de 5 à 4 pts en exact,
   // "1ère phrase" de 3 à 2 pts. La distribution sur les 4 quarts demande
