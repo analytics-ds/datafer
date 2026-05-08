@@ -99,7 +99,19 @@ export function htmlToEditorData(html: string): EditorData {
   const h1s = grab("h1");
   const h2s = grab("h2");
   const h3s = grab("h3");
-  const text = stripTags(html).replace(/\s+/g, " ").trim();
+  // Préserve les sauts de paragraphe lors du strip : insère \n\n après chaque
+  // bloc fermant (p, h1-h6, li, tr, blockquote) et \n après <br>. Sans ça, le
+  // critère structure du scoring (qui split sur \n\s*\n) ne voit qu'un seul
+  // paragraphe géant et plombe le score à 1/6 même sur des contenus bien
+  // structurés (cf. test & learn 2026-05-08).
+  const withBreaks = html
+    .replace(/<\/(p|h[1-6]|li|tr|blockquote|div)\s*>/gi, "\n\n")
+    .replace(/<br\s*\/?>/gi, "\n");
+  const text = stripTags(withBreaks)
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n\n");
   // Compte les <img> du HTML (self-closing inclus). Sert au critère images
   // du scoring : on compare ce nombre à la médiane des concurrents.
   const imageCount = (html.match(/<img\b[^>]*>/gi) ?? []).length;
