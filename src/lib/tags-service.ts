@@ -65,21 +65,26 @@ export async function listTagsForBrief(briefId: string) {
 export async function listTagsForBriefs(briefIds: string[]) {
   if (briefIds.length === 0) return new Map<string, { id: string; name: string; color: string }[]>();
   const db = getDb();
-  const rows = await db
-    .select({
-      briefId: briefTag.briefId,
-      id: tag.id,
-      name: tag.name,
-      color: tag.color,
-    })
-    .from(briefTag)
-    .innerJoin(tag, eq(tag.id, briefTag.tagId))
-    .where(inArray(briefTag.briefId, briefIds));
+  // D1 plafonne ~100 paramètres bind par requête : on chunke pour les listes longues.
+  const CHUNK = 90;
   const map = new Map<string, { id: string; name: string; color: string }[]>();
-  for (const r of rows) {
-    const list = map.get(r.briefId) ?? [];
-    list.push({ id: r.id, name: r.name, color: r.color });
-    map.set(r.briefId, list);
+  for (let i = 0; i < briefIds.length; i += CHUNK) {
+    const slice = briefIds.slice(i, i + CHUNK);
+    const rows = await db
+      .select({
+        briefId: briefTag.briefId,
+        id: tag.id,
+        name: tag.name,
+        color: tag.color,
+      })
+      .from(briefTag)
+      .innerJoin(tag, eq(tag.id, briefTag.tagId))
+      .where(inArray(briefTag.briefId, slice));
+    for (const r of rows) {
+      const list = map.get(r.briefId) ?? [];
+      list.push({ id: r.id, name: r.name, color: r.color });
+      map.set(r.briefId, list);
+    }
   }
   return map;
 }
