@@ -33,6 +33,9 @@ jobs:
       - name: Apply D1 migrations (remote)
         run: npx wrangler d1 migrations apply datafer --remote
 
+      - name: Generate Cloudflare types (cloudflare-env.d.ts)
+        run: npm run cf-typegen
+
       - name: Deploy main worker (Next.js via OpenNext)
         run: npm run deploy
 
