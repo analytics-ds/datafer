@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief, client, user } from "@/db/schema";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../_ui";
 import { SearchableBriefList } from "./searchable-brief-list";
 import { listAllTags, listTagsForBriefs } from "@/lib/tags-service";
@@ -14,13 +14,24 @@ import type { WorkflowStatus } from "./workflow-status";
 // la liste doit refléter la dernière valeur sans cache.
 export const dynamic = "force-dynamic";
 
-export default async function BriefsPage() {
+const PAGE_SIZE = 50;
+
+export default async function BriefsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
   const db = getDb();
 
-  const [rows, folders, availableTags] = await Promise.all([
+  const sp = await searchParams;
+  const pageRaw = Number.parseInt(sp.page ?? "1", 10);
+  const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+  const offset = (page - 1) * PAGE_SIZE;
+
+  const [rows, folders, availableTags, totalRows] = await Promise.all([
     db
       .select({
         id: brief.id,
@@ -44,14 +55,19 @@ export default async function BriefsPage() {
       .from(brief)
       .leftJoin(client, eq(client.id, brief.clientId))
       .leftJoin(user, eq(user.id, brief.ownerId))
-      .orderBy(desc(brief.createdAt)),
+      .orderBy(desc(brief.createdAt))
+      .limit(PAGE_SIZE)
+      .offset(offset),
     db
       .select({ id: client.id, name: client.name, website: client.website })
       .from(client)
       .orderBy(asc(client.name)),
     listAllTags(),
+    db.select({ count: sql<number>`count(*)`.as("count") }).from(brief),
   ]);
 
+  const total = Number(totalRows[0]?.count ?? 0);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const tagsByBrief = await listTagsForBriefs(rows.map((r) => r.id));
 
   return (
@@ -69,7 +85,7 @@ export default async function BriefsPage() {
         }
       />
 
-      {rows.length === 0 ? (
+      {total === 0 ? (
         <EmptyState
           title="Aucun brief"
           description="Crée ton premier brief pour démarrer une analyse sémantique."
@@ -101,6 +117,40 @@ export default async function BriefsPage() {
               : null,
           }))}
         />
+      )}
+
+      {totalPages > 1 && (
+        <nav className="mt-8 flex items-center justify-between text-[13px] text-[var(--text-muted)]">
+          <span>
+            Page {page} / {totalPages} · {total} briefs
+          </span>
+          <div className="flex items-center gap-2">
+            {page > 1 ? (
+              <Link
+                href={page - 1 === 1 ? "/app/briefs" : `/app/briefs?page=${page - 1}`}
+                className="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--border-soft)] px-3 py-[7px] hover:bg-[var(--bg-soft)] transition-colors"
+              >
+                ← Précédent
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--border-soft)] px-3 py-[7px] opacity-40">
+                ← Précédent
+              </span>
+            )}
+            {page < totalPages ? (
+              <Link
+                href={`/app/briefs?page=${page + 1}`}
+                className="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--border-soft)] px-3 py-[7px] hover:bg-[var(--bg-soft)] transition-colors"
+              >
+                Suivant →
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--border-soft)] px-3 py-[7px] opacity-40">
+                Suivant →
+              </span>
+            )}
+          </div>
+        </nav>
       )}
     </div>
   );
