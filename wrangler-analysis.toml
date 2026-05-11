@@ -9,14 +9,14 @@ compatibility_date = "2026-04-14"
 compatibility_flags = ["nodejs_compat"]
 main = "src/worker-analysis/index.ts"
 
-# NOTE : on est sur Workers Free plan, donc [limits] cpu_ms = 60000
-# rejeté par CF (code 100328 "CPU limits are not supported for the
-# Free plan"). Le budget CPU est ~10ms par invocation, ce qui explique
-# les crashes silencieux sur les analyses lourdes (NLP + embeddings
-# bge-m3 sur 300 paragraphes pour le centroïde sémantique iter 8).
-# Solution propre : passer sur Workers Paid ($5/mois). En attendant,
-# on garde HEARTBEAT_STALE_MS = 180s pour limiter les faux positifs
-# du cron cleanup.
+# Workers Paid plan activé : on peut configurer cpu_ms jusqu'à 300000
+# (5 min). On met le maximum pour les analyses lourdes (NLP + embeddings
+# bge-m3 sur 300 paragraphes pour le centroïde sémantique iter 8) sur
+# les KW concurrentiels (sites JS-heavy, finance, e-commerce). Le wall
+# time reste borné côté code par ANALYSIS_DEADLINE_MS (briefs-service.ts)
+# et HEARTBEAT_STALE_MS (cleanup-stuck.ts).
+[limits]
+cpu_ms = 300000
 
 [[d1_databases]]
 binding = "DB"

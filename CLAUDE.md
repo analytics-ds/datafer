@@ -85,7 +85,8 @@ Une analyse de brief = 30-60s CPU + 60-90s wall (SERP + crawl 10 sites + NLP + s
 - **Consumer** = worker dédié `datafer-analysis-consumer` (cf. `src/worker-analysis/index.ts` + `wrangler-analysis.toml`). Tourne `completeBriefAnalysis()` pour chaque message.
 
 Config consumer (`wrangler-analysis.toml`) :
-- `max_batch_size = 1` (jamais 2 analyses en parallèle dans le même worker → on dépasse le budget CPU sinon)
+- `[limits] cpu_ms = 300000` (5 min, Workers Paid activé)
+- `max_batch_size = 1` (jamais 2 analyses en parallèle dans le même worker → on consomme tout le budget CPU sur une seule analyse)
 - `max_retries = 1` (échoue vite, le cron cleanup ramasse derrière)
 - DLQ : `datafer-analysis-dlq`
 

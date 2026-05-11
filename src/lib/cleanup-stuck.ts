@@ -26,13 +26,14 @@ import { brief } from "@/db/schema";
 //   - Un brief actif (worker vivant) appelle `setStep()` à chaque étape
 //     (fetching_serp → crawling:N/10 → analyzing_nlp → scoring → saving),
 //     ce qui rafraîchit `updatedAt` toutes les 5-30s. Si `updatedAt` est
-//     figé > 90s, le worker est mort (CPU exceeded, OOM, kill silencieux).
+//     figé > HEARTBEAT_STALE_MS, le worker est mort (OOM, kill, exception
+//     non catchée).
 //   - 180s : la step la plus longue (`crawling:N/10`) peut traîner sur un
 //     site Cloudflare-protected qui passe en fallback Bright Data Browser
 //     CDP (jusqu'à 60-90s pour un site JS-heavy comme Nike Snkrs ou un
-//     site finance). Bumpé de 90s → 180s le 2026-05-08 après faux positifs
-//     observés sur "comment investir en bourse", "plombier paris",
-//     "chaussures running femme" qui mettent légitimement 100-150s.
+//     site finance). C'est une garde wall-time pour les KW lourds
+//     ("comment investir en bourse", "plombier paris", etc.) qui crawlent
+//     légitimement 100-150s, pas une garde CPU.
 const HEARTBEAT_STALE_MS = 180 * 1000;
 
 export type CleanupResult = {

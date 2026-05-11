@@ -1121,8 +1121,7 @@ function looksLikeChallengePage(html: string): boolean {
 
 /**
  * Fallback via Cloudflare Browser Rendering REST API : lance un Chromium
- * headless côté Cloudflare et récupère le HTML rendu. Plus lent (~3-5s)
- * et limité par le quota (10 min/jour en Workers Free).
+ * headless côté Cloudflare et récupère le HTML rendu. Plus lent (~3-5s).
  *
  * Endpoint :
  *   POST /client/v4/accounts/{account_id}/browser-rendering/content
@@ -1790,8 +1789,7 @@ const SECTION_NOISE = new Set(
  * irréguliers (être, avoir) — déjà filtrés via STOPWORDS.
  */
 // Vrai si `sentence` contient l'un des `patterns` en mot complet (frontières
-// de mot ASCII + accents FR). Évite « test » match « testeur ». Indexation
-// linéaire pour rester sous le budget CPU Workers.
+// de mot ASCII + accents FR). Évite « test » match « testeur ».
 function sentenceMatchesAnyTerm(sentence: string, patterns: string[]): boolean {
   if (patterns.length === 0) return false;
   const text = sentence.toLowerCase();
@@ -2120,13 +2118,11 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
 
       // Citations d'exemple : pour chaque concurrent (URL distincte), on garde
       // la phrase la plus lisible (≈ la plus courte) qui contient le terme.
-      // Pré-filtre CPU : on ne calcule les citations QUE pour les termes qui
-      // passeront le filtre downstream (df ≥ 2 && presence ≥ 25%). Sans ça,
-      // sur 5000+ termes bruts × 240 phrases on dépasse le budget CPU du
-      // consumer. Match en frontière de mot strict via
+      // On filtre df ≥ 2 pour exclure les termes apparaissant chez un seul
+      // concurrent (bruit). Match en frontière de mot strict via
       // `sentenceMatchesAnyTerm` pour éviter "test" → "testeur".
       let sentences: Array<{ url: string; sentence: string }> | undefined;
-      if (df >= 2 && presence >= 0.25) {
+      if (df >= 2) {
         const matchPatterns = isNgram
           ? [displayTerm.toLowerCase()]
           : Array.from(
@@ -3117,7 +3113,7 @@ export function cosineSim(a: number[], b: number[]): number {
  *      (sert au bench "tes paragraphes vs concurrent #1")
  *
  * Coût : ~300 paragraphes × 1024 dim, ~6 batches de 50 inputs bge-m3.
- * Sous le free tier Workers AI (10k neurons/jour), ~1500 neurons par brief.
+ * ~1500 neurons Workers AI par brief.
  *
  * Renvoie null si AI binding absent, aucun paragraphe valide, ou erreur API.
  */
@@ -3139,7 +3135,7 @@ export async function computeSemanticCentroid(
   // annuler tous les batches précédents. On marque les indices manquants
   // comme `null` dans `allEmbeddings` et on les exclut du centroïde.
   // Garantit qu'un timeout/429 transient sur un batch n'invalide pas le
-  // brief entier (cas réaliste sur Workers Free, quota neurons limité).
+  // brief entier.
   const allEmbeddings: (number[] | null)[] = [];
   let failedBatches = 0;
   for (let i = 0; i < allParagraphs.length; i += batchSize) {

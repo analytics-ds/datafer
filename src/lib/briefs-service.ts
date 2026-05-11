@@ -205,16 +205,14 @@ export async function createPendingBrief(
   return { ok: true, id };
 }
 
-// 75s : compromis entre wall-time Workers (~30s par défaut, plus en
-// Standard plan) et le crawler 3 niveaux. On garde une marge pour
-// l'analyse NLP et les écritures DB après le crawl.
+// 180s : compromis wall-time pour la cascade crawl 3 niveaux. Workers Paid
+// permet jusqu'à 300s CPU (cf. wrangler-analysis.toml [limits] cpu_ms), mais
+// on borne le wall ici pour éviter qu'un crawl pathologique (Bright Data
+// Browser CDP coincé sur un site JS-heavy) ne traîne indéfiniment.
 // Cascade fetch direct → BD : ~70% des sites en fetch direct (1-2s) + ~30%
-// en BD (5-50s). Latence cible 30-60s. On garde 90s comme deadline pour
-// laisser de la marge sur les SERPs e-commerce sans risquer le worker timeout
-// CF (~30s CPU, mais wall time peut aller plus loin). Le cron cleanup
-// (`/api/cron/cleanup-stuck`) chasse les briefs zombies > 3min en pending,
-// au cas où le worker meurt avant d'avoir update le status.
-const ANALYSIS_DEADLINE_MS = 90_000;
+// en BD (5-90s). Aligné avec HEARTBEAT_STALE_MS du cron cleanup
+// (`/api/cron/cleanup-stuck`) qui chasse les briefs zombies > 180s.
+const ANALYSIS_DEADLINE_MS = 180_000;
 
 export async function completeBriefAnalysis(
   env: DataferEnv,
