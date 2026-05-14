@@ -28,12 +28,16 @@ binding = "AI"
 
 [[queues.consumers]]
 queue = "datafer-analysis"
-# 1 brief à la fois : chaque analyse prend 30-60s CPU + 60-90s wall, on ne
-# veut pas paralléliser dans le même worker (sinon retour au problème de
-# budget Cloudflare). Plusieurs workers en parallèle = OK (CF spawn auto si
-# la queue grossit).
+# 1 brief à la fois DANS un worker : chaque analyse prend 30-60s CPU + 60-90s
+# wall, on ne veut pas paralléliser dans le même worker (sinon retour au
+# problème de budget Cloudflare).
 max_batch_size = 1
 max_batch_timeout = 5
+# max_concurrency = 3 : CF peut faire tourner jusqu'à 3 invocations du
+# consumer EN PARALLÈLE (3 analyses simultanées max), chacune dans son
+# propre worker avec son propre budget CPU 5 min. Sans risque sur Workers
+# Paid. Évite que le 5e brief d'un batch attende la fin des 4 autres.
+max_concurrency = 3
 # max_retries=1 : si l'analyse plante, on retry UNE fois puis DLQ. Plus de
 # retries = on laisse le brief en pending visiblement plus longtemps côté
 # user, alors qu'il faut vite faillir et laisser le cron cleanup ramasser.
