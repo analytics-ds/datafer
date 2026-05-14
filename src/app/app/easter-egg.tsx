@@ -8,8 +8,8 @@ export function EasterEgg() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      // Cmd/Ctrl + Shift + Y -> pluie de confettis
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyY") {
+      // Cmd/Ctrl + Shift + K -> pluie de confettis
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyK") {
         e.preventDefault();
         fire();
       }
