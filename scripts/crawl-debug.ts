@@ -78,7 +78,7 @@ async function diag(ref: Ref) {
       "  verdict        url",
   );
   console.log("-".repeat(100));
-  const results = [];
+  const results: Awaited<ReturnType<typeof diag>>[] = [];
   for (const ref of refs) {
     const res = await diag(ref);
     results.push(res);
