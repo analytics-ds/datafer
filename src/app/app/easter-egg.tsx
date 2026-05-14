@@ -3,41 +3,14 @@
 import { useEffect, useRef } from "react";
 import confetti from "canvas-confetti";
 
-const SEQUENCE = [
-  "ArrowUp",
-  "ArrowUp",
-  "ArrowDown",
-  "ArrowDown",
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowLeft",
-  "ArrowRight",
-  "KeyB",
-  "KeyA",
-];
-
-export function KonamiEasterEgg() {
-  const bufferRef = useRef<string[]>([]);
+export function EasterEgg() {
   const firingRef = useRef(false);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      const target = e.target as HTMLElement | null;
-      // Ignore quand l'utilisateur tape dans l'éditeur de brief ou un input
-      if (
-        target &&
-        (target.isContentEditable ||
-          target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA")
-      ) {
-        return;
-      }
-
-      const buf = bufferRef.current;
-      buf.push(e.code);
-      if (buf.length > SEQUENCE.length) buf.shift();
-      if (buf.length === SEQUENCE.length && buf.every((k, i) => k === SEQUENCE[i])) {
-        bufferRef.current = [];
+      // Cmd/Ctrl + Shift + Y -> pluie de confettis
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyY") {
+        e.preventDefault();
         fire();
       }
     }

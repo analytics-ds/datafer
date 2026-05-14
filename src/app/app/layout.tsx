@@ -6,7 +6,7 @@ import { client, folderFavorite, user as userTable } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { Sidebar } from "./sidebar";
 import { FirstLoginGate } from "./first-login-gate";
-import { KonamiEasterEgg } from "./konami-easter-egg";
+import { EasterEgg } from "./easter-egg";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (me?.mustChangePassword) {
     return (
       <div className="min-h-screen bg-[var(--bg)]">
-        <KonamiEasterEgg />
+        <EasterEgg />
         <FirstLoginGate />
         {children}
       </div>
@@ -50,7 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-[var(--bg)] flex">
-      <KonamiEasterEgg />
+      <EasterEgg />
       <Sidebar
         user={{
           id: session.user.id,
