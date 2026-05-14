@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { extractParagraphsFromHtml } from "@/lib/analysis";
+import {
+  extractParagraphsFromHtml,
+  extractJsonPayloadText,
+  parseHTML,
+} from "@/lib/analysis";
 
 describe("extractParagraphsFromHtml", () => {
   it("retourne un tableau vide quand il n'y a pas de paragraphe", () => {
@@ -39,5 +43,85 @@ describe("extractParagraphsFromHtml", () => {
     const html = `<p>court</p><p>${longPara}</p><p>aussi court</p>`;
     const result = extractParagraphsFromHtml(html);
     expect(result).toEqual([longPara]);
+  });
+});
+
+describe("extractJsonPayloadText", () => {
+  it("retourne une chaîne vide sans payload JSON", () => {
+    expect(extractJsonPayloadText("<div><p>texte normal</p></div>")).toBe("");
+  });
+
+  it("extrait la prose d'un script application/json", () => {
+    const prose =
+      "Ceci est un vrai paragraphe de contenu editorial suffisamment long.";
+    const html = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
+      { props: { pageProps: { description: prose } } },
+    )}</script>`;
+    expect(extractJsonPayloadText(html)).toContain(prose);
+  });
+
+  it("ignore les URLs et le contenu non-textuel, garde la prose", () => {
+    const html = `<script type="application/json">${JSON.stringify({
+      url: "https://example.com/very/long/path/to/a/page/here",
+      numbers: "1234567890 1234567890 1234567890 9876543210",
+      prose:
+        "Ceci est une vraie phrase de contenu suffisamment longue pour passer le filtre.",
+    })}</script>`;
+    const out = extractJsonPayloadText(html);
+    expect(out).toContain("vraie phrase de contenu");
+    expect(out).not.toContain("example.com");
+    expect(out).not.toContain("9876543210");
+  });
+
+  it("strip le HTML inline des champs richtext", () => {
+    const html = `<script type="application/json">${JSON.stringify({
+      body: "<p>Du <strong>contenu</strong> riche avec assez de mots ici presents.</p>",
+    })}</script>`;
+    const out = extractJsonPayloadText(html);
+    expect(out).toContain("Du contenu riche avec assez de mots ici presents.");
+    expect(out).not.toContain("<strong>");
+  });
+
+  it("déduplique les chaînes identiques", () => {
+    const prose = "Une phrase repetee plusieurs fois dans le payload JSON ici.";
+    const html = `<script type="application/json">${JSON.stringify({
+      a: prose,
+      b: prose,
+      c: { d: prose },
+    })}</script>`;
+    const out = extractJsonPayloadText(html);
+    expect(out.split(prose).length - 1).toBe(1);
+  });
+
+  it("ignore un bloc JSON invalide sans crasher", () => {
+    const html = `<script type="application/json">{ ceci n'est pas du JSON</script>`;
+    expect(extractJsonPayloadText(html)).toBe("");
+  });
+});
+
+describe("parseHTML — contenu dans un <form>", () => {
+  it("capture le contenu éditorial wrappé dans un <form> (pattern ASP.NET)", () => {
+    const html =
+      "<form runat=server>" +
+      "<h1>Titre principal de la page</h1>" +
+      "<p>Voici un paragraphe de contenu editorial reel qui doit etre capture malgre le form englobant.</p>" +
+      "<input type=text name=q>" +
+      "<button>Envoyer</button>" +
+      "</form>";
+    const parsed = parseHTML(html);
+    expect(parsed.wordCount).toBeGreaterThan(10);
+    expect(parsed.h1).toContain("Titre principal de la page");
+    expect(parsed.text).toContain("contenu editorial reel");
+  });
+
+  it("continue d'ignorer le texte des boutons même dans un form", () => {
+    const html =
+      "<form>" +
+      "<p>Contenu editorial visible et assez long pour le scoring NLP.</p>" +
+      "<button>Texte de bouton a ignorer absolument</button>" +
+      "</form>";
+    const parsed = parseHTML(html);
+    expect(parsed.text).toContain("Contenu editorial visible");
+    expect(parsed.text).not.toContain("Texte de bouton");
   });
 });

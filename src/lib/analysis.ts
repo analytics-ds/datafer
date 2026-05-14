@@ -1197,7 +1197,15 @@ async function crawlWithBrowser(url: string): Promise<string | null> {
 
 /**
  * Tags qui ne contiennent jamais de contenu éditorial : navigation, scripts,
- * formulaires, boutons, dialogs… On ignore complètement leur sous-arbre.
+ * boutons, dialogs… On ignore complètement leur sous-arbre.
+ *
+ * Note 2026-05-14 : `form` retiré du noise. Beaucoup de sites (ASP.NET
+ * WebForms qui wrappe TOUT le `<body>` dans un `<form runat=server>`,
+ * vieux thèmes Bootstrap) mettent leur contenu éditorial à l'intérieur
+ * d'un `<form>` — ganpatrimoine.fr avait 8214 chars de contenu réel
+ * jetés, parseHTML sortait wc=12. Les champs de saisie (`input`,
+ * `select`, `textarea`, `button`) restent filtrés individuellement, et
+ * les `<label>` courts sont écartés par isMeaningfulParagraph.
  */
 const NOISE_TAGS = new Set([
   "nav",
@@ -1208,7 +1216,6 @@ const NOISE_TAGS = new Set([
   "style",
   "noscript",
   "svg",
-  "form",
   "iframe",
   "button",
   "input",
@@ -1267,6 +1274,72 @@ const INLINE_TAG_MAP: Record<string, string> = {
   del: "del",
   ins: "ins",
 };
+
+// En-deçà de ce nombre de mots extraits du markup, on considère que la page
+// rend son contenu côté client (Next.js, Nuxt, Gatsby...) et on tente le
+// fallback payload JSON. Aligné sur le seuil du niveau 1 de la cascade crawl.
+const JSON_FALLBACK_WORD_THRESHOLD = 200;
+
+/**
+ * Décide si une chaîne issue d'un payload JSON est du texte éditorial (à
+ * garder pour le NLP) plutôt qu'une URL, un slug, un identifiant, une date
+ * ou du code. Strippe le HTML inline éventuel (champs richtext sérialisés).
+ * Retourne la chaîne nettoyée, ou null si ce n'est pas de la prose.
+ */
+function proseFromJsonString(raw: string): string | null {
+  let s = raw.includes("<") ? raw.replace(/<[^>]+>/g, " ") : raw;
+  s = s.replace(/\s+/g, " ").trim();
+  // Mêmes seuils que isMeaningfulParagraph (25 chars, 5 mots).
+  if (s.length < 25) return null;
+  const words = s.split(/\s+/).filter(Boolean);
+  if (words.length < 5) return null;
+  // Rejette URLs, chemins, ancres, data-URIs.
+  if (/^(?:https?:\/\/|\/\/|\/|data:|#|mailto:)/i.test(s)) return null;
+  // Au moins 60 % de lettres : rejette base64, hashes, suites de chiffres/IDs.
+  const letters = (s.match(/\p{L}/gu) ?? []).length;
+  if (letters / s.length < 0.6) return null;
+  // Au moins un vrai mot (4 lettres) : rejette les listes de codes courts.
+  if (!/\p{L}{4,}/u.test(s)) return null;
+  return s;
+}
+
+/**
+ * Fallback pour les sites qui rendent leur contenu côté client : le markup
+ * HTML est quasi vide mais le contenu textuel est sérialisé dans un
+ * `<script type="application/json">` (typiquement `__NEXT_DATA__`) ou un
+ * bloc JSON-LD. On parse ces blocs et on collecte les chaînes qui
+ * ressemblent à de la prose éditoriale, dédupliquées.
+ */
+export function extractJsonPayloadText(html: string): string {
+  const re =
+    /<script\b[^>]*\btype=["']application\/(?:json|ld\+json)["'][^>]*>([\s\S]*?)<\/script>/gi;
+  const collected: string[] = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    let json: unknown;
+    try {
+      json = JSON.parse(m[1]);
+    } catch {
+      continue; // bloc tronqué ou non-JSON, on ignore
+    }
+    const walk = (v: unknown) => {
+      if (typeof v === "string") {
+        const prose = proseFromJsonString(v);
+        if (prose && !seen.has(prose)) {
+          seen.add(prose);
+          collected.push(prose);
+        }
+      } else if (Array.isArray(v)) {
+        for (const item of v) walk(item);
+      } else if (v && typeof v === "object") {
+        for (const val of Object.values(v)) walk(val);
+      }
+    };
+    walk(json);
+  }
+  return collected.join(" ");
+}
 
 export function parseHTML(html: string): PageContent {
   // On parse tout le <body> et on filtre uniquement via NOISE_TAGS et
@@ -1617,8 +1690,24 @@ export function parseHTML(html: string): PageContent {
   const h2 = headings.filter((h) => h.level === 2).map((h) => h.text);
   const h3 = headings.filter((h) => h.level === 3).map((h) => h.text);
 
-  const text = paragraphs.join(" ").replace(/\s+/g, " ").trim();
-  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  let text = paragraphs.join(" ").replace(/\s+/g, " ").trim();
+  let wordCount = text.split(/\s+/).filter(Boolean).length;
+
+  // Fallback rendu côté client : si le markup est quasi vide, le contenu
+  // est probablement dans un payload JSON (__NEXT_DATA__, JSON-LD...). On
+  // l'extrait pour alimenter le corpus NLP. structuredHtml / headings /
+  // outline restent vides (le JSON n'a pas la structure HTML), mais le
+  // wordCount et le texte deviennent exploitables pour le scoring.
+  let jsonFallbackText = "";
+  if (wordCount < JSON_FALLBACK_WORD_THRESHOLD) {
+    const jsonText = extractJsonPayloadText(html);
+    const jsonWordCount = jsonText.split(/\s+/).filter(Boolean).length;
+    if (jsonWordCount > wordCount) {
+      jsonFallbackText = jsonText;
+      text = text ? `${text} ${jsonText}` : jsonText;
+      wordCount = text.split(/\s+/).filter(Boolean).length;
+    }
+  }
 
   // Texte "corps" : paragraphes + items de liste + cellules de tableau, sans
   // les titres Hn. C'est la source utilisée pour extraire les phrases
@@ -1643,6 +1732,9 @@ export function parseHTML(html: string): PageContent {
     }
     // Hn (h1-h6) volontairement ignorés.
   }
+  // Le fallback JSON n'a pas de structure HTML : on l'ajoute au bodyText
+  // pour que le popover NLP ait des phrases d'exemple sur ces pages.
+  if (jsonFallbackText) bodyParts.push(jsonFallbackText);
   const bodyText = bodyParts.join(" ").replace(/\s+/g, " ").trim();
 
   const renderTable = (t: TableBlock): string => {
