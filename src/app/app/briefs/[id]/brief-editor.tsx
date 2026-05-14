@@ -667,8 +667,11 @@ export function BriefEditor(props: BriefEditorProps) {
           color: var(--text-secondary);
         }
         .rich-editor p { margin-bottom: 12px; }
-        .rich-editor ul, .rich-editor ol { margin: 8px 0 12px 24px; }
+        .rich-editor ul, .rich-editor ol { margin: 8px 0 12px 24px; padding-left: 0; }
+        .rich-editor ul { list-style: disc outside; }
+        .rich-editor ol { list-style: decimal outside; }
         .rich-editor li { margin-bottom: 4px; }
+        .rich-editor li::marker { color: var(--text-muted); }
         .rich-editor img {
           max-width: 100%;
           height: auto;
