@@ -773,6 +773,10 @@ export async function crawlPage(
     BRIGHTDATA_BROWSER_WSS?: string;
   },
 ): Promise<PageContent | null> {
+  // Logs structurés `[crawl]` : permettent d'agréger en prod le taux de
+  // réussite par niveau et de comprendre pourquoi une page fallback. Format
+  // parsable (clé=valeur), url en dernier car potentiellement longue.
+
   // 1. Fetch direct (gratuit)
   try {
     const r = await fetch(url, {
@@ -788,17 +792,26 @@ export async function crawlPage(
     if (r.ok) {
       const html = await r.text();
       const truncated = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
-      if (!looksLikeChallengePage(truncated)) {
+      if (looksLikeChallengePage(truncated)) {
+        console.log(`[crawl] niveau=1 fallback raison=challenge_page url=${url}`);
+      } else {
         const parsed = parseHTML(truncated);
         // Seuil 200 mots : sous ce seuil on suppose que le contenu est
         // partiel ou tronqué (page non hydratée, contenu lazy-loaded, WAF
         // qui sert une version dégradée). Dans ce cas on bascule sur BD
         // pour récupérer le vrai contenu hydraté.
-        if (parsed.wordCount >= 200) return { ...parsed, url };
+        if (parsed.wordCount >= 200) {
+          console.log(`[crawl] niveau=1 ok wc=${parsed.wordCount} url=${url}`);
+          return { ...parsed, url };
+        }
+        console.log(`[crawl] niveau=1 fallback raison=wc_faible(${parsed.wordCount}) url=${url}`);
       }
+    } else {
+      console.log(`[crawl] niveau=1 fallback raison=http_${r.status} url=${url}`);
     }
   } catch {
     // Timeout / TLS / DNS : on bascule sur Bright Data
+    console.log(`[crawl] niveau=1 fallback raison=fetch_error url=${url}`);
   }
 
   // 2. Bright Data Web Unlocker (zone web_unlocker1, Premium domains activé)
@@ -808,7 +821,13 @@ export async function crawlPage(
     // Seuil 100 mots : on accepte un seuil plus bas qu'au niveau fetch
     // direct car BD est notre dernier recours, pas la peine de jeter une
     // page à 150 mots de contenu utile.
-    if (parsed.wordCount >= 100) return { ...parsed, url };
+    if (parsed.wordCount >= 100) {
+      console.log(`[crawl] niveau=2 ok wc=${parsed.wordCount} url=${url}`);
+      return { ...parsed, url };
+    }
+    console.log(`[crawl] niveau=2 fallback raison=wc_faible(${parsed.wordCount}) url=${url}`);
+  } else {
+    console.log(`[crawl] niveau=2 fallback raison=${fullHtml ? "challenge_page" : "pas_de_html"} url=${url}`);
   }
 
   // 3. Bright Data Scraping Browser via CDP raw (vrai Chromium headless).
@@ -818,9 +837,16 @@ export async function crawlPage(
   const browserHtml = await crawlWithBrightDataBrowser(url, env);
   if (browserHtml && !looksLikeChallengePage(browserHtml)) {
     const parsed = parseHTML(browserHtml);
-    if (parsed.wordCount >= 100) return { ...parsed, url };
+    if (parsed.wordCount >= 100) {
+      console.log(`[crawl] niveau=3 ok wc=${parsed.wordCount} url=${url}`);
+      return { ...parsed, url };
+    }
+    console.log(`[crawl] niveau=3 echec raison=wc_faible(${parsed.wordCount}) url=${url}`);
+  } else {
+    console.log(`[crawl] niveau=3 echec raison=${browserHtml ? "challenge_page" : "pas_de_html"} url=${url}`);
   }
 
+  console.log(`[crawl] ECHEC tous_niveaux url=${url}`);
   return null;
 }
 
