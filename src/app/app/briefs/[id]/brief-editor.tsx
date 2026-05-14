@@ -1255,44 +1255,65 @@ function CompetitorSections({
     return { section: s, covered };
   });
   const coveredCount = coverage.filter((c) => c.covered).length;
+  // Non couvertes en premier (priorité d'action). Array.sort est stable,
+  // donc l'ordre par hits décroissants est préservé dans chaque groupe.
+  const sorted = [...coverage].sort(
+    (a, b) => Number(a.covered) - Number(b.covered),
+  );
   return (
     <div>
       <div className="text-[11px] text-[var(--text-muted)] mb-[8px]">
         <span className="font-semibold text-[var(--text)]">{coveredCount}/{sections.length}</span> sections couvertes. Cliquer pour insérer comme H2.
       </div>
       <div className="flex flex-col gap-1">
-        {coverage.map(({ section, covered }) => {
+        {sorted.map(({ section, covered }) => {
           const titleCase =
             section.label.charAt(0).toUpperCase() + section.label.slice(1);
           const suggestedHeading = section.sampleHeadings[0] ?? titleCase;
+          const pct =
+            section.total > 0
+              ? Math.round((section.hits / section.total) * 100)
+              : 0;
+          const examples = section.sampleHeadings.slice(0, 2);
           return (
             <button
               key={section.label}
               onClick={() => onInsert(suggestedHeading)}
               title={`Exemples concurrents : ${section.sampleHeadings.slice(0, 3).join(" · ")}`}
-              className="group flex items-center gap-2 px-[10px] py-[7px] bg-[var(--bg-card)] border rounded-[var(--radius-xs)] text-left text-[12px] leading-[1.4] hover:bg-[var(--bg-olive-light)] transition-colors"
+              className="group flex flex-col gap-1 px-[10px] py-[7px] bg-[var(--bg-card)] border rounded-[var(--radius-xs)] text-left text-[12px] leading-[1.4] hover:bg-[var(--bg-olive-light)] transition-colors"
               style={{
                 borderColor: covered ? "var(--green)" : "var(--border)",
                 background: covered ? "var(--green-bg)" : undefined,
               }}
             >
-              <span
-                className="w-[14px] h-[14px] rounded-full border flex items-center justify-center text-[9px] shrink-0"
-                style={{
-                  borderColor: covered ? "var(--green)" : "var(--border-strong)",
-                  background: covered ? "var(--green)" : "transparent",
-                  color: covered ? "white" : "var(--text-muted)",
-                }}
-              >
-                {covered ? "✓" : ""}
+              <span className="flex items-center gap-2 w-full">
+                <span
+                  className="w-[14px] h-[14px] rounded-full border flex items-center justify-center text-[9px] shrink-0"
+                  style={{
+                    borderColor: covered ? "var(--green)" : "var(--border-strong)",
+                    background: covered ? "var(--green)" : "transparent",
+                    color: covered ? "white" : "var(--text-muted)",
+                  }}
+                >
+                  {covered ? "✓" : ""}
+                </span>
+                <span className="flex-1 font-medium capitalize">{titleCase}</span>
+                <span
+                  className="text-[9px] font-[family-name:var(--font-mono)] shrink-0"
+                  style={{ color: covered ? "var(--text-muted)" : "var(--orange)" }}
+                  title={`${section.hits}/${section.total} concurrents traitent ce sous-sujet`}
+                >
+                  {pct}%
+                </span>
+                <span className="text-[9px] text-[var(--text-muted)] font-semibold uppercase tracking-[0.5px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  → H2
+                </span>
               </span>
-              <span className="flex-1 font-medium capitalize">{titleCase}</span>
-              <span className="text-[9px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] shrink-0">
-                {section.hits}/{section.total}
-              </span>
-              <span className="text-[9px] text-[var(--text-muted)] font-semibold uppercase tracking-[0.5px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                → H2
-              </span>
+              {!covered && examples.length > 0 && (
+                <span className="pl-[22px] text-[10px] text-[var(--text-muted)] leading-[1.45] italic">
+                  {examples.join("  ·  ")}
+                </span>
+              )}
             </button>
           );
         })}
