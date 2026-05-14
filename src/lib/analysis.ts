@@ -814,36 +814,52 @@ export async function crawlPage(
     console.log(`[crawl] niveau=1 fallback raison=fetch_error url=${url}`);
   }
 
+  // Rendu partiel niveau 2 conservé comme filet de sécurité : si le niveau 3
+  // ne fait pas mieux (ou échoue), on retombe dessus plutôt que ECHEC.
+  let partial: PageContent | null = null;
+
   // 2. Bright Data Web Unlocker (zone web_unlocker1, Premium domains activé)
   const fullHtml = await crawlWithBrightData(url, env);
   if (fullHtml && !looksLikeChallengePage(fullHtml)) {
     const parsed = parseHTML(fullHtml);
-    // Seuil 100 mots : on accepte un seuil plus bas qu'au niveau fetch
-    // direct car BD est notre dernier recours, pas la peine de jeter une
-    // page à 150 mots de contenu utile.
-    if (parsed.wordCount >= 100) {
+    // Seuil 400 mots : sous ce seuil, le Web Unlocker a probablement servi
+    // un rendu partiel d'une SPA (header/nav/footer sans le vrai contenu).
+    // Une page qui ranke dans le top 10 a quasi toujours >400 mots de
+    // contenu réel. On tente alors le niveau 3 (vrai Chromium), mais on
+    // garde ce rendu partiel en filet.
+    if (parsed.wordCount >= 400) {
       console.log(`[crawl] niveau=2 ok wc=${parsed.wordCount} url=${url}`);
       return { ...parsed, url };
     }
-    console.log(`[crawl] niveau=2 fallback raison=wc_faible(${parsed.wordCount}) url=${url}`);
+    if (parsed.wordCount > 0) partial = { ...parsed, url };
+    console.log(`[crawl] niveau=2 fallback raison=wc_partiel(${parsed.wordCount}) url=${url}`);
   } else {
     console.log(`[crawl] niveau=2 fallback raison=${fullHtml ? "challenge_page" : "pas_de_html"} url=${url}`);
   }
 
   // 3. Bright Data Scraping Browser via CDP raw (vrai Chromium headless).
-  // Pour les SPAs ultra-blindées (Nike Snkrs, Patta, etc.) qui retournent
-  // un squelette HTML vide via Web Unlocker. Plus cher (~$0.05/page),
-  // donc utilisé uniquement quand les niveaux 1+2 ont échoué.
+  // Pour les SPAs ultra-blindées (Nike, Zalando, etc.) qui retournent un
+  // rendu partiel via Web Unlocker. Plus cher, donc utilisé uniquement
+  // quand les niveaux 1+2 n'ont pas ramené assez de contenu.
   const browserHtml = await crawlWithBrightDataBrowser(url, env);
   if (browserHtml && !looksLikeChallengePage(browserHtml)) {
     const parsed = parseHTML(browserHtml);
-    if (parsed.wordCount >= 100) {
+    // On garde le niveau 3 seulement s'il dépasse le seuil minimal absolu
+    // (100) ET fait au moins aussi bien que le rendu partiel niveau 2.
+    if (parsed.wordCount >= 100 && parsed.wordCount >= (partial?.wordCount ?? 0)) {
       console.log(`[crawl] niveau=3 ok wc=${parsed.wordCount} url=${url}`);
       return { ...parsed, url };
     }
-    console.log(`[crawl] niveau=3 echec raison=wc_faible(${parsed.wordCount}) url=${url}`);
+    console.log(`[crawl] niveau=3 insuffisant wc=${parsed.wordCount} url=${url}`);
   } else {
     console.log(`[crawl] niveau=3 echec raison=${browserHtml ? "challenge_page" : "pas_de_html"} url=${url}`);
+  }
+
+  // Anti-régression : le niveau 3 n'a pas fait mieux, on retombe sur le
+  // rendu partiel du niveau 2 plutôt que de jeter la page.
+  if (partial && partial.wordCount >= 100) {
+    console.log(`[crawl] niveau=2 retombée wc=${partial.wordCount} url=${url}`);
+    return partial;
   }
 
   console.log(`[crawl] ECHEC tous_niveaux url=${url}`);
@@ -970,11 +986,11 @@ async function crawlWithBrightDataBrowser(
     });
 
   try {
-    // Garde-fou global : on coupe tout après 35s (15s navigate + 5s post-load
-    // hydratation + 15s marge pour Runtime.evaluate sur de gros DOM).
+    // Garde-fou global : on coupe tout après 45s (15s navigate + 12s polling
+    // d'hydratation + marge pour Runtime.evaluate sur de gros DOM).
     const overall = setTimeout(() => {
       try { ws.close(1000, "overall timeout"); } catch {}
-    }, 35000);
+    }, 45000);
 
     // 1. Crée un nouvel onglet blank (BD interdit d'ouvrir une URL non-blank
     // directement via Target.createTarget)
@@ -1003,10 +1019,45 @@ async function crawlWithBrightDataBrowser(
       // peut avoir bloqué sur un script lent mais le DOM est déjà là.
     }
 
-    // 5. Délai post-load pour laisser les SPAs hydrater l'app. 5s nécessaires
-    // sur Nike Snkrs qui charge cookies banner puis fetch le contenu produit
-    // en async après loadEventFired.
-    await new Promise((r) => setTimeout(r, 5000));
+    // 5b. Polling d'hydratation : au lieu d'un délai fixe, on attend que le
+    // contenu se stabilise. Les SPAs (Nike, Zalando...) hydratent en
+    // plusieurs vagues après loadEventFired ; un setTimeout fixe capturait
+    // souvent un rendu encore partiel. On mesure innerText.length toutes les
+    // 800ms et on s'arrête après 3 mesures consécutives stables (<5% d'écart)
+    // ou au plafond de 12s.
+    const POLL_INTERVAL_MS = 800;
+    const POLL_MAX_MS = 12000;
+    const pollStart = Date.now();
+    let lastLen = -1;
+    let stableCount = 0;
+    while (Date.now() - pollStart < POLL_MAX_MS) {
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      let len = 0;
+      try {
+        const probe = await send<{ result: { value?: number } }>(
+          "Runtime.evaluate",
+          {
+            expression: "document.body ? document.body.innerText.length : 0",
+            returnByValue: true,
+          },
+          sid,
+        );
+        len = probe.result?.value ?? 0;
+      } catch {
+        break; // l'eval a échoué, on prend ce qu'on a
+      }
+      if (
+        len > 0 &&
+        lastLen > 0 &&
+        Math.abs(len - lastLen) / Math.max(len, lastLen) < 0.05
+      ) {
+        stableCount++;
+        if (stableCount >= 2) break; // 3 mesures proches d'affilée
+      } else {
+        stableCount = 0;
+      }
+      lastLen = len;
+    }
 
     // 6. Récupère le HTML rendu via Runtime.evaluate
     const evalRes = await send<{
