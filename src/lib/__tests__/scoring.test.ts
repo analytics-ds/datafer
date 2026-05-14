@@ -1,13 +1,11 @@
 import { describe, it, expect } from "vitest";
-import * as fs from "node:fs";
-import * as path from "node:path";
 import {
   relativizeScore,
   medianCompetitorScore,
   computeDetailedScore,
   type EditorData,
 } from "@/lib/scoring";
-import type { NlpResult } from "@/lib/analysis";
+import type { NlpResult, NlpTerm } from "@/lib/analysis";
 
 describe("relativizeScore", () => {
   it("retourne le brut quand la médiane concurrente est nulle ou négative", () => {
@@ -75,7 +73,7 @@ describe("medianCompetitorScore", () => {
 });
 
 describe("computeDetailedScore", () => {
-  const nlp = loadNlpFixture();
+  const nlp = makeNlp();
 
   it("ne crash pas et retourne une structure complète quand nlp est null", () => {
     const ed: EditorData = { text: "Un peu de texte.", h1s: [], h2s: [], h3s: [] };
@@ -122,7 +120,6 @@ describe("computeDetailedScore", () => {
     const kw = nlp.exactKeyword.keyword;
     const essentials = nlp.nlpTerms
       .filter((t) => t.presence >= 70)
-      .slice(0, 20)
       .map((t) => t.term);
     const optimText =
       `${kw} : guide complet pour bien choisir. ${kw} est un sujet essentiel. ` +
@@ -157,17 +154,65 @@ describe("computeDetailedScore", () => {
   });
 });
 
-/** Charge un NlpResult réel depuis les fixtures du bench de scoring. */
-function loadNlpFixture(): NlpResult {
-  const p = path.join(
-    process.cwd(),
-    "scripts/bench-data/costume-homme-beige.json",
-  );
-  const brief = JSON.parse(fs.readFileSync(p, "utf8")) as { nlp_json: string };
-  const nlp = JSON.parse(brief.nlp_json) as NlpResult;
-  // Briefs anciens : medianImages peut être absent (cf. score-bench.ts).
-  if (nlp.medianImages == null) {
-    (nlp as { medianImages: number }).medianImages = 0;
-  }
-  return nlp;
+/** NlpTerm minimal pour les fixtures de test. */
+function term(
+  t: string,
+  presence: number,
+  avgCount = 3,
+  inHeadings = false,
+): NlpTerm {
+  return {
+    term: t,
+    score: presence / 10,
+    presence,
+    df: Math.round((presence / 100) * 10),
+    inHeadings,
+    minCount: 1,
+    maxCount: avgCount + 2,
+    avgCount,
+  };
+}
+
+/**
+ * Construit un NlpResult minimal mais valide pour tester computeDetailedScore.
+ * Inline (pas de fixture filesystem) : les dumps scripts/bench-data/*.json
+ * sont gitignorés et indisponibles dans le CI.
+ */
+function makeNlp(): NlpResult {
+  return {
+    exactKeyword: {
+      keyword: "costume homme beige",
+      variations: ["costumes homme beige", "costume beige homme"],
+      avgCount: 8,
+      avgDensity: 0.6,
+      idealDensityMin: 0.3,
+      idealDensityMax: 1.2,
+      inH1Pct: 70,
+      inH2Pct: 40,
+      inFirst100Pct: 80,
+    },
+    nlpTerms: [
+      term("coupe", 90, 6, true),
+      term("tissu", 85, 5, true),
+      term("laine", 80, 4),
+      term("mariage", 78, 4, true),
+      term("veste", 75, 5),
+      term("pantalon", 72, 4),
+      term("élégance", 70, 3),
+      term("morphologie", 60, 3),
+      term("accessoires", 55, 2),
+      term("entretien", 48, 2),
+      term("couleur", 45, 3),
+      term("cérémonie", 42, 2),
+      term("budget", 30, 1),
+      term("tendance", 25, 1),
+      term("saison", 20, 1),
+    ],
+    avgWordCount: 1200,
+    avgHeadings: 8,
+    avgParagraphs: 18,
+    minWordCount: 900,
+    maxWordCount: 1600,
+    medianImages: 4,
+  };
 }
