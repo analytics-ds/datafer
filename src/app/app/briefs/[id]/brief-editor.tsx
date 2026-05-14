@@ -13,7 +13,7 @@ import type {
   Section as NlpSection,
   Entity,
 } from "@/lib/analysis";
-import { buildKeywordRegex, computeDetailedScore, type DetailedScore, type ParagraphSemanticScore } from "@/lib/scoring";
+import { buildKeywordRegex, computeDetailedScore, MIN_VALID_COMPETITOR_SCORE, type DetailedScore, type ParagraphSemanticScore } from "@/lib/scoring";
 import {
   extractGeoSignals,
   EMPTY_GEO_SIGNALS,
@@ -2498,7 +2498,13 @@ function colorByVolumeDeviation(value: number, mean: number): string {
 function CompetitorScoreRow({ scoreTotal, serp }: { scoreTotal: number; serp: SerpResult[] }) {
   const scored = serp.filter((r): r is SerpResult & { score: number } => typeof r.score === "number");
   if (scored.length === 0) return null;
-  const avg = Math.round(scored.reduce((s, r) => s + r.score, 0) / scored.length);
+  // Exclure les pages mal crawlées (score effondré) du calcul de la moyenne,
+  // cohérent avec medianCompetitorScore. Sinon la moyenne est tirée vers le
+  // bas par des pages que notre crawl a ratées, pas par de vrais mauvais
+  // contenus. Fallback sur scored si tout est sous le seuil (cas extrême).
+  const reliable = scored.filter((r) => r.score >= MIN_VALID_COMPETITOR_SCORE);
+  const forAvg = reliable.length > 0 ? reliable : scored;
+  const avg = Math.round(forAvg.reduce((s, r) => s + r.score, 0) / forAvg.length);
   const best = scored.reduce((b, r) => (r.score > b.score ? r : b), scored[0]);
   const gapAvg = scoreTotal - avg;
   const gapBest = scoreTotal - best.score;
@@ -2524,7 +2530,7 @@ function CompetitorScoreRow({ scoreTotal, serp }: { scoreTotal: number; serp: Se
           value={`${avg}/100`}
           gap={gapAvg}
           tone={tone(gapAvg)}
-          tooltip={`Moyenne du score SEO sur les ${scored.length} concurrents crawlés.`}
+          tooltip={`Moyenne du score SEO sur les ${forAvg.length} concurrents correctement crawlés${forAvg.length < scored.length ? ` (${scored.length - forAvg.length} exclu(s), crawl incomplet)` : ""}.`}
         />
         <CompareCell
           label="Meilleur"
@@ -2880,22 +2886,35 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
           </div>
         </a>
         <div className="flex items-center gap-4 text-center">
-          {r.score != null && (
-            <div title="Score SEO du concurrent (même algorithme que la rédaction)">
+          {r.score != null &&
+            (r.score < MIN_VALID_COMPETITOR_SCORE ? (
               <div
-                className="font-[family-name:var(--font-mono)] text-[13px] font-semibold"
-                style={{
-                  color:
-                    r.score >= 70 ? "var(--green)" : r.score >= 40 ? "var(--orange)" : "var(--red)",
-                }}
+                title="Score non fiable : page probablement mal crawlée (rendu JavaScript non capté, blocage anti-bot...). Exclue du calcul de la moyenne. Ce n'est pas un jugement sur la qualité réelle du concurrent."
+                className="cursor-help"
               >
-                {r.score}
+                <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold text-[var(--text-muted)]">
+                  ⚠
+                </div>
+                <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
+                  crawl ✗
+                </div>
               </div>
-              <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
-                score
+            ) : (
+              <div title="Score SEO du concurrent (même algorithme que la rédaction)">
+                <div
+                  className="font-[family-name:var(--font-mono)] text-[13px] font-semibold"
+                  style={{
+                    color:
+                      r.score >= 70 ? "var(--green)" : r.score >= 40 ? "var(--orange)" : "var(--red)",
+                  }}
+                >
+                  {r.score}
+                </div>
+                <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
+                  score
+                </div>
               </div>
-            </div>
-          )}
+            ))}
           <div>
             <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
               {r.wordCount ? r.wordCount : "N/A"}

@@ -285,14 +285,23 @@ export function ensureCompetitorScores(
 }
 
 /**
- * Médiane d'une liste de scores. Filtre les valeurs aberrantes (< 25)
- * qui correspondent quasi systématiquement à des pages mal scrapées
- * (parser cassé, contenu majoritairement bloqué, page produit sans
- * texte éditorial). Sans ce filtre, ces outliers tirent la médiane vers
- * le bas et rendent l'objectif relatif trop facile à atteindre.
+ * Score plancher sous lequel un concurrent est considéré mal crawlé
+ * (rendu JS non capté, blocage anti-bot, parser cassé, page produit sans
+ * texte éditorial) plutôt que réellement mauvais. Ces pages sont exclues
+ * du calcul de la médiane de référence et signalées comme telles dans
+ * l'UI (pour ne pas faire croire que le concurrent est nul alors que
+ * c'est notre extraction qui a échoué).
+ */
+export const MIN_VALID_COMPETITOR_SCORE = 25;
+
+/**
+ * Médiane d'une liste de scores. Filtre les valeurs aberrantes
+ * (< MIN_VALID_COMPETITOR_SCORE) qui correspondent quasi systématiquement
+ * à des pages mal scrapées. Sans ce filtre, ces outliers tirent la médiane
+ * vers le bas et rendent l'objectif relatif trop facile à atteindre.
  */
 export function medianCompetitorScore(scores: number[]): number {
-  const valid = scores.filter((s) => s >= 25);
+  const valid = scores.filter((s) => s >= MIN_VALID_COMPETITOR_SCORE);
   if (valid.length === 0) return 0;
   const sorted = [...valid].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
