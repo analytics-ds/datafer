@@ -141,17 +141,16 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
   if (!nlp) return { ok: false, status: 500, error: "brief has no NLP data" };
 
   const ed = htmlToEditorData(editorHtml);
-  const competitorScores = ensureCompetitorScores(nlp, row.serpJson);
+  // Score brut (rawTotal) directement : on n'applique plus la relativisation
+  // vs médiane concurrents. Pierre veut que le score affiché user soit
+  // comparable 1:1 au score brut affiché côté SERP concurrents (décision
+  // 2026-05-16). On garde quand même ensureCompetitorScores pour persister
+  // nlp.competitorScores (utilisé par computeCompetitorStats côté UI pour
+  // afficher concurrence avg/best).
+  ensureCompetitorScores(nlp, row.serpJson);
   const geoSignals = geoSignalsFromHtml(editorHtml);
-  const breakdown = computeDetailedScore(ed, nlp, geoSignals, competitorScores);
+  const breakdown = computeDetailedScore(ed, nlp, geoSignals);
 
-  // Si on vient de lazy-backfill competitorScores, on persiste pour ne pas
-  // refaire le calcul à la prochaine sauvegarde. `ensureCompetitorScores`
-  // mute `nlp.competitorScores` en place dès qu'elle a calculé quelque
-  // chose (même un tableau vide quand serpJson n'a aucun concurrent
-  // exploitable). Donc `nlp.competitorScores !== undefined` ⇔ on a fait
-  // un calcul et il faut persister. `serpJson` null laisse `nlp` intact
-  // et on conserve `row.nlpJson` original.
   const nlpJsonToWrite = nlp.competitorScores !== undefined ? JSON.stringify(nlp) : row.nlpJson;
 
   await db
@@ -565,7 +564,6 @@ async function createBriefAnalysisPayload(
         { text: myPage.text, h1s: myPage.h1, h2s: myPage.h2, h3s: myPage.h3, imageCount: myPage.imageCount },
         nlp,
         myGeoSignals,
-        nlp.competitorScores,
       );
       myInitialScore = breakdown.total;
     }

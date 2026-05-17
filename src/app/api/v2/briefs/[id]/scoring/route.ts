@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
 import { htmlToEditorData, computeCompetitorStats } from "@/lib/briefs-service";
-import { computeDetailedScore, ensureCompetitorScores } from "@/lib/scoring";
+import { computeDetailedScore } from "@/lib/scoring";
 import { geoSignalsFromHtml } from "@/lib/geo-scoring";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +22,10 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 
   const editorHtml = row.editorHtml ?? "";
   const ed = htmlToEditorData(editorHtml);
-  const competitorScores = ensureCompetitorScores(nlp, row.serpJson);
   const geoSignals = geoSignalsFromHtml(editorHtml);
-  const breakdown = computeDetailedScore(ed, nlp, geoSignals, competitorScores);
+  // Score brut (rawTotal) directement, plus de relativisation vs médiane
+  // concurrents (décision 2026-05-16 : aligner user vs SERP sur même échelle).
+  const breakdown = computeDetailedScore(ed, nlp, geoSignals);
 
   // Le critère sémantique paragraphe est calculé côté client (live editor)
   // car il nécessite des appels bge-m3 par paragraphe. Côté serveur on
