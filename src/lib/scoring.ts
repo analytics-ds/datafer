@@ -52,16 +52,18 @@ function tokenCoverage(segmentNorm: string, kwTokens: string[]): number {
  * Utilisée des deux côtés du matching KW pour que "moto électrique" et
  * "moto electrique" matchent la même chose. Google fait pareil en SERP.
  */
-function normalize(s: string): string {
+export function normalize(s: string): string {
   return (
     s
       .toLowerCase()
       .normalize("NFD")
       .replace(/[̀-ͯ]/g, "")
-      // Apostrophes typographiques et droites → espaces. Sans ça
-      // « d'électrostimulation » bloquait le matching mot-à-mot
-      // (pas d'espace entre l'apostrophe et le mot suivant).
-      .replace(/['']/g, " ")
+      // Apostrophes typographiques ET droites (ASCII) → espaces. Sans ça
+      // « d'électrostimulation » bloquait le matching mot-à-mot.
+      // L'apostrophe ASCII U+0027 est la plus courante dans les textes
+      // saisis (clavier standard), oublier ce caractère cassait le H1 check
+      // et faisait remonter des termes NLP type « lauto » au lieu de « auto ».
+      .replace(/['‘’`]/g, " ")
   );
 }
 

@@ -13,7 +13,7 @@ import type {
   Section as NlpSection,
   Entity,
 } from "@/lib/analysis";
-import { buildKeywordRegex, computeDetailedScore, MIN_VALID_COMPETITOR_SCORE, type DetailedScore, type ParagraphSemanticScore } from "@/lib/scoring";
+import { buildKeywordRegex, computeDetailedScore, MIN_VALID_COMPETITOR_SCORE, normalize, type DetailedScore, type ParagraphSemanticScore } from "@/lib/scoring";
 import {
   extractGeoSignals,
   EMPTY_GEO_SIGNALS,
@@ -310,16 +310,16 @@ export function BriefEditor(props: BriefEditorProps) {
   }, [paragraphScores, editorData.text, paragraphCacheKey]);
 
   const score: DetailedScore = useMemo(
-    // nlp.competitorScores est rempli côté serveur (pipeline analyse) ou
-    // via lazy backfill (rescoreBrief / api scoring). Si absent, le score
-    // calculé est brut (rétro-compat) au lieu de relatif.
+    // Score brut (rawTotal) directement : plus de relativisation vs médiane
+    // concurrents (décision 2026-05-16). Le score affiché user est désormais
+    // sur la même échelle que le score brut affiché côté SERP concurrents.
     // semanticParagraphScores est alimenté par le debounce ci-dessus.
     () =>
       computeDetailedScore(
         editorData,
         nlp,
         geoSignals,
-        nlp?.competitorScores,
+        undefined,
         semanticParagraphScores.length > 0 ? semanticParagraphScores : undefined,
       ),
     [editorData, nlp, geoSignals, semanticParagraphScores],
@@ -602,7 +602,7 @@ export function BriefEditor(props: BriefEditorProps) {
             editorH1HasKw={
               nlp
                 ? editorData.h1s.some((h) =>
-                    buildKeywordRegex(nlp.exactKeyword.keyword).test(h),
+                    buildKeywordRegex(nlp.exactKeyword.keyword).test(normalize(h)),
                   )
                 : false
             }
@@ -808,10 +808,10 @@ function EditorSidebar({
   if (ek) {
     // Regex tolérante aux flexions (genre/nombre/accents) : « meilleurs
     // transports » matche aussi un keyword « meilleur transport ».
-    kwCount = (lower.match(buildKeywordRegex(ek.keyword)) ?? []).length;
+    kwCount = (normalize(lower).match(buildKeywordRegex(ek.keyword)) ?? []).length;
     density = wc > 0 ? Math.round(((kwCount * ek.keyword.split(/\s+/).length) / wc) * 10000) / 100 : 0;
     const intro = editorText.trim().split(/\s+/).slice(0, 100).join(" ");
-    inIntro = buildKeywordRegex(ek.keyword).test(intro);
+    inIntro = buildKeywordRegex(ek.keyword).test(normalize(intro));
   }
 
   const ringCirc = 2 * Math.PI * 44;

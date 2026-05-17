@@ -2129,7 +2129,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     // "d'un" devient "dun" (idem rawWords/ngramWords ci-dessous).
     [...(c.h1 ?? []), ...(c.h2 ?? [])].forEach((h) => {
       h.toLowerCase()
-        .replace(/[''`]/g, " ")
+        .replace(/['‘’`]/g, " ")
         .replace(/[^a-zà-ÿ0-9\s-]/g, "")
         .split(/\s+/)
         .filter((w) => w.length > 2 && !STOPWORDS.has(w))
@@ -2138,7 +2138,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     // rawWords : filtre strict (sans stopwords) pour les unigrammes BM25.
     const rawWords = c.text
       .toLowerCase()
-      .replace(/[''`]/g, " ")
+      .replace(/['‘’`]/g, " ")
       .replace(/[^a-zà-ÿ0-9\s-]/g, "")
       .split(/\s+/)
       .filter((w) => w.length > 2 && !STOPWORDS.has(w) && !WEB_NOISE.has(w));
@@ -2147,7 +2147,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     // "à petit prix" etc. Min 2 lettres, pas de digits seuls.
     const ngramWords = c.text
       .toLowerCase()
-      .replace(/[''`]/g, " ")
+      .replace(/['‘’`]/g, " ")
       .replace(/[^a-zà-ÿ0-9\s-]/g, "")
       .split(/\s+/)
       .filter(
