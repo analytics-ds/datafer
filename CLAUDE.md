@@ -10,17 +10,26 @@ Notes opérationnelles pour Claude Code sur ce repo. Les choses évidentes à la
 - Better-auth (email + password, `disableSignUp: true`)
 - URL prod : https://datafer.analytics-e0d.workers.dev
 
-## Déploiement — PAS d'auto-deploy
+## Déploiement — auto-deploy via GitHub Actions
 
-**Le repo GitHub n'a aucun CI/CD branché sur Cloudflare.** Un `git push` sur `main` ne déploie rien en prod, il ne fait que pousser le code sur GitHub.
+**Auto-deploy actif depuis 2026-05-10.** Un `git push` sur `main` déclenche `.github/workflows/deploy.yml` qui :
 
-Pour déployer, il faut lancer manuellement depuis la machine locale :
+1. `npm ci` + tests Vitest
+2. Migrations D1 distantes (`db:migrate:remote`)
+3. Génère les types Cloudflare
+4. Déploie le worker principal `datafer` (Next.js via OpenNext)
+5. Déploie le consumer `datafer-analysis-consumer` (cf. `wrangler-analysis.toml`)
+
+Durée typique : 1m30 à 2m. Suivre l'état avec `gh run watch <id>` ou via la liste `gh run list --workflow=deploy.yml`.
+
+Déploiement manuel local (fallback) :
 
 ```bash
-npm run deploy
+npm run deploy                                                # main worker uniquement
+npx wrangler deploy --config wrangler-analysis.toml           # consumer uniquement
 ```
 
-Ça exécute `opennextjs-cloudflare build && opennextjs-cloudflare deploy` et upload le Worker + les assets `public/` sur Cloudflare. Les assets sous `public/` ne sont servis en prod qu'après un deploy — un fichier committé sur `main` mais jamais déployé renvoie 404.
+`npm run deploy` exécute `opennextjs-cloudflare build && opennextjs-cloudflare deploy` et upload le Worker + les assets `public/`. Les assets sous `public/` ne sont servis en prod qu'après un deploy : un fichier committé sur `main` mais jamais déployé renvoie 404 (cas impossible avec l'auto-deploy puisque le workflow déploie systématiquement).
 
 ## Migrations D1
 
