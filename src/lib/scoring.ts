@@ -64,6 +64,11 @@ export function normalize(s: string): string {
       // saisis (clavier standard), oublier ce caractère cassait le H1 check
       // et faisait remonter des termes NLP type « lauto » au lieu de « auto ».
       .replace(/['‘’`]/g, " ")
+      // Ligatures françaises → forme décomposée (fold à la Google). Sans ça
+      // « œuf » et « oeuf » n'étaient pas considérés équivalents pour le
+      // matching KW/H1, ce qui pénalisait les KW à ligature.
+      .replace(/œ/g, "oe")
+      .replace(/æ/g, "ae")
   );
 }
 

@@ -2130,7 +2130,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     [...(c.h1 ?? []), ...(c.h2 ?? [])].forEach((h) => {
       h.toLowerCase()
         .replace(/['‘’`]/g, " ")
-        .replace(/[^a-zà-ÿ0-9\s-]/g, "")
+        .replace(/[^a-zà-ÿœ0-9\s-]/g, "")
         .split(/\s+/)
         .filter((w) => w.length > 2 && !STOPWORDS.has(w))
         .forEach((w) => headingStems.add(frenchStem(w)));
@@ -2139,7 +2139,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     const rawWords = c.text
       .toLowerCase()
       .replace(/['‘’`]/g, " ")
-      .replace(/[^a-zà-ÿ0-9\s-]/g, "")
+      .replace(/[^a-zà-ÿœ0-9\s-]/g, "")
       .split(/\s+/)
       .filter((w) => w.length > 2 && !STOPWORDS.has(w) && !WEB_NOISE.has(w));
     // ngramWords : filtre permissif qui conserve les function words à valeur
@@ -2148,7 +2148,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     const ngramWords = c.text
       .toLowerCase()
       .replace(/['‘’`]/g, " ")
-      .replace(/[^a-zà-ÿ0-9\s-]/g, "")
+      .replace(/[^a-zà-ÿœ0-9\s-]/g, "")
       .split(/\s+/)
       .filter(
         (w) =>
@@ -2508,7 +2508,7 @@ function computeKeywordTerms(
       return `${esc}s?`;
     });
     // Word boundaries pour ne pas matcher "cher" dans "chercher" ou "marché".
-    const pattern = `(?:^|[^a-zà-ÿ0-9])${wordPatterns.join(" ")}(?=$|[^a-zà-ÿ0-9])`;
+    const pattern = `(?:^|[^a-zà-ÿœ0-9])${wordPatterns.join(" ")}(?=$|[^a-zà-ÿœ0-9])`;
     const rx = new RegExp(pattern, "gi");
     const rxHead = new RegExp(pattern, "i");
 
@@ -2659,7 +2659,7 @@ function detectCompetitorSections(
     headings.forEach((h) => {
       const tokens = h
         .toLowerCase()
-        .replace(/[^a-zà-ÿ0-9\s'-]/g, " ")
+        .replace(/[^a-zà-ÿœ0-9\s'-]/g, " ")
         .split(/\s+/)
         .filter(
           (w) =>
@@ -2790,7 +2790,7 @@ function detectNamedEntities(pages: PageContent[]): Entity[] {
         if (clean.length < 2) return;
         const isAcronym = /^[A-Z]{2,6}$/.test(clean);
         const isCapStart =
-          /^[A-ZÀÂÉÈÊËÎÏÔÖÙÛÜÇ][a-zà-ÿ'’-]+$/.test(clean) && i > 0;
+          /^[A-ZÀÂÉÈÊËÎÏÔÖÙÛÜÇ][a-zà-ÿœ'’-]+$/.test(clean) && i > 0;
         if (!isAcronym && !isCapStart) return;
         const key = clean.toLowerCase();
         if (ENTITY_STOP.has(key)) return;

@@ -1396,7 +1396,7 @@ function PaaCoverageList({
   const kwTokens = new Set<string>();
   keyword
     .toLowerCase()
-    .replace(/[^a-zà-ÿ0-9\s'-]/g, " ")
+    .replace(/[^a-zà-ÿœ0-9\s'-]/g, " ")
     .split(/\s+/)
     .filter((w) => w.length > 2)
     .forEach((w) => {
@@ -1408,7 +1408,7 @@ function PaaCoverageList({
   const rows = paa.slice(0, 5).map((q) => {
     const tokens = q.question
       .toLowerCase()
-      .replace(/[^a-zà-ÿ0-9\s'-]/g, " ")
+      .replace(/[^a-zà-ÿœ0-9\s'-]/g, " ")
       .split(/\s+/)
       .filter(
         (w) =>
@@ -1893,7 +1893,7 @@ function KeywordTermsList({
       {terms.map((k) => {
         const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const rx = new RegExp(
-          `(?:^|[^a-zà-ÿ0-9])${escape(k.term)}(?=$|[^a-zà-ÿ0-9])`,
+          `(?:^|[^a-zà-ÿœ0-9])${escape(k.term)}(?=$|[^a-zà-ÿœ0-9])`,
           "gi",
         );
         const currentCount = (lower.match(rx) ?? []).length;
