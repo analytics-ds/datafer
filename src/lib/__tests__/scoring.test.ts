@@ -152,6 +152,44 @@ describe("computeDetailedScore", () => {
     expect(s.total).toBeGreaterThanOrEqual(0);
     expect(s.total).toBeLessThanOrEqual(100);
   });
+
+  describe("critère sémantique (mapping recalibré 2026-05-20)", () => {
+    const ed: EditorData = {
+      text: "Voici un texte de test suffisamment long pour déclencher le scoring sémantique.",
+      h1s: [],
+      h2s: [],
+      h3s: [],
+    };
+    const semScoreFor = (avg: number): number =>
+      computeDetailedScore(ed, nlp, undefined, undefined, [{ score: avg }])
+        .semantic.score;
+
+    it("plafonne à 10 dès 0.78 de cosinus moyen", () => {
+      expect(semScoreFor(0.78)).toBe(10);
+      expect(semScoreFor(0.85)).toBe(10);
+    });
+
+    it("donne 7/10 à 0.68 et 5/10 à 0.60 (zone réaliste relevée)", () => {
+      expect(semScoreFor(0.68)).toBe(7);
+      expect(semScoreFor(0.6)).toBe(5);
+    });
+
+    it("donne 3/10 à 0.50 et 1/10 à 0.40", () => {
+      expect(semScoreFor(0.5)).toBe(3);
+      expect(semScoreFor(0.4)).toBe(1);
+    });
+
+    it("tombe à 0 sous 0.32", () => {
+      expect(semScoreFor(0.3)).toBe(0);
+      expect(semScoreFor(0.1)).toBe(0);
+    });
+
+    it("active le critère (max=10) quand des scores paragraphe sont fournis", () => {
+      const s = computeDetailedScore(ed, nlp, undefined, undefined, [{ score: 0.7 }]);
+      expect(s.semantic.max).toBe(10);
+      expect(s.semantic.details.avgCosine).toBe(0.7);
+    });
+  });
 });
 
 /** NlpTerm minimal pour les fixtures de test. */

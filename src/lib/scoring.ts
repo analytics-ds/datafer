@@ -626,24 +626,39 @@ export function computeDetailedScore(
   // client (live editor) et passé en `paragraphSemanticScores`. Si absent,
   // critère neutralisé (max=0, renormalisation comme images).
   //
-  // Mapping cosinus → 10 pts :
-  //   cosinus moyen = 0.85 (excellent) → 10/10
-  //   cosinus moyen = 0.65 (médian) → 5/10
-  //   cosinus moyen = 0.45 (faible) → 2/10
-  //   cosinus moyen ≤ 0.30 → 0/10
+  // Mapping cosinus → 10 pts (recalibré 2026-05-20) :
+  //   cosinus moyen ≥ 0.78 (excellent) → 10/10
+  //   cosinus moyen = 0.68 → 7/10
+  //   cosinus moyen = 0.60 (correct) → 5/10
+  //   cosinus moyen = 0.50 → 3/10
+  //   cosinus moyen = 0.40 (faible) → 1/10
+  //   cosinus moyen ≤ 0.32 → 0/10
   //
   // Choix d'une mapping non linéaire car les scores bge-m3 sur du contenu
-  // français français se concentrent dans la zone 0.40-0.85 ; un seuil
-  // linéaire 0→1 rendrait quasi impossible d'atteindre 10/10.
+  // français se concentrent dans la zone 0.40-0.85. Recalibrage : l'ancien
+  // plafond à 0.85 était quasi inatteignable (presque rien ne dépasse 0.80
+  // de cosinus moyen), ce qui transformait le critère en malus permanent
+  // (un bon contenu à 0.65-0.70 ne tapait que 5-6/10, sous son niveau sur
+  // les autres critères, et faisait baisser le total renormalisé). Le
+  // plafond passe à 0.78 et le milieu est relevé pour qu'un contenu qui
+  // colle vraiment au sujet du top 10 soit récompensé. Validé via
+  // scripts/semantic-recalib-bench.ts (impact +0 à +4 sur le score affiché,
+  // concentré sur la zone réaliste 0.68-0.75).
+  //
+  // NB : ce mapping reste absolu. Le passage à un scoring relatif aux
+  // competitorSemanticScores (cohérent avec relativizeScore) est suivi à
+  // part et nécessite une validation sur un brief prod récent.
   if (paragraphSemanticScores && paragraphSemanticScores.length > 0) {
     const avg =
       paragraphSemanticScores.reduce((acc, p) => acc + p.score, 0) /
       paragraphSemanticScores.length;
     let s: number;
-    if (avg >= 0.85) s = 10;
-    else if (avg >= 0.65) s = Math.round(5 + ((avg - 0.65) / 0.2) * 5);
-    else if (avg >= 0.45) s = Math.round(2 + ((avg - 0.45) / 0.2) * 3);
-    else if (avg > 0.3) s = Math.round(((avg - 0.3) / 0.15) * 2);
+    if (avg >= 0.78) s = 10;
+    else if (avg >= 0.68) s = Math.round(7 + ((avg - 0.68) / 0.1) * 3);
+    else if (avg >= 0.6) s = Math.round(5 + ((avg - 0.6) / 0.08) * 2);
+    else if (avg >= 0.5) s = Math.round(3 + ((avg - 0.5) / 0.1) * 2);
+    else if (avg >= 0.4) s = Math.round(1 + ((avg - 0.4) / 0.1) * 2);
+    else if (avg > 0.32) s = Math.round(((avg - 0.32) / 0.08) * 1);
     else s = 0;
     r.semantic.score = Math.max(0, Math.min(10, s));
     r.semantic.details = {
