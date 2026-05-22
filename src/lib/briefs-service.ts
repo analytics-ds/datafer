@@ -204,14 +204,17 @@ export async function createPendingBrief(
   return { ok: true, id };
 }
 
-// 180s : compromis wall-time pour la cascade crawl 3 niveaux. Workers Paid
-// permet jusqu'à 300s CPU (cf. wrangler-analysis.toml [limits] cpu_ms), mais
-// on borne le wall ici pour éviter qu'un crawl pathologique (Bright Data
-// Browser CDP coincé sur un site JS-heavy) ne traîne indéfiniment.
+// 240s : compromis wall-time pour la cascade crawl 3 niveaux. Workers Paid
+// permet jusqu'à 300s CPU (cf. wrangler-analysis.toml [limits] cpu_ms), or le
+// crawl est I/O-bound (peu de CPU), donc on tient large sous ce plafond. On
+// borne quand même le wall ici pour éviter qu'un crawl pathologique (Bright
+// Data Browser CDP coincé sur un site JS-heavy) ne traîne indéfiniment.
 // Cascade fetch direct → BD : ~70% des sites en fetch direct (1-2s) + ~30%
-// en BD (5-90s). Aligné avec HEARTBEAT_STALE_MS du cron cleanup
-// (`/api/cron/cleanup-stuck`) qui chasse les briefs zombies > 180s.
-const ANALYSIS_DEADLINE_MS = 180_000;
+// en BD (5-90s). Passé de 180s à 240s le 2026-05-22 : le SERP CrazySerp peut
+// désormais prendre jusqu'à 90s (2 pages × 45s) avant le crawl, il fallait
+// redonner de la marge. Le cron cleanup (HEARTBEAT_STALE_MS) reste à 180s mais
+// est heartbeat-based (step figée), pas une garde de durée totale.
+const ANALYSIS_DEADLINE_MS = 240_000;
 
 export async function completeBriefAnalysis(
   env: DataferEnv,

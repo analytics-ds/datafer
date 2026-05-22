@@ -351,17 +351,36 @@ async function fetchCrazyserpPage(
     googleDomain,
   });
   const url = `https://crazyserp.com/api/search?${params.toString()}`;
-  const r = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    signal: AbortSignal.timeout(25000),
-  });
-  if (!r.ok) return null;
-  const d = (await r.json()) as CrazySerpResponse;
-  if (!d.success) return null;
-  return d;
+  // try/catch obligatoire : sans lui, un timeout (AbortSignal.timeout) ou une
+  // erreur réseau lève "The operation was aborted due to timeout" qui remonte
+  // jusqu'au catch global de runBriefAnalysis et tue tout le brief. Tous les
+  // appelants (fetchSerpFromCrazyserp, fetchCrazyserpTop100) attendent `null`
+  // en cas d'échec pour déclencher la bascule clé fallback. Bug remonté par
+  // Pierre le 2026-05-22 (brief "idée recette repas").
+  try {
+    const r = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      // 45s (au lieu de 25s) : "idée recette repas" et autres KW génériques
+      // lourds dépassaient les 25s sur la page 2 CrazySerp et faisaient échouer
+      // le brief. 45s × 2 pages = 90s max, ce qui laisse encore ~90s dans le
+      // deadline global de 180s (cf. ANALYSIS_DEADLINE_MS) pour crawl + NLP.
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!r.ok) return null;
+    const d = (await r.json()) as CrazySerpResponse;
+    if (!d.success) return null;
+    return d;
+  } catch (e) {
+    console.error("[crazyserp] page fetch failed", {
+      page,
+      keyword,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return null;
+  }
 }
 
 async function fetchSerpFromCrazyserp(
