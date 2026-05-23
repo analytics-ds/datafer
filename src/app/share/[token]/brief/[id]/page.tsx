@@ -5,6 +5,7 @@ import { getDb } from "@/db";
 import { brief, client } from "@/db/schema";
 import { faviconUrl } from "@/lib/favicon";
 import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
+import { applyBriefOverrides, parseBriefOverrides } from "@/lib/brief-overrides";
 import { BriefEditor } from "@/app/app/briefs/[id]/brief-editor";
 import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
@@ -30,8 +31,14 @@ export default async function SharedBriefPage({
   const b = row.brief;
   const folder = row.folder;
 
-  const nlp = b.nlpJson ? (JSON.parse(b.nlpJson) as NlpResult) : null;
-  const serp = b.serpJson ? (JSON.parse(b.serpJson) as SerpResult[]) : [];
+  const rawNlp = b.nlpJson ? (JSON.parse(b.nlpJson) as NlpResult) : null;
+  const rawSerp = b.serpJson ? (JSON.parse(b.serpJson) as SerpResult[]) : [];
+  const overridden = applyBriefOverrides(
+    { nlp: rawNlp, serp: rawSerp, position: b.position ?? null },
+    parseBriefOverrides(b.overridesJson),
+  );
+  const nlp = overridden.nlp;
+  const serp = overridden.serp;
   const paa = b.paaJson ? (JSON.parse(b.paaJson) as Paa[]) : [];
   const haloscan = b.haloscanJson ? (JSON.parse(b.haloscanJson) as HaloscanOverview) : null;
 
@@ -98,7 +105,7 @@ export default async function SharedBriefPage({
           serp={serp}
           paa={paa}
           haloscan={haloscan}
-          position={b.position ?? null}
+          position={overridden.position}
           workflowStatus={b.workflowStatus as WorkflowStatus}
           initialTags={initialTags}
           availableTags={availableTags}

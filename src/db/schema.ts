@@ -111,6 +111,11 @@ export const brief = sqliteTable("brief", {
   nlpJson: text("nlp_json"),
   haloscanJson: text("haloscan_json"),
   paaJson: text("paa_json"),
+  // Overrides back-office sur les data d'analyse : position, word count
+  // min/max/avg, concurrents désactivés du top 10, termes NLP ajoutés/retirés.
+  // Appliqués au runtime avant scoring/affichage ; la data brute SERP/Haloscan
+  // reste intacte dans les colonnes dédiées.
+  overridesJson: text("overrides_json"),
   editorHtml: text("editor_html"),
   score: integer("score"),
   // Snapshots Haloscan + position client, stockés en colonnes pour pouvoir

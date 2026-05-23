@@ -7,6 +7,7 @@ import { brief, client } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
 import { ensureCompetitorScores } from "@/lib/scoring";
+import { applyBriefOverrides, parseBriefOverrides } from "@/lib/brief-overrides";
 import { BriefEditor } from "./brief-editor";
 import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "../workflow-status";
@@ -27,12 +28,24 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
   if (!row) notFound();
 
   const b = row.brief;
-  const nlp = b.nlpJson ? (JSON.parse(b.nlpJson) as NlpResult) : null;
-  const serp = b.serpJson ? (JSON.parse(b.serpJson) as SerpResult[]) : [];
+  const rawNlp = b.nlpJson ? (JSON.parse(b.nlpJson) as NlpResult) : null;
+  const rawSerp = b.serpJson ? (JSON.parse(b.serpJson) as SerpResult[]) : [];
+  const overrides = parseBriefOverrides(b.overridesJson);
+  // Applique les overrides back-office (Paramètres du brief). Filtre les
+  // concurrents désactivés du SERP, retire les termes NLP masqués, override
+  // position et word count min/max/avg.
+  const overridden = applyBriefOverrides(
+    { nlp: rawNlp, serp: rawSerp, position: b.position ?? null },
+    overrides,
+  );
+  const nlp = overridden.nlp;
+  const serp = overridden.serp;
   // Lazy backfill des scores concurrents pour les briefs antérieurs à
   // l'itération 7. Mutation in-memory ; la persistance D1 a lieu au
-  // prochain save (rescoreBrief sérialise le NlpResult complet).
-  if (nlp) ensureCompetitorScores(nlp, b.serpJson);
+  // prochain save (rescoreBrief sérialise le NlpResult complet). Avec
+  // overrides : on re-scoring sur le serp filtré (competitorScores a été
+  // invalidé par applyBriefOverrides).
+  if (nlp) ensureCompetitorScores(nlp, JSON.stringify(serp));
   const paa = b.paaJson ? (JSON.parse(b.paaJson) as Paa[]) : [];
   const haloscan = b.haloscanJson ? (JSON.parse(b.haloscanJson) as HaloscanOverview) : null;
 
@@ -63,8 +76,11 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
       serp={serp}
       paa={paa}
       haloscan={haloscan}
-      position={b.position ?? null}
+      position={overridden.position}
       shareToken={b.shareToken ?? null}
+      overrides={overrides}
+      rawSerp={rawSerp}
+      rawNlpTerms={rawNlp?.nlpTerms ?? []}
       workflowStatus={b.workflowStatus as WorkflowStatus}
       initialTags={initialTags}
       availableTags={availableTags}

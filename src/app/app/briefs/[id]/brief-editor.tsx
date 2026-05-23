@@ -28,6 +28,8 @@ import { StatusPicker } from "../status-picker";
 import { TagPicker, type TagDTO } from "../tag-picker";
 import type { WorkflowStatus } from "../workflow-status";
 import { ExportMenu } from "./export-menu";
+import { BriefSettingsModal } from "./brief-settings-modal";
+import type { BriefOverrides } from "@/lib/brief-overrides";
 
 type Folder = { id: string; name: string; website: string | null; scope: "personal" | "agency" };
 
@@ -75,6 +77,15 @@ type BriefEditorProps = {
   hideNewAnalysis?: boolean;
   /** Token de partage déjà actif sur le brief (mode consultant uniquement). */
   shareToken?: string | null;
+  /**
+   * Overrides back-office en cours sur le brief. Absent en mode partage :
+   * la modal Paramètres ne s'ouvre que pour les users authentifiés.
+   */
+  overrides?: BriefOverrides;
+  /** SERP brute (avant filtre disabledCompetitors) pour piloter la modal. */
+  rawSerp?: SerpResult[];
+  /** Termes NLP bruts (avant filtre nlpTermsRemoved) pour piloter la modal. */
+  rawNlpTerms?: NlpTerm[];
 };
 
 type Tab = "editor" | "serp" | "insights";
@@ -90,6 +101,9 @@ export function BriefEditor(props: BriefEditorProps) {
 
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus>(props.workflowStatus);
   const [tags, setTags] = useState<TagDTO[]>(props.initialTags);
+  // Modal Paramètres back-office (icône ⚙️). Affichée uniquement quand le
+  // brief est ouvert depuis la session authentifiée (pas en mode partage).
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   async function changeWorkflowStatus(next: WorkflowStatus) {
     const prev = workflowStatus;
@@ -512,6 +526,16 @@ export function BriefEditor(props: BriefEditorProps) {
           {saveStatus === "saved" && <span className="text-[11px] text-[var(--green)] font-semibold">✓ Enregistré</span>}
           <ExportMenu exportEndpoint={exportEndpoint} printUrl={printUrl} />
           {!hideNewAnalysis && (
+            <button
+              onClick={() => setSettingsOpen(true)}
+              title="Paramètres du brief (back-office)"
+              aria-label="Paramètres du brief"
+              className="px-3 py-[8px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[14px] hover:bg-[var(--bg-warm)] transition-colors leading-none"
+            >
+              ⚙
+            </button>
+          )}
+          {!hideNewAnalysis && (
             <ShareBriefPanel briefId={id} initialToken={props.shareToken ?? null} />
           )}
           {!hideNewAnalysis && (
@@ -698,6 +722,20 @@ export function BriefEditor(props: BriefEditorProps) {
           font-weight: 600;
         }
       `}</style>
+      {!hideNewAnalysis && (
+        <BriefSettingsModal
+          briefId={id}
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          currentPosition={position}
+          rawAvgWordCount={nlp?.avgWordCount ?? 0}
+          rawMinWordCount={nlp?.minWordCount ?? 0}
+          rawMaxWordCount={nlp?.maxWordCount ?? 0}
+          rawSerp={props.rawSerp ?? serp}
+          rawNlpTerms={props.rawNlpTerms ?? nlp?.nlpTerms ?? []}
+          current={props.overrides ?? {}}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,98 @@
+import type { NlpResult, SerpResult } from "@/lib/analysis";
+
+/**
+ * Overrides back-office sur les data d'analyse du brief. Edités via la modal
+ * "Paramètres du brief" (icône ⚙️ dans le header). Persisté dans la colonne
+ * `brief.overrides_json`. Appliqué côté serveur au chargement, avant le
+ * scoring et l'affichage. La data brute SERP/Haloscan reste intacte dans les
+ * autres colonnes : on peut toujours revenir à l'analyse d'origine en
+ * vidant l'objet d'overrides.
+ */
+export type BriefOverrides = {
+  position?: number | null;
+  wordCount?: {
+    min?: number;
+    max?: number;
+    avg?: number;
+  };
+  // URLs des concurrents top 10 à retirer du calcul (médiane, benchmarks,
+  // affichage SERP). Le centroïde sémantique paragraphe reste calculé sur
+  // l'ensemble du top 10 (embeddings non stockés par concurrent).
+  disabledCompetitors?: string[];
+  // Termes NLP à retirer (par .term). Utile quand l'analyse remonte du bruit
+  // ("cookie", "newsletter") qui n'a rien à voir avec le sujet du KW.
+  nlpTermsRemoved?: string[];
+};
+
+export function parseBriefOverrides(json: string | null | undefined): BriefOverrides {
+  if (!json) return {};
+  try {
+    const parsed = JSON.parse(json);
+    return typeof parsed === "object" && parsed !== null ? (parsed as BriefOverrides) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Applique les overrides aux data brutes du brief. Retourne une copie
+ * modifiée (immutabilité). Si overrides est vide / null, retourne les data
+ * d'origine sans copie.
+ *
+ * - `position` : remplacement direct
+ * - `wordCount.{min,max,avg}` : remplacement champ par champ sur le NlpResult
+ * - `disabledCompetitors` : filtre serp[] sur url. On invalide
+ *   `nlp.competitorScores` pour forcer un re-scoring sur les concurrents
+ *   restants (médiane + score relatif recalculés).
+ * - `nlpTermsRemoved` : filtre nlp.nlpTerms
+ */
+export function applyBriefOverrides(
+  data: { nlp: NlpResult | null; serp: SerpResult[]; position: number | null },
+  overrides: BriefOverrides,
+): { nlp: NlpResult | null; serp: SerpResult[]; position: number | null } {
+  if (!overrides || Object.keys(overrides).length === 0) return data;
+
+  let serp = data.serp;
+  if (overrides.disabledCompetitors && overrides.disabledCompetitors.length > 0) {
+    const disabled = new Set(overrides.disabledCompetitors);
+    serp = data.serp.filter((s) => !disabled.has(s.link));
+  }
+
+  const position =
+    overrides.position !== undefined ? overrides.position : data.position;
+
+  let nlp = data.nlp;
+  if (nlp) {
+    const next: NlpResult = { ...nlp };
+
+    if (overrides.nlpTermsRemoved && overrides.nlpTermsRemoved.length > 0) {
+      const removed = new Set(overrides.nlpTermsRemoved);
+      next.nlpTerms = nlp.nlpTerms.filter((t) => !removed.has(t.term));
+    }
+
+    if (overrides.wordCount) {
+      if (typeof overrides.wordCount.min === "number") {
+        next.minWordCount = overrides.wordCount.min;
+      }
+      if (typeof overrides.wordCount.max === "number") {
+        next.maxWordCount = overrides.wordCount.max;
+      }
+      if (typeof overrides.wordCount.avg === "number") {
+        next.avgWordCount = overrides.wordCount.avg;
+      }
+    }
+
+    // Si on a retiré des concurrents, le tableau competitorScores caché
+    // dans nlp_json est obsolète : on l'invalide pour que le prochain
+    // computeDetailedScore (via ensureCompetitorScores) re-score sur le
+    // serp filtré. competitorSemanticScores reste tel quel (centroïde
+    // bge-m3 figé à la création).
+    if (overrides.disabledCompetitors && overrides.disabledCompetitors.length > 0) {
+      next.competitorScores = undefined;
+    }
+
+    nlp = next;
+  }
+
+  return { nlp, serp, position };
+}
