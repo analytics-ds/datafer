@@ -741,7 +741,9 @@ function EditorSidebar({
   insertTermAtCursor: (t: string) => void;
   insertPaaAsH2: (q: string) => void;
 }) {
-  const lower = editorText.toLowerCase();
+  // normalize() = lowercase + strip accents + flatten ligatures. Indispensable
+  // côté chips NLP : "première" et "premiere" doivent matcher pareil.
+  const lower = normalize(editorText);
 
   const subItems = [
     { label: "Mot-clé exact", s: score.keyword, color: "var(--accent)",
@@ -885,8 +887,6 @@ function EditorSidebar({
         kgr={haloscan?.kgr ?? null}
         position={position}
         folderWebsite={folderWebsite}
-        imagesUser={editorImageCount}
-        imagesTarget={nlp?.medianImages ?? 0}
       />
 
       {/* Sub-scores */}
@@ -1184,12 +1184,13 @@ function CompetitorSections({
   editorH3s: string[];
   onInsert: (text: string) => void;
 }) {
-  const userHeadings = [...editorH2s, ...editorH3s].map((h) => h.toLowerCase());
+  const userHeadings = [...editorH2s, ...editorH3s].map((h) => normalize(h));
   // Une section est couverte si au moins un key term (ou sa forme) apparaît
-  // dans un H2/H3 de l'utilisateur.
+  // dans un H2/H3 de l'utilisateur. normalize() des deux côtés pour matcher
+  // accent-insensible.
   const coverage = sections.map((s) => {
     const covered = s.keyTerms.some((t) =>
-      userHeadings.some((h) => h.includes(t.toLowerCase())),
+      userHeadings.some((h) => h.includes(normalize(t))),
     );
     return { section: s, covered };
   });
@@ -1271,10 +1272,10 @@ function EntityList({
   editorText: string;
   onInsert: (t: string) => void;
 }) {
-  const lower = editorText.toLowerCase();
+  const lower = normalize(editorText);
   const rows = entities.map((e) => ({
     entity: e,
-    mentioned: lower.includes(e.label.toLowerCase()),
+    mentioned: lower.includes(normalize(e.label)),
   }));
   const mentioned = rows.filter((r) => r.mentioned).length;
   return (
@@ -1333,9 +1334,8 @@ function PaaCoverageList({
   // un mot avec le keyword serait marquée 'traitée' à tort. On ajoute aussi
   // les variantes singulier/pluriel.
   const kwTokens = new Set<string>();
-  keyword
-    .toLowerCase()
-    .replace(/[^a-zà-ÿœ0-9\s'-]/g, " ")
+  normalize(keyword)
+    .replace(/[^a-z0-9\s'-]/g, " ")
     .split(/\s+/)
     .filter((w) => w.length > 2)
     .forEach((w) => {
@@ -1343,11 +1343,10 @@ function PaaCoverageList({
       if (w.endsWith("s")) kwTokens.add(w.slice(0, -1));
       else kwTokens.add(w + "s");
     });
-  const lower = editorText.toLowerCase();
+  const lower = normalize(editorText);
   const rows = paa.slice(0, 5).map((q) => {
-    const tokens = q.question
-      .toLowerCase()
-      .replace(/[^a-zà-ÿœ0-9\s'-]/g, " ")
+    const tokens = normalize(q.question)
+      .replace(/[^a-z0-9\s'-]/g, " ")
       .split(/\s+/)
       .filter(
         (w) =>
@@ -1409,12 +1408,13 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
 }) {
   if (!terms.length) return null;
   // Un terme est "utilisé" si sa forme affichée OU l'une de ses variantes
-  // morphologiques apparaît dans le contenu.
+  // morphologiques apparaît dans le contenu. normalize() des deux côtés pour
+  // que "première" matche "premiere" (accent-insensible, comme Google).
   const used = terms.filter((k) => {
     if (k.variants && k.variants.length > 0) {
-      return k.variants.some((v) => lower.includes(v.toLowerCase()));
+      return k.variants.some((v) => lower.includes(normalize(v)));
     }
-    return lower.includes(k.term.toLowerCase());
+    return lower.includes(normalize(k.term));
   }).length;
   return (
     <div className="mb-3">
@@ -1430,12 +1430,13 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
           // Compte des occurrences actuelles dans l'éditeur. Pour les
           // unigrammes on matche toutes les variantes morphologiques (stemming)
           // afin que "travaille", "travaillé", "travaux" comptent tous pour le
-          // chip "travaux".
+          // chip "travaux". Pattern normalisé (accents strippés) pour matcher
+          // `lower` qui l'est aussi.
           const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
           const pattern =
             k.variants && k.variants.length > 0
-              ? k.variants.map(escape).join("|")
-              : escape(k.term);
+              ? k.variants.map((v) => escape(normalize(v))).join("|")
+              : escape(normalize(k.term));
           const rx = new RegExp(`\\b(?:${pattern})\\b`, "gi");
           const currentCount = (lower.match(rx) ?? []).length;
           const hasRange = typeof k.minCount === "number" && k.maxCount > 0;
@@ -1830,9 +1831,12 @@ function KeywordTermsList({
   return (
     <div className="flex flex-wrap gap-[5px]">
       {terms.map((k) => {
+        // `lower` est passé en normalize() (accents strippés, ligatures
+        // dépliées) par le parent — on normalise le terme côté pattern pour
+        // garder les deux côtés alignés et matcher "première" ↔ "premiere".
         const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const rx = new RegExp(
-          `(?:^|[^a-zà-ÿœ0-9])${escape(k.term)}(?=$|[^a-zà-ÿœ0-9])`,
+          `(?:^|[^a-z0-9])${escape(normalize(k.term))}(?=$|[^a-z0-9])`,
           "gi",
         );
         const currentCount = (lower.match(rx) ?? []).length;
@@ -2522,15 +2526,11 @@ function KeywordStatsRow({
   kgr,
   position,
   folderWebsite,
-  imagesUser,
-  imagesTarget,
 }: {
   volume: number | null;
   kgr: number | null;
   position: number | null;
   folderWebsite: string | null;
-  imagesUser: number;
-  imagesTarget: number;
 }) {
   // Échelle position : top 3 vert foncé, top 10 vert, top 30 orange, au-delà rouge.
   const positionTone =
@@ -2546,19 +2546,9 @@ function KeywordStatsRow({
   // KGR : vert quand opportunité (< 0.25), neutre sinon. Pas de rouge :
   // un KGR élevé est un signal informatif, pas une erreur.
   const kgrTone = kgr != null && kgr < 0.25 ? "good" : "muted";
-  // Images : vert quand on a atteint la cible mediane, orange en dessous,
-  // muted si pas de cible (briefs anciens sans medianImages).
-  const imagesTone: StatTone =
-    imagesTarget <= 0
-      ? "muted"
-      : imagesUser >= imagesTarget
-        ? "good"
-        : imagesUser > 0
-          ? "warn"
-          : "bad";
 
   return (
-    <div className="grid grid-cols-2 gap-2 mb-5">
+    <div className="grid grid-cols-3 gap-2 mb-5">
       <KeyStat
         label="Volume"
         value={volume != null ? volume.toLocaleString("fr-FR") : "N/A"}
@@ -2580,16 +2570,6 @@ function KeywordStatsRow({
             : "Rattache un client avec un site pour suivre ta position."
         }
         tone={positionTone}
-      />
-      <KeyStat
-        label="Images"
-        value={imagesTarget > 0 ? `${imagesUser}/${imagesTarget}` : "—"}
-        tooltip={
-          imagesTarget > 0
-            ? `${imagesUser} image${imagesUser > 1 ? "s" : ""} dans ton contenu, médiane des concurrents : ${imagesTarget}. Atteins la médiane pour 3/3.`
-            : "Pas de médiane disponible (briefs antérieurs à la feature images)."
-        }
-        tone={imagesTone}
       />
     </div>
   );
