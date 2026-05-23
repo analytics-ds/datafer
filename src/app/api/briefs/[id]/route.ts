@@ -5,6 +5,8 @@ import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
 import { detachAllTagsFromBrief } from "@/lib/tags-service";
+import { evaluateScoreXp } from "@/lib/xp";
+import type { NlpResult } from "@/lib/analysis";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   const body = (await req.json().catch(() => null)) as {
     editorHtml?: string;
     score?: number;
+    rawScore?: number;
     clientId?: string | null;
     workflowStatus?: "pending" | "in_progress" | "drafted" | "published";
   } | null;
@@ -25,7 +28,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
   // Workspace partagé : tout user authentifié peut éditer n'importe quel brief.
   const [row] = await db
-    .select({ id: brief.id, clientId: brief.clientId })
+    .select({ id: brief.id, clientId: brief.clientId, ownerId: brief.ownerId, nlpJson: brief.nlpJson })
     .from(brief)
     .where(eq(brief.id, id))
     .limit(1);
@@ -58,6 +61,22 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   }
 
   await db.update(brief).set(patch).where(eq(brief.id, id));
+
+  // XP : si le score raw franchit la médiane / le best concurrent pour la
+  // 1re fois, on award. Best-effort, idempotent côté evaluateScoreXp via
+  // les flags brief.xpAwarded. On utilise l'owner du brief (et non la
+  // session courante) pour rester cohérent avec le créateur du contenu.
+  if (typeof body.rawScore === "number" && Number.isFinite(body.rawScore)) {
+    try {
+      const nlp = row.nlpJson ? (JSON.parse(row.nlpJson) as NlpResult) : null;
+      const competitorScores = nlp?.competitorScores ?? [];
+      if (competitorScores.length > 0) {
+        await evaluateScoreXp(id, row.ownerId, body.rawScore, competitorScores);
+      }
+    } catch {
+      // best-effort : un échec d'XP n'impacte pas la sauvegarde du brief.
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

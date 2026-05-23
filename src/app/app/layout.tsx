@@ -7,6 +7,7 @@ import { asc, eq } from "drizzle-orm";
 import { Sidebar } from "./sidebar";
 import { FirstLoginGate } from "./first-login-gate";
 import { EasterEgg } from "./easter-egg";
+import { levelFromXp } from "@/lib/xp";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       firstName: userTable.firstName,
       lastName: userTable.lastName,
       image: userTable.image,
+      totalXp: userTable.totalXp,
     })
     .from(userTable)
     .where(eq(userTable.id, session.user.id))
@@ -57,6 +59,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           email: session.user.email,
           name: displayName,
           image: me?.image ?? null,
+          level: levelFromXp(me?.totalXp ?? 0).level,
         }}
         favorites={favorites}
       />

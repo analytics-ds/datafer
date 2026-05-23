@@ -8,7 +8,7 @@ import { faviconUrl } from "@/lib/favicon";
 type Favorite = { id: string; name: string; website: string | null };
 
 type SidebarProps = {
-  user: { id: string; email: string; name: string; image: string | null };
+  user: { id: string; email: string; name: string; image: string | null; level: number };
   favorites: Favorite[];
 };
 
@@ -103,8 +103,16 @@ export function Sidebar({ user, favorites }: SidebarProps) {
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-semibold truncate leading-tight">
-              {user.name}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[13px] font-semibold truncate leading-tight">
+                {user.name}
+              </span>
+              <span
+                className="shrink-0 inline-flex items-center justify-center px-1.5 py-0.5 rounded-[var(--radius-pill)] text-[10px] font-bold tracking-[0.3px] bg-[var(--bg-olive-light)] text-[var(--accent-dark)] leading-none"
+                title={`Niveau ${user.level} · Voir le détail dans les paramètres`}
+              >
+                Lv {user.level}
+              </span>
             </div>
             <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] truncate">
               {user.email}

@@ -351,11 +351,11 @@ export function BriefEditor(props: BriefEditorProps) {
     fetch(saveEndpoint, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ score: score.total }),
+      body: JSON.stringify({ score: score.total, rawScore: score.rawTotal }),
     }).catch(() => {
       // best-effort : si ça échoue, le debounce save reprendra plus tard.
     });
-  }, [editorData.text, score.total, saveEndpoint]);
+  }, [editorData.text, score.total, score.rawTotal, saveEndpoint]);
 
   // Debounced save
   useEffect(() => {
@@ -370,6 +370,7 @@ export function BriefEditor(props: BriefEditorProps) {
           body: JSON.stringify({
             editorHtml: editorRef.current?.innerHTML ?? "",
             score: score.total,
+            rawScore: score.rawTotal,
           }),
         });
         setSaveStatus("saved");
@@ -381,7 +382,7 @@ export function BriefEditor(props: BriefEditorProps) {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [editorData, score.total, saveEndpoint]);
+  }, [editorData, score.total, score.rawTotal, saveEndpoint]);
 
   const exec = (cmd: string, value?: string) => {
     editorRef.current?.focus();

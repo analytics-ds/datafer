@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getAuth } from "@/lib/auth";
 import { createPendingBrief } from "@/lib/briefs-service";
+import { awardBriefXp } from "@/lib/xp";
 import type { DataferEnv } from "@/lib/datafer-env";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,11 @@ export async function POST(req: Request) {
     userId: session.user.id,
     input,
   });
+
+  // Award XP de création (10 XP). Best-effort : un échec ne doit pas bloquer
+  // la création du brief (l'XP est secondaire et idempotent, on retentera
+  // lors d'une opération suivante au pire des cas).
+  awardBriefXp(created.id, session.user.id, "created").catch(() => {});
 
   return NextResponse.json({
     id: created.id,

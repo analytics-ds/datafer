@@ -17,6 +17,11 @@ export const user = sqliteTable("user", {
   mustChangePassword: integer("must_change_password", { mode: "boolean" })
     .notNull()
     .default(false),
+  // Cumul XP gagné. Source de vérité = brief.xpAwarded (les flags par brief),
+  // ce champ est un cache pour éviter de re-sommer à chaque affichage. Mis à
+  // jour à chaque award (création brief, dépassement médiane, dépassement
+  // best concurrent). Reset possible via update direct si besoin de debug.
+  totalXp: integer("total_xp").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
@@ -116,6 +121,11 @@ export const brief = sqliteTable("brief", {
   // Appliqués au runtime avant scoring/affichage ; la data brute SERP/Haloscan
   // reste intacte dans les colonnes dédiées.
   overridesJson: text("overrides_json"),
+  // Flags d'XP gagné sur ce brief (JSON {created, aboveMedian, aboveBest}).
+  // Idempotent : une fois un flag à true, l'XP correspondant est définitif
+  // même si le score user redescend en dessous du seuil. Évite le farming
+  // par allers-retours sur le score.
+  xpAwarded: text("xp_awarded"),
   editorHtml: text("editor_html"),
   score: integer("score"),
   // Snapshots Haloscan + position client, stockés en colonnes pour pouvoir
