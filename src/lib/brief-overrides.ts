@@ -22,6 +22,10 @@ export type BriefOverrides = {
   // Termes NLP à retirer (par .term). Utile quand l'analyse remonte du bruit
   // ("cookie", "newsletter") qui n'a rien à voir avec le sujet du KW.
   nlpTermsRemoved?: string[];
+  // Termes NLP custom ajoutés manuellement par le consultant. Injectés avec
+  // presence=70 (tier Importants) pour entrer dans le scoring de couverture
+  // sans être bloquants comme les Essentiels. avgCount/minCount/maxCount à 1.
+  nlpTermsAdded?: string[];
 };
 
 export function parseBriefOverrides(json: string | null | undefined): BriefOverrides {
@@ -68,6 +72,26 @@ export function applyBriefOverrides(
     if (overrides.nlpTermsRemoved && overrides.nlpTermsRemoved.length > 0) {
       const removed = new Set(overrides.nlpTermsRemoved);
       next.nlpTerms = nlp.nlpTerms.filter((t) => !removed.has(t.term));
+    }
+
+    if (overrides.nlpTermsAdded && overrides.nlpTermsAdded.length > 0) {
+      const existing = new Set(next.nlpTerms.map((t) => t.term.toLowerCase()));
+      // Termes ajoutés avec metadata par défaut : presence=70 (tier Importants),
+      // avgCount/minCount/maxCount=1. Pas de dédoublonnage côté display si
+      // l'utilisateur ré-ajoute un terme déjà présent (filtre côté lower).
+      const customs = overrides.nlpTermsAdded
+        .filter((term) => term && !existing.has(term.toLowerCase()))
+        .map((term) => ({
+          term,
+          score: 0,
+          presence: 70,
+          df: 1,
+          inHeadings: false,
+          minCount: 1,
+          maxCount: 1,
+          avgCount: 1,
+        }));
+      next.nlpTerms = [...next.nlpTerms, ...customs];
     }
 
     if (overrides.wordCount) {

@@ -29,6 +29,7 @@ import { TagPicker, type TagDTO } from "../tag-picker";
 import type { WorkflowStatus } from "../workflow-status";
 import { ExportMenu } from "./export-menu";
 import { BriefSettingsModal } from "./brief-settings-modal";
+import { InfoBubble } from "./info-bubble";
 import type { BriefOverrides } from "@/lib/brief-overrides";
 
 type Folder = { id: string; name: string; website: string | null; scope: "personal" | "agency" };
@@ -889,7 +890,10 @@ function EditorSidebar({
           </div>
         </div>
         <div className="flex flex-col gap-[4px] min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">Score SEO</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
+            Score SEO
+            <InfoBubble text="Score /100 calibré sur la médiane des concurrents top 10 : médiane = 50, médiane × 1.5 = 100. Sur les KW à concurrence faible, on remonte la médiane à 60 pour rester ambitieux. Composé de 9 critères : mot-clé, NLP, longueur, titres, placement, structure, qualité, images, sémantique paragraphe + signaux GEO." />
+          </span>
           <span className="text-[13px] font-semibold leading-tight">{scoreHint}</span>
           {nlp?.intent && (
             <span
@@ -928,7 +932,13 @@ function EditorSidebar({
       />
 
       {/* Sub-scores */}
-      <Section title="Score détaillé" dotColor="var(--bg-black)" collapsible defaultOpen={false}>
+      <Section
+        title="Score détaillé"
+        dotColor="var(--bg-black)"
+        collapsible
+        defaultOpen={false}
+        info="Décomposition du score SEO en 9 critères pondérés sur 100. Chaque barre indique ta progression sur le critère (vert ≥70%, orange 40-69%, rouge <40%). La somme pondérée donne le score affiché en haut."
+      >
         {subItems.map((i) => {
           const pct = Math.round((i.s.score / i.s.max) * 100);
           const valColor = pct >= 70 ? "var(--green)" : pct >= 40 ? "var(--orange)" : "var(--red)";
@@ -952,7 +962,13 @@ function EditorSidebar({
       </Section>
 
       {ek && (
-        <Section title="Mot-clé exact (densité)" dotColor="var(--accent)" collapsible defaultOpen={false}>
+        <Section
+          title="Mot-clé exact (densité)"
+          dotColor="var(--accent)"
+          collapsible
+          defaultOpen={false}
+          info="Densité = (occurrences × longueur du KW) / nombre total de mots × 100. La fourchette idéale est calculée d'après les concurrents top 10. Trop bas = mot-clé sous-représenté, trop haut = bourrage (risque de pénalité Google)."
+        >
           <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold px-3 py-[7px] bg-[var(--bg-warm)] rounded-[var(--radius-xs)] mb-[10px] text-center">
             &quot;{ek.keyword}&quot;
           </div>
@@ -966,7 +982,11 @@ function EditorSidebar({
       )}
 
       {nlp && (((nlp.keywordTerms?.length ?? 0) + essential.length + important.length + opportunity.length) > 0) && (
-        <Section title="Champ sémantique" dotColor="var(--purple)">
+        <Section
+          title="Champ sémantique"
+          dotColor="var(--purple)"
+          info="Termes que les concurrents top 10 utilisent fréquemment sur ce KW. Plus la présence est haute, plus le terme est attendu par Google. 3 tiers : Essentiels (≥70%), Importants (40-69%), Opportunités (<40%)."
+        >
           {(nlp.keywordTerms?.length ?? 0) > 0 && (
             <div className="mb-[10px]">
               <div className="text-[10px] font-semibold uppercase tracking-[0.5px] mb-[6px]" style={{ color: "var(--red)" }}>
@@ -980,10 +1000,21 @@ function EditorSidebar({
               label={(nlp.keywordTerms?.length ?? 0) > 0 ? "Essentiels — autres" : "Essentiels"}
               color="var(--red)" bg="#FFF0F0" border="#E8BCBC"
               terms={essential} lower={lower} onInsert={insertTermAtCursor}
+              info="Termes présents chez ≥70% des concurrents top 10. Considérés comme obligatoires : tu dois tous les couvrir pour avoir le score NLP max (17/27 pts). 100% requis."
             />
           )}
-          <TierTags label="Importants" color="var(--orange)" bg="var(--orange-bg)" border="#E8D6A0" terms={important} lower={lower} onInsert={insertTermAtCursor} />
-          <TierTags label="Opportunité" color="var(--blue)" bg="var(--blue-bg)" border="#B8D0E8" terms={opportunity} lower={lower} onInsert={insertTermAtCursor} />
+          <TierTags
+            label="Importants"
+            color="var(--orange)" bg="var(--orange-bg)" border="#E8D6A0"
+            terms={important} lower={lower} onInsert={insertTermAtCursor}
+            info="Termes présents chez 40-69% des concurrents. Pas obligatoires mais fortement attendus. Couvrir le maximum donne jusqu'à 10/27 pts de NLP."
+          />
+          <TierTags
+            label="Opportunité"
+            color="var(--blue)" bg="var(--blue-bg)" border="#B8D0E8"
+            terms={opportunity} lower={lower} onInsert={insertTermAtCursor}
+            info="Termes présents chez moins de 40% des concurrents. Ignorés du scoring (zéro pénalité). À ajouter en bonus si pertinent pour différencier ton contenu."
+          />
         </Section>
       )}
 
@@ -1056,13 +1087,25 @@ function EditorSidebar({
       )}
 
       {paa.length > 0 && (
-        <Section title="People Also Ask" dotColor="var(--blue)" collapsible defaultOpen={false}>
+        <Section
+          title="People Also Ask"
+          dotColor="var(--blue)"
+          collapsible
+          defaultOpen={false}
+          info="Questions affichées par Google dans le bloc 'Autres questions posées' sur ce KW. Couvrir ces questions dans tes H2 améliore la pertinence et peut déclencher un rich snippet."
+        >
           <PaaCoverageList paa={paa} editorText={editorText} keyword={ek?.keyword ?? ""} onInsert={insertPaaAsH2} />
         </Section>
       )}
 
       {nlp && (
-        <Section title="Benchmarks SERP" dotColor="var(--green)" collapsible defaultOpen={false}>
+        <Section
+          title="Benchmarks SERP"
+          dotColor="var(--green)"
+          collapsible
+          defaultOpen={false}
+          info="Statistiques calculées sur les 10 premières pages Google (concurrents). Sert de référence pour calibrer ton contenu : viser dans la fourchette est généralement bon, viser la moyenne est sûr."
+        >
           <BenchRow label="Plage de mots" value={`${nlp.minWordCount} à ${nlp.maxWordCount}`} />
           <BenchRow label="Moyenne" value={String(nlp.avgWordCount)} />
           <BenchRow label="Titres" value={String(nlp.avgHeadings)} />
@@ -1152,12 +1195,15 @@ function Section({
   dotColor,
   defaultOpen = true,
   collapsible = false,
+  info,
   children,
 }: {
   title: string;
   dotColor: string;
   defaultOpen?: boolean;
   collapsible?: boolean;
+  /** Tooltip d'aide affiché via une bulle "i" à côté du titre. */
+  info?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -1168,6 +1214,7 @@ function Section({
         <div className="flex items-center gap-[6px] text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-[10px]">
           <span className="w-[6px] h-[6px] rounded-full" style={{ background: dotColor }} />
           {title}
+          {info && <InfoBubble text={info} />}
         </div>
         {children}
       </div>
@@ -1183,6 +1230,7 @@ function Section({
         <span className="flex items-center gap-[6px]">
           <span className="w-[6px] h-[6px] rounded-full" style={{ background: dotColor }} />
           {title}
+          {info && <InfoBubble text={info} />}
         </span>
         <svg
           width="10"
@@ -1441,8 +1489,9 @@ function PaaCoverageList({
   );
 }
 
-function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
+function TierTags({ label, color, bg, border, terms, lower, onInsert, info }: {
   label: string; color: string; bg: string; border: string; terms: NlpTerm[]; lower: string; onInsert: (t: string) => void;
+  info?: string;
 }) {
   if (!terms.length) return null;
   // Un terme est "utilisé" si sa forme affichée OU l'une de ses variantes
@@ -1462,6 +1511,7 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert }: {
         <span className="font-[family-name:var(--font-mono)] font-normal text-[var(--text-muted)]">
           {used}/{terms.length}
         </span>
+        {info && <InfoBubble text={info} />}
       </div>
       <div className="flex flex-wrap gap-[5px]">
         {terms.map((k) => {

@@ -108,13 +108,32 @@ export async function PATCH(
     );
   }
 
+  if ("nlpTermsAdded" in body) {
+    if (!Array.isArray(body.nlpTermsAdded)) {
+      return NextResponse.json({ error: "bad nlpTermsAdded" }, { status: 400 });
+    }
+    // Trim + cap longueur (50 chars) + dédoublonne pour éviter le bruit.
+    const seen = new Set<string>();
+    next.nlpTermsAdded = body.nlpTermsAdded
+      .filter((t): t is string => typeof t === "string")
+      .map((t) => t.trim().slice(0, 50))
+      .filter((t) => {
+        if (t.length === 0) return false;
+        const k = t.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+  }
+
   // Sérialise compactement pour ne pas gonfler la BDD si tous les champs
   // sont à leur défaut (objet vide → null).
   const hasAny =
     next.position !== undefined ||
     (next.wordCount && Object.keys(next.wordCount).length > 0) ||
     (next.disabledCompetitors && next.disabledCompetitors.length > 0) ||
-    (next.nlpTermsRemoved && next.nlpTermsRemoved.length > 0);
+    (next.nlpTermsRemoved && next.nlpTermsRemoved.length > 0) ||
+    (next.nlpTermsAdded && next.nlpTermsAdded.length > 0);
 
   await db
     .update(brief)

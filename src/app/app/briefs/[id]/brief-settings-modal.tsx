@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { BriefOverrides } from "@/lib/brief-overrides";
 import type { NlpTerm, SerpResult } from "@/lib/analysis";
 import { faviconUrl } from "@/lib/favicon";
+import { InfoBubble } from "./info-bubble";
 
 type Props = {
   briefId: string;
@@ -62,6 +63,10 @@ export function BriefSettingsModal({
   const [removedTerms, setRemovedTerms] = useState<Set<string>>(
     () => new Set(current.nlpTermsRemoved ?? []),
   );
+  const [addedTerms, setAddedTerms] = useState<string[]>(
+    () => current.nlpTermsAdded ?? [],
+  );
+  const [newTermInput, setNewTermInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,6 +80,8 @@ export function BriefSettingsModal({
     setAvgWc(current.wordCount?.avg != null ? String(current.wordCount.avg) : "");
     setDisabledSet(new Set(current.disabledCompetitors ?? []));
     setRemovedTerms(new Set(current.nlpTermsRemoved ?? []));
+    setAddedTerms(current.nlpTermsAdded ?? []);
+    setNewTermInput("");
     setError(null);
   }, [open, currentPosition, current]);
 
@@ -96,6 +103,25 @@ export function BriefSettingsModal({
       else next.add(term);
       return next;
     });
+  }
+
+  function addCustomTerm() {
+    const t = newTermInput.trim().slice(0, 50);
+    if (!t) return;
+    // Dédoublonne en case-insensitive
+    const lower = t.toLowerCase();
+    const existsInBase = top40Terms.some((x) => x.term.toLowerCase() === lower);
+    const existsInCustom = addedTerms.some((x) => x.toLowerCase() === lower);
+    if (existsInBase || existsInCustom) {
+      setNewTermInput("");
+      return;
+    }
+    setAddedTerms((prev) => [...prev, t]);
+    setNewTermInput("");
+  }
+
+  function removeCustomTerm(term: string) {
+    setAddedTerms((prev) => prev.filter((t) => t !== term));
   }
 
   function parseIntOrUndef(s: string): number | undefined {
@@ -138,6 +164,7 @@ export function BriefSettingsModal({
 
     body.disabledCompetitors = Array.from(disabledSet);
     body.nlpTermsRemoved = Array.from(removedTerms);
+    body.nlpTermsAdded = addedTerms;
 
     const r = await fetch(`/api/briefs/${briefId}/overrides`, {
       method: "PATCH",
@@ -317,6 +344,61 @@ export function BriefSettingsModal({
               Clic = masquer / réafficher. Recalcule la couverture NLP à l&apos;enregistrement.
             </p>
           </section>
+
+          {/* Ajout de termes NLP custom */}
+          <section>
+            <h3 className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[var(--text-secondary)] mb-2">
+              Termes NLP à ajouter
+              <InfoBubble text="Ajoute un terme que l'analyse automatique n'a pas remonté mais que tu veux voir apparaître dans les chips de l'éditeur et compter dans le scoring couverture NLP. Ajouté au tier 'Importants' (presence 70%), pas bloquant comme un Essentiel." />
+            </h3>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={newTermInput}
+                onChange={(e) => setNewTermInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addCustomTerm();
+                  }
+                }}
+                placeholder="ex. cosmétique naturelle"
+                maxLength={50}
+                className="flex-1 px-3 py-2 text-[13px] border border-[var(--border)] rounded-[var(--radius-xs)] bg-[var(--bg)] focus:outline-none focus:border-[var(--accent)]"
+              />
+              <button
+                type="button"
+                onClick={addCustomTerm}
+                disabled={!newTermInput.trim()}
+                className="px-4 py-2 text-[13px] font-semibold bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] hover:bg-[var(--bg)] disabled:opacity-50"
+              >
+                + Ajouter
+              </button>
+            </div>
+            {addedTerms.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {addedTerms.map((t) => (
+                  <span
+                    key={t}
+                    className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-[var(--radius-pill)] bg-[var(--green-bg)] border border-[var(--green)] text-[var(--green)]"
+                  >
+                    {t}
+                    <button
+                      onClick={() => removeCustomTerm(t)}
+                      className="ml-0.5 leading-none hover:text-[var(--red)]"
+                      aria-label={`Retirer ${t}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-[var(--text-muted)] italic">
+                Aucun terme custom. Ajoute des termes que les concurrents n&apos;utilisent pas mais que tu veux pousser.
+              </p>
+            )}
+          </section>
         </div>
 
         {/* Footer */}
@@ -380,17 +462,3 @@ function WcInput({
   );
 }
 
-/**
- * Petite bulle "i" qui affiche un tooltip natif au hover. Utilisée dans les
- * titres de section pour expliquer les paramètres au consultant.
- */
-function InfoBubble({ text }: { text: string }) {
-  return (
-    <span
-      title={text}
-      className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full border border-[var(--border-strong)] text-[10px] font-bold text-[var(--text-muted)] cursor-help align-middle"
-    >
-      i
-    </span>
-  );
-}
