@@ -858,27 +858,6 @@ const NLP_JUNK_TOKENS = new Set([
   "n", "s", "d", "l", "j", "t", "m", "c",
 ]);
 
-/* Section "MOT-CLÉ PRINCIPAL" : on garde le KW exact toujours + au plus 2
-   autres termes (parts ou extensions) pour ne pas saturer la zone. On
-   privilégie les extensions (formes réelles utilisées par le marché) puis
-   on trie par presence décroissante puis avgCount décroissant. Les junks
-   stopwords sont déjà filtrés en amont par isJunkNlpTerm. */
-function selectTopKeywordTerms<T extends { kind: string; presence: number; avgCount: number }>(
-  terms: T[],
-  maxOthers = 2,
-): T[] {
-  const exact = terms.filter((t) => t.kind === "exact");
-  const others = terms
-    .filter((t) => t.kind !== "exact")
-    .sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === "extension" ? -1 : 1;
-      if (b.presence !== a.presence) return b.presence - a.presence;
-      return b.avgCount - a.avgCount;
-    })
-    .slice(0, maxOthers);
-  return [...exact, ...others];
-}
-
 function isJunkNlpTerm(term: string, targetKeyword?: string | null): boolean {
   const tokens = normalize(term)
     .replace(/[^a-z0-9\s'-]/g, " ")
@@ -1152,15 +1131,10 @@ function EditorSidebar({
             label="Essentiels"
             color="var(--red)" bg="#FFF0F0" border="#E8BCBC"
             terms={essential}
-            kwTerms={selectTopKeywordTerms(
-              (nlp.keywordTerms ?? []).filter(
-                (k) => k.kind === "exact" || !isJunkNlpTerm(k.term),
-              ),
-              2,
-            )}
+            kwTerms={(nlp.keywordTerms ?? []).filter((k) => k.kind === "exact")}
             lower={lower}
             onInsert={insertTermAtCursor}
-            info="Le mot-clé principal (+ 2 variantes max) et les termes présents chez ≥70% des concurrents top 10. Considérés comme obligatoires : tu dois tous les couvrir pour avoir le score NLP max (17/27 pts)."
+            info="Le mot-clé principal du brief + les termes présents chez ≥70% des concurrents top 10. Considérés comme obligatoires : tu dois tous les couvrir pour avoir le score NLP max (17/27 pts)."
           />
           <TierTags
             label="Importants"
