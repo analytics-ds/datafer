@@ -858,6 +858,27 @@ const NLP_JUNK_TOKENS = new Set([
   "n", "s", "d", "l", "j", "t", "m", "c",
 ]);
 
+/* Section "MOT-CLÉ PRINCIPAL" : on garde le KW exact toujours + au plus 2
+   autres termes (parts ou extensions) pour ne pas saturer la zone. On
+   privilégie les extensions (formes réelles utilisées par le marché) puis
+   on trie par presence décroissante puis avgCount décroissant. Les junks
+   stopwords sont déjà filtrés en amont par isJunkNlpTerm. */
+function selectTopKeywordTerms<T extends { kind: string; presence: number; avgCount: number }>(
+  terms: T[],
+  maxOthers = 2,
+): T[] {
+  const exact = terms.filter((t) => t.kind === "exact");
+  const others = terms
+    .filter((t) => t.kind !== "exact")
+    .sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === "extension" ? -1 : 1;
+      if (b.presence !== a.presence) return b.presence - a.presence;
+      return b.avgCount - a.avgCount;
+    })
+    .slice(0, maxOthers);
+  return [...exact, ...others];
+}
+
 function isJunkNlpTerm(term: string, targetKeyword?: string | null): boolean {
   const tokens = normalize(term)
     .replace(/[^a-z0-9\s'-]/g, " ")
@@ -1133,8 +1154,11 @@ function EditorSidebar({
                 Essentiels — mot-clé principal
               </div>
               <KeywordTermsList
-                terms={nlp.keywordTerms!.filter(
-                  (k) => k.kind === "exact" || !isJunkNlpTerm(k.term),
+                terms={selectTopKeywordTerms(
+                  nlp.keywordTerms!.filter(
+                    (k) => k.kind === "exact" || !isJunkNlpTerm(k.term),
+                  ),
+                  2,
                 )}
                 lower={lower}
                 onInsert={insertTermAtCursor}
