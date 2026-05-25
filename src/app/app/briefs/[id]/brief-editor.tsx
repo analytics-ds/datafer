@@ -1148,31 +1148,20 @@ function EditorSidebar({
           defaultOpen
           info="Termes que les concurrents top 10 utilisent fréquemment sur ce KW. Plus la présence est haute, plus le terme est attendu par Google. 3 tiers : Essentiels (≥70%), Importants (40-69%), Opportunités (<40%)."
         >
-          {(nlp.keywordTerms?.length ?? 0) > 0 && (
-            <div className="mb-[10px]">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.5px] mb-[6px]" style={{ color: "var(--red)" }}>
-                Essentiels — mot-clé principal
-              </div>
-              <KeywordTermsList
-                terms={selectTopKeywordTerms(
-                  nlp.keywordTerms!.filter(
-                    (k) => k.kind === "exact" || !isJunkNlpTerm(k.term),
-                  ),
-                  2,
-                )}
-                lower={lower}
-                onInsert={insertTermAtCursor}
-              />
-            </div>
-          )}
-          {essential.length > 0 && (
-            <TierTags
-              label={(nlp.keywordTerms?.length ?? 0) > 0 ? "Essentiels — autres" : "Essentiels"}
-              color="var(--red)" bg="#FFF0F0" border="#E8BCBC"
-              terms={essential} lower={lower} onInsert={insertTermAtCursor}
-              info="Termes présents chez ≥70% des concurrents top 10. Considérés comme obligatoires : tu dois tous les couvrir pour avoir le score NLP max (17/27 pts). 100% requis."
-            />
-          )}
+          <TierTags
+            label="Essentiels"
+            color="var(--red)" bg="#FFF0F0" border="#E8BCBC"
+            terms={essential}
+            kwTerms={selectTopKeywordTerms(
+              (nlp.keywordTerms ?? []).filter(
+                (k) => k.kind === "exact" || !isJunkNlpTerm(k.term),
+              ),
+              2,
+            )}
+            lower={lower}
+            onInsert={insertTermAtCursor}
+            info="Le mot-clé principal (+ 2 variantes max) et les termes présents chez ≥70% des concurrents top 10. Considérés comme obligatoires : tu dois tous les couvrir pour avoir le score NLP max (17/27 pts)."
+          />
           <TierTags
             label="Importants"
             color="var(--orange)" bg="var(--orange-bg)" border="#E8D6A0"
@@ -1639,11 +1628,14 @@ function PaaCoverageList({
   );
 }
 
-function TierTags({ label, color, bg, border, terms, lower, onInsert, info }: {
+function TierTags({ label, color, bg, border, terms, lower, onInsert, info, kwTerms }: {
   label: string; color: string; bg: string; border: string; terms: NlpTerm[]; lower: string; onInsert: (t: string) => void;
   info?: string;
+  /** Mots-clés principaux à afficher en tête, avec leur styling propre
+      (chip noir pour exact, chip kaki/bleu pour part/extension). */
+  kwTerms?: KeywordTerm[];
 }) {
-  if (!terms.length) return null;
+  if (!terms.length && !(kwTerms?.length ?? 0)) return null;
   // Un terme est "utilisé" si sa forme affichée OU l'une de ses variantes
   // morphologiques apparaît dans le contenu. normalize() des deux côtés pour
   // que "première" matche "premiere" (accent-insensible, comme Google).
@@ -1653,17 +1645,83 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert, info }: {
     }
     return lower.includes(normalize(k.term));
   }).length;
+  const kwUsed = (kwTerms ?? []).filter((k) => {
+    const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const rx = new RegExp(
+      `(?:^|[^a-z0-9])${escape(normalize(k.term))}(?=$|[^a-z0-9])`,
+      "gi",
+    );
+    return (lower.match(rx) ?? []).length > 0;
+  }).length;
+  const totalUsed = used + kwUsed;
+  const totalCount = terms.length + (kwTerms?.length ?? 0);
   return (
     <div className="mb-3">
       <div className="text-[10px] font-semibold uppercase tracking-[0.8px] mb-[6px] flex items-center gap-[5px]" style={{ color }}>
         <span className="w-[5px] h-[5px] rounded-full" style={{ background: color }} />
         {label}
         <span className="font-[family-name:var(--font-mono)] font-normal text-[var(--text-muted)]">
-          {used}/{terms.length}
+          {totalUsed}/{totalCount}
         </span>
         {info && <InfoBubble text={info} />}
       </div>
       <div className="flex flex-wrap gap-[5px]">
+        {(kwTerms ?? []).map((k) => {
+          const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const rx = new RegExp(
+            `(?:^|[^a-z0-9])${escape(normalize(k.term))}(?=$|[^a-z0-9])`,
+            "gi",
+          );
+          const currentCount = (lower.match(rx) ?? []).length;
+          const hasRange = k.maxCount > 0;
+          const rangeLabel = hasRange
+            ? k.minCount === k.maxCount
+              ? String(k.maxCount)
+              : `${k.minCount}-${k.maxCount}`
+            : null;
+          const inRange = hasRange && currentCount >= k.minCount && currentCount <= k.maxCount;
+          const overRange = hasRange && currentCount > k.maxCount;
+          const tone = currentCount === 0 ? "missing" : inRange ? "good" : overRange ? "over" : "low";
+          const baseStyle =
+            k.kind === "exact"
+              ? { background: "var(--bg-black)", borderColor: "var(--bg-black)", color: "var(--text-inverse)" }
+              : k.kind === "extension"
+                ? { background: "var(--blue-bg)", borderColor: "var(--blue)", color: "var(--blue)" }
+                : { background: "var(--bg-olive-light)", borderColor: "var(--accent-dark)", color: "var(--accent-dark)" };
+          const overlay =
+            tone === "good"
+              ? { background: "var(--green-bg)", borderColor: "var(--green)", color: "var(--green)" }
+              : tone === "over"
+                ? { background: "var(--orange-bg)", borderColor: "var(--orange)", color: "var(--orange)" }
+                : null;
+          const style = overlay ?? baseStyle;
+          return (
+            <span
+              key={`kw-${k.term}`}
+              title={
+                k.kind === "extension"
+                  ? `Extension détectée chez ${k.presence}% des concurrents`
+                  : k.kind === "exact"
+                    ? "Mot-clé principal"
+                    : "Sous-partie du mot-clé"
+              }
+              className="inline-flex items-center gap-[6px] px-[10px] py-[5px] rounded-full text-[12px] font-medium border"
+              style={style}
+            >
+              {k.term}
+              {rangeLabel && (
+                <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+                  {currentCount}/{rangeLabel}
+                </span>
+              )}
+              {!rangeLabel && currentCount > 0 && (
+                <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+                  {currentCount}
+                </span>
+              )}
+            </span>
+          );
+        })}
         {terms.map((k) => {
           // Compte des occurrences actuelles dans l'éditeur. Pour les
           // unigrammes on matche toutes les variantes morphologiques (stemming)
