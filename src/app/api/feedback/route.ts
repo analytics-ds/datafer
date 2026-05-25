@@ -27,7 +27,7 @@ type Body = {
 };
 
 const DEFAULT_TO = "pierre@datashake.fr";
-const DEFAULT_FROM = "Rankshake Feedback <onboarding@resend.dev>";
+const DEFAULT_FROM = "RankShaker Feedback <onboarding@resend.dev>";
 
 export async function POST(req: Request) {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -112,7 +112,7 @@ export async function POST(req: Request) {
       screenshotsCount: screenshots.length,
     });
 
-    const subject = `${categoryTag(category)} Rankshake feedback de ${session.user.name}`;
+    const subject = `${categoryTag(category)} RankShaker feedback de ${session.user.name}`;
 
     const result = await sendEmail({
       apiKey: e.RESEND_API_KEY,
@@ -162,7 +162,7 @@ function renderFeedbackEmail(p: {
   <div style="max-width:560px;margin:0 auto;background:#FFFFFF;border:1px solid #E8E2DC;border-radius:14px;overflow:hidden">
     <div style="padding:20px 24px;border-bottom:1px solid #E8E2DC;background:#FAF6F2;">
       <div style="font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#8A8A8A;margin-bottom:4px">
-        Rankshake · Nouveau feedback
+        RankShaker · Nouveau feedback
       </div>
       <div style="font-size:22px;font-weight:700;letter-spacing:-0.5px">${categoryTag(p.category)} ${label}</div>
     </div>

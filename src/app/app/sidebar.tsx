@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth-client";
 import { faviconUrl } from "@/lib/favicon";
-import { LogoDatafer } from "@/components/brand";
+import { LogoRankShaker } from "@/components/brand";
 
 type Favorite = { id: string; name: string; website: string | null };
 
@@ -30,7 +30,7 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
   return (
     <aside className="w-[260px] shrink-0 h-screen sticky top-0 bg-[var(--bg-card)] border-r border-[var(--border)] flex flex-col">
       <div className="px-5 h-[68px] flex items-center border-b border-[var(--border)]">
-        <LogoDatafer height={24} />
+        <LogoRankShaker height={24} />
       </div>
 
       <div className="px-4 pt-5 pb-3">

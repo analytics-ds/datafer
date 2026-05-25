@@ -56,8 +56,8 @@ export function LogoDatashake({ height = 22, className }: LogoDatashakeProps) {
   );
 }
 
-/** Combo "symbole + datafer" utilisé dans la sidebar et les chrome interne. */
-export function LogoDatafer({ height = 22, className }: LogoDatashakeProps) {
+/** Combo "symbole + RankShaker" utilisé dans la sidebar et les chrome interne. */
+export function LogoRankShaker({ height = 22, className }: LogoDatashakeProps) {
   return (
     <span
       className={`inline-flex items-center gap-[8px] text-current ${className ?? ""}`}
@@ -68,8 +68,9 @@ export function LogoDatafer({ height = 22, className }: LogoDatashakeProps) {
         className="font-[family-name:var(--font-body)] font-semibold tracking-[-0.02em]"
         style={{ fontSize: height * 0.85, lineHeight: 1 }}
       >
-        datafer
+        RankShaker
       </span>
     </span>
   );
 }
+

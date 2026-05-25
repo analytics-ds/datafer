@@ -1,7 +1,7 @@
 import { LogoDatashake } from "@/components/brand";
 
 /**
- * Aperçu stylisé de datafer affiché à gauche de l'écran de login.
+ * Aperçu stylisé de RankShaker affiché à gauche de l'écran de login.
  * Reproduit en HTML/CSS une "photo" de l'outil (score ring, éditeur,
  * sidebar NLP) pour donner envie avant la connexion.
  */
@@ -29,7 +29,7 @@ export function LoginPreview() {
       <div className="relative z-10 flex items-center gap-3 text-[var(--text)]">
         <LogoDatashake height={22} />
         <div className="w-px h-6 bg-[var(--border)]" />
-        <span className="font-semibold text-[14px] tracking-[-0.2px]">datafer</span>
+        <span className="font-semibold text-[14px] tracking-[-0.2px]">RankShaker</span>
       </div>
 
       {/* Mock de l'interface */}

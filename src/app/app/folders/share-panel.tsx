@@ -85,7 +85,7 @@ export function SharePanel({
           <div className="font-semibold text-[14px] mb-1">Partager ce client</div>
           <p className="text-[12px] text-[var(--text-secondary)] leading-[1.5] mb-4">
             Génère un lien public que tu peux envoyer à ton client. Il pourra consulter
-            tous les briefs du client en lecture seule, sans compte datafer.
+            tous les briefs du client en lecture seule, sans compte RankShaker.
           </p>
 
           {token ? (

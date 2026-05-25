@@ -6,7 +6,7 @@ import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysi
 import { BriefEditor } from "@/app/app/briefs/[id]/brief-editor";
 import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
-import { LogoDatafer } from "@/components/brand";
+import { LogoRankShaker } from "@/components/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +42,7 @@ export default async function SharedSingleBriefPage({
   return (
     <div className="min-h-screen bg-[var(--bg)] flex flex-col">
       <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 h-14 flex items-center justify-between shrink-0">
-        <LogoDatafer height={20} className="text-[var(--text)]" />
+        <LogoRankShaker height={20} className="text-[var(--text)]" />
         <span className="inline-flex items-center gap-[5px] px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[11px] font-semibold tracking-[0.4px]">
           Vue client
         </span>
