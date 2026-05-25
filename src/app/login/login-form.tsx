@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
+import { LogoDatashake } from "@/components/brand";
 
 export function LoginForm() {
   const router = useRouter();
@@ -31,14 +32,8 @@ export function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="w-full max-w-[380px]">
       {/* Brand compact visible uniquement en mobile (sinon le panneau de gauche l'affiche déjà) */}
-      <div className="flex items-center gap-3 mb-10 md:hidden">
-        <div className="ds-logo text-[var(--text)]">
-          <div className="ds-logo-mark">
-            <div className="sq sq1" />
-            <div className="sq sq2" />
-          </div>
-          <span className="ds-logo-name">datashake</span>
-        </div>
+      <div className="flex items-center gap-3 mb-10 md:hidden text-[var(--text)]">
+        <LogoDatashake height={20} />
         <div className="w-px h-6 bg-[var(--border)]" />
         <span className="font-semibold text-[14px]">datafer</span>
       </div>

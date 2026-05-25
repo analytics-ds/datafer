@@ -9,6 +9,7 @@ import { applyBriefOverrides, parseBriefOverrides } from "@/lib/brief-overrides"
 import { BriefEditor } from "@/app/app/briefs/[id]/brief-editor";
 import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
+import { LogoDatafer } from "@/components/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -51,13 +52,7 @@ export default async function SharedBriefPage({
     <div className="min-h-screen bg-[var(--bg)] flex flex-col">
       <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 h-14 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
-          <div className="ds-logo text-[var(--text)]">
-            <div className="ds-logo-mark">
-              <div className="sq sq1" />
-              <div className="sq sq2" />
-            </div>
-            <span className="ds-logo-name">datafer</span>
-          </div>
+          <LogoDatafer height={20} className="text-[var(--text)]" />
           {folder && (
             <>
               <div className="w-px h-6 bg-[var(--border)]" />

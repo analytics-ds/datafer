@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { LogoDatafer } from "@/components/brand";
 import { eq, desc } from "drizzle-orm";
 import { getDb } from "@/db";
 import { brief, client } from "@/db/schema";
@@ -76,13 +77,7 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
   return (
     <main className="min-h-screen bg-[var(--bg)]">
       <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 py-5 flex items-center justify-between">
-        <div className="ds-logo text-[var(--text)]">
-          <div className="ds-logo-mark">
-            <div className="sq sq1" />
-            <div className="sq sq2" />
-          </div>
-          <span className="ds-logo-name">datafer</span>
-        </div>
+        <LogoDatafer height={20} className="text-[var(--text)]" />
         <span className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
           Vue client
         </span>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth-client";
 import { faviconUrl } from "@/lib/favicon";
+import { LogoDatafer } from "@/components/brand";
 
 type Favorite = { id: string; name: string; website: string | null };
 
@@ -27,13 +28,7 @@ export function Sidebar({ user, favorites }: SidebarProps) {
   return (
     <aside className="w-[260px] shrink-0 h-screen sticky top-0 bg-[var(--bg-card)] border-r border-[var(--border)] flex flex-col">
       <div className="px-5 h-14 flex items-center border-b border-[var(--border)]">
-        <div className="ds-logo text-[var(--text)]">
-          <div className="ds-logo-mark">
-            <div className="sq sq1" />
-            <div className="sq sq2" />
-          </div>
-          <span className="ds-logo-name">datafer</span>
-        </div>
+        <LogoDatafer height={20} />
       </div>
 
       <div className="px-4 pt-4 pb-3">

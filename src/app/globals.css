@@ -1,25 +1,34 @@
 @import "tailwindcss";
 
 :root {
-  /* Palette Datashake (reprise du HTML original) */
-  --bg: #FAFAF7;
-  --bg-warm: #F2F0EB;
+  /* Palette Datashake — Brand Guidelines 2026
+     Couleurs principales (fonds) : Blanc / Beige #F3EDE8 / Noir #101010
+     Couleurs accents (jamais en fond, juste tags/icônes/graphiques) :
+       Blue #77B0ED, Flash Yellow #FFFF7D, Kaki #ADAC2F */
+  --bg: #F3EDE8;
+  --bg-warm: #FAF6F2;
   --bg-card: #FFFFFF;
-  --bg-olive: #C2B642;
-  --bg-olive-light: #E8E4A0;
-  --bg-black: #1A1A1A;
-  --bg-dark: #2C2C2C;
+  --bg-olive: #ADAC2F;        /* legacy name kept, now = Brand Kaki */
+  --bg-olive-light: #EDEDC9;  /* legacy name kept, now = pale Kaki */
+  --bg-black: #101010;
+  --bg-dark: #2A2A2A;
 
-  --border: #E5E3DE;
-  --border-strong: #D0CEC7;
+  --border: #E8E2DC;
+  --border-strong: #CFC9C2;
 
-  --text: #1A1A1A;
-  --text-secondary: #6B6B60;
-  --text-muted: #9C9C90;
+  --text: #101010;
+  --text-secondary: #5C5C5C;
+  --text-muted: #8A8A8A;
   --text-inverse: #FFFFFF;
 
-  --accent: #C2B642;
-  --accent-dark: #9A8F30;
+  /* Accent principal = Brand Kaki (tonalité dorée Datashake, héritière
+     de l'ancien olive Datafer, cohérente avec la nouvelle charte) */
+  --accent: #ADAC2F;
+  --accent-dark: #7E7D22;
+
+  /* Accents Brand secondaires — usage ponctuel (tags, icônes, graphes) */
+  --brand-blue: #77B0ED;
+  --brand-yellow: #FFFF7D;
 
   --green: #2D8C5A;
   --green-bg: #E8F5EE;
@@ -29,8 +38,8 @@
   --red-bg: #FDE8E8;
   --purple: #7B61FF;
   --purple-bg: #F0EDFF;
-  --blue: #4A90D9;
-  --blue-bg: #E8F0FA;
+  --blue: #77B0ED;
+  --blue-bg: #E0EDFA;
 
   --radius: 16px;
   --radius-sm: 10px;
@@ -72,10 +81,12 @@
   --color-brand-red-bg: var(--red-bg);
   --color-brand-purple: var(--purple);
   --color-brand-purple-bg: var(--purple-bg);
-  --color-brand-blue: var(--blue);
+  --color-brand-blue: var(--brand-blue);
   --color-brand-blue-bg: var(--blue-bg);
+  --color-brand-yellow: var(--brand-yellow);
+  --color-brand-kaki: var(--accent);
 
-  --font-display: var(--font-display), Georgia, serif;
+  --font-display: var(--font-display), -apple-system, sans-serif;
   --font-sans: var(--font-body), -apple-system, sans-serif;
   --font-mono: var(--font-mono), ui-monospace, monospace;
 
@@ -100,29 +111,3 @@ body {
   border-radius: 3px;
 }
 
-/* Logo datashake (2 carrés décalés) */
-.ds-logo {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.ds-logo-mark {
-  position: relative;
-  width: 22px;
-  height: 22px;
-}
-.ds-logo-mark .sq {
-  position: absolute;
-  width: 11px;
-  height: 11px;
-  background: currentColor;
-  border-radius: 2.5px;
-}
-.ds-logo-mark .sq1 { top: 0; left: 4px; }
-.ds-logo-mark .sq2 { top: 7px; left: 11px; }
-.ds-logo-name {
-  font-family: var(--font-body);
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: -0.3px;
-}

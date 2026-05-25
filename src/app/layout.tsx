@@ -1,19 +1,23 @@
 import type { Metadata } from "next";
-import { Instrument_Serif, DM_Sans, IBM_Plex_Mono } from "next/font/google";
+import { Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
-const displaySerif = Instrument_Serif({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["400"],
-  style: ["normal", "italic"],
-  display: "swap",
-});
-
-const bodySans = DM_Sans({
+/* Datashake Brand Guidelines 2026 :
+   - Titres : Season Sans Medium (payante, displaay.net) — substitut autorisé : Inter
+   - Paragraphes : Inter Regular (Google Fonts)
+   On n'a pas la licence Season Sans, donc Inter partout (titres en weight 600/700,
+   paragraphes en 400, comme le suggère la doc brand). */
+const inter = Inter({
   variable: "--font-body",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+const interDisplay = Inter({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
   display: "swap",
 });
 
@@ -37,7 +41,7 @@ export default function RootLayout({
   return (
     <html
       lang="fr"
-      className={`${displaySerif.variable} ${bodySans.variable} ${monoPlex.variable} h-full antialiased`}
+      className={`${interDisplay.variable} ${inter.variable} ${monoPlex.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

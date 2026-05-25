@@ -1,3 +1,5 @@
+import { LogoDatashake } from "@/components/brand";
+
 /**
  * Aperçu stylisé de datafer affiché à gauche de l'écran de login.
  * Reproduit en HTML/CSS une "photo" de l'outil (score ring, éditeur,
@@ -19,14 +21,8 @@ export function LoginPreview() {
       />
 
       {/* Header brand */}
-      <div className="relative z-10 flex items-center gap-3">
-        <div className="ds-logo text-[var(--text)]">
-          <div className="ds-logo-mark">
-            <div className="sq sq1" />
-            <div className="sq sq2" />
-          </div>
-          <span className="ds-logo-name">datashake</span>
-        </div>
+      <div className="relative z-10 flex items-center gap-3 text-[var(--text)]">
+        <LogoDatashake height={22} />
         <div className="w-px h-6 bg-[var(--border)]" />
         <span className="font-semibold text-[14px] tracking-[-0.2px]">datafer</span>
       </div>
