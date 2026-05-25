@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { enableBriefShareAction, revokeBriefShareAction } from "./actions";
 
 export function ShareBriefPanel({
@@ -14,6 +14,26 @@ export function ShareBriefPanel({
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
 
   const url = token
     ? typeof window !== "undefined"
@@ -43,7 +63,7 @@ export function ShareBriefPanel({
   }
 
   return (
-    <div className="relative">
+    <div ref={wrapperRef} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-2 px-4 py-[8px] rounded-[var(--radius-sm)] text-[12px] font-semibold border bg-[var(--bg)] border-[var(--border)] hover:border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors"
@@ -53,7 +73,15 @@ export function ShareBriefPanel({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 z-30 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] shadow-[var(--shadow-lg)] p-5 w-[400px]">
+        <div className="absolute right-0 top-full mt-2 z-30 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] shadow-[var(--shadow-lg)] p-5 pt-9 w-[400px]">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Fermer"
+            className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
+          >
+            <CloseIcon />
+          </button>
           <div className="font-semibold text-[14px] mb-1">Partager ce brief</div>
           <p className="text-[12px] text-[var(--text-secondary)] leading-[1.5] mb-4">
             Génère un lien que tu peux envoyer à ton client. Il accède au même éditeur
@@ -107,6 +135,19 @@ function ShareIcon() {
       <circle cx="15" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
       <circle cx="15" cy="15" r="2.5" stroke="currentColor" strokeWidth="1.5" />
       <path d="M7 9l6-3M7 11l6 3" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+      <path
+        d="M5 5l10 10M15 5L5 15"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
