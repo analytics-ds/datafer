@@ -11,9 +11,11 @@ type Favorite = { id: string; name: string; website: string | null };
 type SidebarProps = {
   user: { id: string; email: string; name: string; image: string | null; level: number };
   favorites: Favorite[];
+  /** Affiche les liens d'administration (page Feedback). Réservé à Pierre. */
+  isAdmin?: boolean;
 };
 
-export function Sidebar({ user, favorites }: SidebarProps) {
+export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -72,6 +74,18 @@ export function Sidebar({ user, favorites }: SidebarProps) {
                 {f.name}
               </FolderItem>
             ))}
+          </NavSection>
+        )}
+
+        {isAdmin && (
+          <NavSection title="Admin">
+            <NavItem
+              href="/app/admin/feedback"
+              icon={<InboxIcon />}
+              active={pathname?.startsWith("/app/admin/feedback") ?? false}
+            >
+              Feedback
+            </NavItem>
           </NavSection>
         )}
       </nav>
@@ -235,6 +249,13 @@ function FoldersIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" className="w-full h-full">
       <path d="M3 6a1 1 0 011-1h3l2 2h7a1 1 0 011 1v7a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function InboxIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="w-full h-full">
+      <path d="M3 11h4l1 2h4l1-2h4M3 11l2-6h10l2 6M3 11v5a1 1 0 001 1h12a1 1 0 001-1v-5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
     </svg>
   );
 }

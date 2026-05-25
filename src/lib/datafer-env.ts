@@ -44,4 +44,8 @@ export type DataferEnv = {
   BRIGHTDATA_BROWSER_WSS?: string;
   CF_BROWSER_TOKEN?: string;
   CRON_SECRET?: string;
+  /** Clé API Resend pour l'envoi de mails transactionnels (feedback). */
+  RESEND_API_KEY?: string;
+  /** Destinataire des mails de feedback (par défaut pierre@datashake.fr). */
+  FEEDBACK_TO?: string;
 };

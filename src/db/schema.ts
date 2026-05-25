@@ -187,3 +187,31 @@ export const briefTag = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.briefId, t.tagId] })],
 );
+
+// Feedback envoyé par les consultants depuis le widget chatbot bas-droite.
+// Email/name dénormalisés pour rester lisibles si l'utilisateur est supprimé
+// plus tard. Screenshots en JSON array de data URLs base64 (limite côté API
+// pour éviter les rows trop lourdes). Statut workflow géré par Pierre côté
+// page admin.
+export const feedback = sqliteTable("feedback", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+  userEmail: text("user_email").notNull(),
+  userName: text("user_name").notNull(),
+  category: text("category", { enum: ["bug", "suggestion", "question"] }).notNull(),
+  message: text("message").notNull(),
+  url: text("url").notNull(),
+  userAgent: text("user_agent"),
+  viewportWidth: integer("viewport_width"),
+  viewportHeight: integer("viewport_height"),
+  // JSON array de data URLs base64 ("data:image/png;base64,...")
+  screenshotsJson: text("screenshots_json"),
+  status: text("status", { enum: ["new", "in_progress", "resolved"] })
+    .notNull()
+    .default("new"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  resolvedNote: text("resolved_note"),
+});

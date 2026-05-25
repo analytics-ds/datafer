@@ -7,6 +7,7 @@ import { asc, eq } from "drizzle-orm";
 import { Sidebar } from "./sidebar";
 import { FirstLoginGate } from "./first-login-gate";
 import { EasterEgg } from "./easter-egg";
+import { FeedbackWidget } from "@/components/feedback/feedback-widget";
 import { levelFromXp } from "@/lib/xp";
 
 export const dynamic = "force-dynamic";
@@ -62,8 +63,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           level: levelFromXp(me?.totalXp ?? 0).level,
         }}
         favorites={favorites}
+        isAdmin={session.user.email.toLowerCase() === "pierre@datashake.fr"}
       />
       <main className="flex-1 min-w-0">{children}</main>
+      <FeedbackWidget />
     </div>
   );
 }
