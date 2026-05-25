@@ -401,11 +401,16 @@ async function createBriefAnalysisPayload(
   const settled = await Promise.allSettled(
     results.map(async (r) => {
       let c: PageContent | null = null;
+      let finished = false;
       try {
         c = await Promise.race([
-          crawlPage(r.link, env),
+          crawlPage(r.link, env).then((v) => {
+            finished = true;
+            return v;
+          }),
           new Promise<null>((resolve) =>
             setTimeout(() => {
+              if (finished) return;
               console.log(`[crawl] timeout global 90s url=${r.link}`);
               resolve(null);
             }, PER_SITE_TIMEOUT_MS),
