@@ -42,7 +42,7 @@ export function FolderListCard({ folder }: { folder: Folder }) {
   return (
     <>
       <div
-        className="relative bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-sm)] transition-all"
+        className="group relative bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-6 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow)] hover:-translate-y-[2px] transition-all duration-200"
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
       >

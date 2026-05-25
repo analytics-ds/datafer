@@ -26,7 +26,7 @@ export default async function NewBriefPage({
   return (
     <div className="px-10 py-10 max-w-[720px]">
       <PageHeader
-        title={<>Nouveau brief<span className="italic text-[var(--accent-dark)]">.</span></>}
+        title={<>Nouveau brief<span className="df-accent">.</span></>}
         subtitle="Renseigne le mot-clé cible et le marché. Tu peux aussi mettre jusqu'à 5 mots-clés, un par ligne, pour lancer un batch d'analyses en file d'attente."
       />
 

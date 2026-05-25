@@ -86,7 +86,7 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
       </div>
 
       <PageHeader
-        title={<>{folder.name}<span className="italic text-[var(--accent-dark)]">.</span></>}
+        title={<>{folder.name}<span className="df-accent">.</span></>}
         subtitle={folder.website ?? undefined}
         action={
           <div className="flex items-center gap-2 flex-wrap">

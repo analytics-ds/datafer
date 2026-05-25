@@ -88,6 +88,7 @@
 
   --font-display: var(--font-display), -apple-system, sans-serif;
   --font-sans: var(--font-body), -apple-system, sans-serif;
+  --font-serif: var(--font-serif), Georgia, serif;
   --font-mono: var(--font-mono), ui-monospace, monospace;
 
   --radius-pill: 100px;
@@ -109,5 +110,16 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
   border-radius: 3px;
+}
+
+/* Emphase signature Datafer : mot/ponctuation en italique serif kaki à la
+   fin des titres ("Bonjour Pierre.", "Tous les clients.", "dominez."…).
+   Fraunces italic apporte le ton éditorial qu'Inter italic ne produit pas. */
+.df-accent {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--accent-dark);
+  letter-spacing: -0.01em;
 }
 

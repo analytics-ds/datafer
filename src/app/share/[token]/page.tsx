@@ -103,7 +103,7 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
         </div>
         <h1 className="font-[family-name:var(--font-display)] text-[48px] leading-[1.05] tracking-[-1.2px] mb-2">
           {folder.name}
-          <span className="italic text-[var(--accent-dark)]">.</span>
+          <span className="df-accent">.</span>
         </h1>
         {folder.website && (
           <p className="text-[13px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] mb-10">

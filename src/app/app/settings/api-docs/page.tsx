@@ -16,7 +16,7 @@ export default function ApiDocsPage() {
       </div>
 
       <PageHeader
-        title={<>Documentation API<span className="italic text-[var(--accent-dark)]">.</span></>}
+        title={<>Documentation API<span className="df-accent">.</span></>}
         subtitle="Intègre Datafer dans tes outils pour créer un brief, récupérer le score et envoyer du contenu à scorer."
       />
 

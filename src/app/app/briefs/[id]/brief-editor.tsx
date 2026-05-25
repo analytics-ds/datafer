@@ -472,9 +472,9 @@ export function BriefEditor(props: BriefEditorProps) {
   return (
     <div className="flex flex-col h-[calc(100vh)] min-h-[640px]">
       {/* Top bar */}
-      <div className="flex items-center justify-between gap-3 px-7 py-3 bg-[var(--bg-card)] border-b border-[var(--border)] flex-wrap">
-        <div className="flex items-center gap-[10px]">
-          <h2 className="font-[family-name:var(--font-display)] text-[22px] tracking-[-0.4px]">
+      <div className="flex items-center justify-between gap-3 px-7 py-4 bg-[var(--bg-card)] border-b border-[var(--border)] flex-wrap">
+        <div className="flex items-center gap-[12px]">
+          <h2 className="font-[family-name:var(--font-display)] text-[24px] tracking-[-0.6px] font-semibold leading-none">
             {keyword}
           </h2>
           <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase">
@@ -553,7 +553,7 @@ export function BriefEditor(props: BriefEditorProps) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-0 px-7 bg-[var(--bg-card)] border-b border-[var(--border)]">
+      <div className="flex gap-[2px] px-7 bg-[var(--bg-card)] border-b border-[var(--border)]">
         <TabButton active={tab === "editor"} onClick={() => setTab("editor")}>
           Éditeur
         </TabButton>
@@ -846,12 +846,16 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
 
 const NLP_JUNK_TOKENS = new Set([
   "est", "ce", "qui", "que", "quoi", "qu", "où", "quand",
-  "comment", "pourquoi", "combien", "quel", "quelle", "quels", "quelles",
+  "comment", "pourquoi", "combien",
+  "quel", "quelle", "quels", "quelles",
+  "quelque", "quelques", "quelconque", "quelconques",
+  "lequel", "laquelle", "lesquels", "lesquelles",
   "le", "la", "les", "un", "une", "des", "du", "de", "en", "et", "ou",
   "à", "au", "aux", "pour", "par", "sur", "sous", "dans", "avec", "sans",
   "plus", "moins", "très", "tout", "tous", "toute", "toutes",
   "bien", "mieux", "aussi", "encore", "déjà", "même", "non", "oui",
   "fait", "faire", "peut", "peuvent", "sont", "etre", "avoir",
+  "n", "s", "d", "l", "j", "t", "m", "c",
 ]);
 
 function isJunkNlpTerm(term: string, targetKeyword?: string | null): boolean {
@@ -1128,7 +1132,13 @@ function EditorSidebar({
               <div className="text-[10px] font-semibold uppercase tracking-[0.5px] mb-[6px]" style={{ color: "var(--red)" }}>
                 Essentiels — mot-clé principal
               </div>
-              <KeywordTermsList terms={nlp.keywordTerms!} lower={lower} onInsert={insertTermAtCursor} />
+              <KeywordTermsList
+                terms={nlp.keywordTerms!.filter(
+                  (k) => k.kind === "exact" || !isJunkNlpTerm(k.term),
+                )}
+                lower={lower}
+                onInsert={insertTermAtCursor}
+              />
             </div>
           )}
           {essential.length > 0 && (
@@ -2147,21 +2157,27 @@ function TabButton({ active, onClick, count, children }: { active: boolean; onCl
   return (
     <button
       onClick={onClick}
-      className={`px-5 py-3 bg-transparent border-none border-b-2 text-[13px] transition-all ${
+      className={`relative px-5 py-[14px] bg-transparent border-none text-[13px] transition-all ${
         active
-          ? "text-[var(--text)] font-semibold border-[var(--bg-black)]"
-          : "text-[var(--text-muted)] border-transparent hover:text-[var(--text-secondary)]"
+          ? "text-[var(--text)] font-semibold"
+          : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
       }`}
     >
       {children}
       {count !== undefined && (
         <span
-          className={`ml-[5px] inline-flex items-center justify-center min-w-[18px] h-[18px] px-[5px] rounded-full text-[10px] font-[family-name:var(--font-mono)] font-semibold ${
+          className={`ml-[6px] inline-flex items-center justify-center min-w-[18px] h-[18px] px-[5px] rounded-full text-[10px] font-[family-name:var(--font-mono)] font-semibold ${
             active ? "bg-[var(--bg-black)] text-[var(--text-inverse)]" : "bg-[var(--bg-warm)] text-[var(--text-muted)]"
           }`}
         >
           {count}
         </span>
+      )}
+      {active && (
+        <span
+          aria-hidden
+          className="absolute left-2 right-2 bottom-[-1px] h-[2px] bg-[var(--bg-black)] rounded-full"
+        />
       )}
     </button>
   );

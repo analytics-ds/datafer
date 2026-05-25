@@ -97,7 +97,7 @@ export default async function AppHome() {
   return (
     <div className="px-10 py-10 max-w-[1100px]">
       <PageHeader
-        title={<>Bonjour <span className="italic text-[var(--accent-dark)]">{session.user.name.split(" ")[0]}.</span></>}
+        title={<>Bonjour <span className="df-accent">{session.user.name.split(" ")[0]}.</span></>}
         subtitle="Reprends un brief en cours, démarre une nouvelle analyse ou ajoute un client."
       />
 
@@ -135,7 +135,7 @@ export default async function AppHome() {
 
       {/* Stats du mois : donut + leaderboard équipe */}
       <section className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-3 mb-12">
-        <ShareDonut share={myShare} />
+        <ShareDonut share={myShare} myBriefs={myBriefsThisMonth} totalBriefs={totalBriefsThisMonth} />
         <Leaderboard
           users={visibleLeaderboard.map((u) => ({
             id: u.userId,
@@ -247,34 +247,59 @@ export default async function AppHome() {
   );
 }
 
-function ShareDonut({ share }: { share: number }) {
-  const R = 90;
+function ShareDonut({ share, myBriefs, totalBriefs }: { share: number; myBriefs: number; totalBriefs: number }) {
+  const R = 56;
   const C = 2 * Math.PI * R;
   const offset = C * (1 - share);
   const pct = Math.round(share * 100);
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-6 flex items-center justify-center">
-      <div className="relative w-[220px] h-[220px]">
-        <svg viewBox="0 0 220 220" className="w-full h-full -rotate-90">
-          <circle cx="110" cy="110" r={R} fill="none" stroke="var(--border)" strokeWidth="22" />
-          <circle
-            cx="110"
-            cy="110"
-            r={R}
-            fill="none"
-            stroke="var(--accent-dark)"
-            strokeWidth="22"
-            strokeLinecap="round"
-            strokeDasharray={C}
-            strokeDashoffset={offset}
-            style={{ transition: "stroke-dashoffset .6s ease" }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-[family-name:var(--font-display)] text-[52px] leading-none tracking-[-1px]">{pct}%</span>
-          <span className="text-[9px] uppercase tracking-[1px] text-[var(--text-muted)] mt-2">de l&apos;équipe</span>
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-7 flex flex-col">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-1">
+        Ta part ce mois
+      </div>
+      <div className="text-[12px] text-[var(--text-secondary)] mb-6 leading-[1.4]">
+        Briefs créés par toi vs reste de l&apos;équipe.
+      </div>
+      <div className="flex items-center gap-5">
+        <div className="relative w-[140px] h-[140px] shrink-0">
+          <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90">
+            <circle cx="70" cy="70" r={R} fill="none" stroke="var(--border)" strokeWidth="14" />
+            <circle
+              cx="70"
+              cy="70"
+              r={R}
+              fill="none"
+              stroke="var(--accent-dark)"
+              strokeWidth="14"
+              strokeLinecap="round"
+              strokeDasharray={C}
+              strokeDashoffset={offset}
+              style={{ transition: "stroke-dashoffset .6s ease" }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="font-[family-name:var(--font-display)] text-[34px] leading-none tracking-[-1px]">{pct}%</span>
+          </div>
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col gap-3">
+          <Stat label="Tes briefs" value={String(myBriefs)} accent />
+          <Stat label="Équipe" value={String(totalBriefs)} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 pb-2 border-b border-[var(--border)] last:border-0 last:pb-0">
+      <span className="text-[11px] text-[var(--text-muted)] uppercase tracking-[0.6px] font-semibold">{label}</span>
+      <span
+        className="font-[family-name:var(--font-display)] text-[22px] leading-none tabular-nums tracking-[-0.5px]"
+        style={{ color: accent ? "var(--accent-dark)" : "var(--text)" }}
+      >
+        {value}
+      </span>
     </div>
   );
 }

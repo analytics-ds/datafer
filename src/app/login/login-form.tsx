@@ -43,7 +43,7 @@ export function LoginForm() {
       </span>
 
       <h1 className="font-[family-name:var(--font-display)] text-[44px] leading-[1.05] tracking-[-1.2px] mb-2">
-        Bon retour<em className="italic text-[var(--accent-dark)]">.</em>
+        Bon retour<em className="df-accent">.</em>
       </h1>
       <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-10">
         Connecte-toi à ton espace datafer pour générer tes briefs et accéder à tes clients.

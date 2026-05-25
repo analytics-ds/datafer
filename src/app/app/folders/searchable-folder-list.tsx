@@ -27,8 +27,8 @@ export function SearchableFolderList({ folders }: { folders: Folder[] }) {
 
   return (
     <>
-      <div className="relative mb-4">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none">
+      <div className="relative mb-6 max-w-[420px]">
+        <span className="absolute left-[14px] top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none">
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
             <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
             <path d="M14 14l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -38,8 +38,8 @@ export function SearchableFolderList({ folders }: { folders: Folder[] }) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher un client (nom ou site)…"
-          className="w-full pl-9 pr-9 py-[9px] text-[13px] bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] outline-none focus:border-[var(--bg-black)] transition-colors"
+          placeholder="Rechercher un client…"
+          className="w-full pl-10 pr-9 py-[10px] text-[13px] bg-transparent border-b-2 border-[var(--border)] outline-none focus:border-[var(--bg-black)] transition-colors placeholder:text-[var(--text-muted)]"
         />
         {query && (
           <button
@@ -62,6 +62,14 @@ export function SearchableFolderList({ folders }: { folders: Folder[] }) {
           {filtered.map((f) => (
             <FolderListCard key={f.id} folder={f} />
           ))}
+          {!query && (
+            <a
+              href="/app/folders/new"
+              className="flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed border-[var(--border-strong)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)] hover:bg-[var(--bg-warm)] transition-colors min-h-[160px] text-[13px] font-semibold"
+            >
+              <span className="text-[16px]">+</span> Ajouter un client
+            </a>
+          )}
         </div>
       )}
     </>

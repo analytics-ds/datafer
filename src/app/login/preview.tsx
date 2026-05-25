@@ -8,16 +8,21 @@ import { LogoDatashake } from "@/components/brand";
 export function LoginPreview() {
   return (
     <div className="relative hidden md:flex flex-col justify-between h-full bg-[var(--bg-warm)] overflow-hidden p-10 lg:p-14 border-r border-[var(--border)]">
-      {/* Halo décoratif olive en fond */}
+      {/* Halos décoratifs kaki en fond, intensité bridée pour ne pas voler la vedette au mockup */}
       <div
         aria-hidden
-        className="absolute -top-40 -left-40 w-[480px] h-[480px] rounded-full opacity-40 blur-3xl"
+        className="absolute -top-48 -left-56 w-[560px] h-[560px] rounded-full opacity-50 blur-3xl"
         style={{ background: "radial-gradient(circle, var(--bg-olive-light) 0%, transparent 70%)" }}
       />
       <div
         aria-hidden
-        className="absolute -bottom-48 -right-32 w-[420px] h-[420px] rounded-full opacity-30 blur-3xl"
+        className="absolute -bottom-56 -right-40 w-[520px] h-[520px] rounded-full opacity-25 blur-3xl"
         style={{ background: "radial-gradient(circle, var(--bg-olive) 0%, transparent 70%)" }}
+      />
+      <div
+        aria-hidden
+        className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] rounded-full opacity-[0.06] blur-2xl"
+        style={{ background: "radial-gradient(circle, var(--bg-black) 0%, transparent 70%)" }}
       />
 
       {/* Header brand */}
@@ -37,7 +42,7 @@ export function LoginPreview() {
         <h2 className="font-[family-name:var(--font-display)] text-[44px] leading-[1.05] tracking-[-1.2px] mb-3">
           Analysez, optimisez,
           <br />
-          <em className="italic text-[var(--accent-dark)]">dominez.</em>
+          <em className="df-accent">dominez.</em>
         </h2>
         <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] max-w-[380px]">
           Analyse les top résultats Google, extrait les patterns NLP et score
@@ -55,8 +60,8 @@ function MockInterface() {
 
   return (
     <div
-      className="w-full max-w-[560px] bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] overflow-hidden"
-      style={{ boxShadow: "var(--shadow-lg)" }}
+      className="w-full max-w-[560px] bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] overflow-hidden transform -rotate-[0.4deg]"
+      style={{ boxShadow: "0 20px 60px -20px rgba(0,0,0,0.15), 0 8px 24px -12px rgba(0,0,0,0.1)" }}
     >
       {/* Mini top bar */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] bg-[var(--bg-card)]">

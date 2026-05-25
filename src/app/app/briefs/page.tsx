@@ -73,7 +73,7 @@ export default async function BriefsPage({
   return (
     <div className="px-10 py-10 max-w-[1100px]">
       <PageHeader
-        title={<>Tous les briefs<span className="italic text-[var(--accent-dark)]">.</span></>}
+        title={<>Tous les briefs<span className="df-accent">.</span></>}
         subtitle="Historique complet de tes analyses sémantiques."
         action={
           <Link

@@ -39,7 +39,7 @@ export default async function FoldersPage() {
   return (
     <div className="px-10 py-10 max-w-[1100px]">
       <PageHeader
-        title={<>Tous les clients<span className="italic text-[var(--accent-dark)]">.</span></>}
+        title={<>Tous les clients<span className="df-accent">.</span></>}
         subtitle="Tous les clients clients de l'agence, visibles par tous les consultants."
         action={
           <Link

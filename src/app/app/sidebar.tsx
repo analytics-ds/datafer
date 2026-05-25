@@ -27,16 +27,16 @@ export function Sidebar({ user, favorites }: SidebarProps) {
 
   return (
     <aside className="w-[260px] shrink-0 h-screen sticky top-0 bg-[var(--bg-card)] border-r border-[var(--border)] flex flex-col">
-      <div className="px-5 h-14 flex items-center border-b border-[var(--border)]">
-        <LogoDatafer height={20} />
+      <div className="px-5 h-[68px] flex items-center border-b border-[var(--border)]">
+        <LogoDatafer height={24} />
       </div>
 
-      <div className="px-4 pt-4 pb-3">
+      <div className="px-4 pt-5 pb-3">
         <Link
           href="/app/briefs/new"
-          className="flex items-center justify-center gap-2 w-full bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] py-[10px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] transition-colors"
+          className="group flex items-center justify-center gap-2 w-full bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] py-[11px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] transition-colors shadow-[var(--shadow-sm)]"
         >
-          <PlusIcon className="w-[14px] h-[14px]" />
+          <PlusIcon className="w-[14px] h-[14px] group-hover:rotate-90 transition-transform duration-200" />
           Nouveau brief
         </Link>
       </div>
@@ -140,13 +140,19 @@ function NavItem({
   return (
     <Link
       href={href}
-      className={`flex items-center gap-[10px] px-3 py-[7px] rounded-[var(--radius-sm)] transition-colors ${
+      className={`relative flex items-center gap-[10px] pl-[14px] pr-3 py-[8px] rounded-[var(--radius-sm)] transition-colors ${
         active
           ? "bg-[var(--bg-warm)] text-[var(--text)] font-semibold"
           : "text-[var(--text-secondary)] hover:bg-[var(--bg)] hover:text-[var(--text)]"
       }`}
     >
-      <span className="shrink-0 w-4 h-4">{icon}</span>
+      {active && (
+        <span
+          aria-hidden
+          className="absolute left-[3px] top-[18%] bottom-[18%] w-[3px] rounded-full bg-[var(--accent-dark)]"
+        />
+      )}
+      <span className={`shrink-0 w-4 h-4 ${active ? "text-[var(--accent-dark)]" : ""}`}>{icon}</span>
       <span>{children}</span>
     </Link>
   );

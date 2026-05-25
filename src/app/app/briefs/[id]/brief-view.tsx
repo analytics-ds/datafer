@@ -81,7 +81,7 @@ export function BriefView({
           </span>
         </div>
         <h1 className="font-[family-name:var(--font-display)] text-[44px] leading-[1.05] tracking-[-1.2px] mb-2">
-          {keyword}<span className="italic text-[var(--accent-dark)]">.</span>
+          {keyword}<span className="df-accent">.</span>
         </h1>
       </header>
 

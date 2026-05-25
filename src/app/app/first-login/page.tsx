@@ -29,7 +29,7 @@ export default async function FirstLoginPage() {
           Premier login
         </span>
         <h1 className="font-[family-name:var(--font-display)] text-[40px] leading-[1.05] tracking-[-1px] mb-2">
-          Choisis ton mot de passe<span className="italic text-[var(--accent-dark)]">.</span>
+          Choisis ton mot de passe<span className="df-accent">.</span>
         </h1>
         <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-8">
           Ton compte a été créé avec un mot de passe temporaire. Définis-en un nouveau
