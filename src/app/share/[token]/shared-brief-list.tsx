@@ -276,7 +276,7 @@ function Pill({
   return (
     <span
       title={tooltip}
-      className="inline-flex items-center gap-[5px] px-[8px] py-[2px] rounded-full text-[11px] font-medium border cursor-help"
+      className="inline-flex items-center gap-[5px] px-[8px] py-[2px] rounded-full text-[11px] font-medium border"
       style={{
         background: p.bg,
         color: p.color,

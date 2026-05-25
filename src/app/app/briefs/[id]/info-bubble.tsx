@@ -17,7 +17,7 @@ export function InfoBubble({
   return (
     <span
       title={text}
-      className={`ml-1 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border border-[var(--border-strong)] text-[9px] font-bold text-[var(--text-muted)] cursor-help align-middle hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors ${className}`}
+      className={`ml-1 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border border-[var(--border-strong)] text-[9px] font-bold text-[var(--text-muted)] align-middle hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors ${className}`}
       aria-label="Plus d'infos"
     >
       i

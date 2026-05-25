@@ -406,11 +406,16 @@ export function BriefEditor(props: BriefEditorProps) {
     readEditor();
   };
 
-  const handleInsertImage = () => {
-    const url = window.prompt("URL de l'image :");
-    if (!url) return;
+  const handleInsertImage = (src: string, alt: string) => {
+    if (!src) return;
     editorRef.current?.focus();
-    document.execCommand("insertImage", false, url);
+    const safeAlt = escapeHtml(alt);
+    const safeSrc = escapeHtml(src);
+    document.execCommand(
+      "insertHTML",
+      false,
+      `<img src="${safeSrc}" alt="${safeAlt}" style="max-width:100%;height:auto" />`,
+    );
     readEditor();
   };
 
@@ -422,17 +427,13 @@ export function BriefEditor(props: BriefEditorProps) {
     readEditor();
   };
 
-  const handleInsertTable = () => {
-    const dims = window.prompt("Dimensions du tableau (lignes x colonnes), ex : 3x4", "3x3");
-    if (!dims) return;
-    const m = dims.match(/^(\d+)\s*[x×]\s*(\d+)$/);
-    if (!m) return;
-    const rows = Math.min(20, Math.max(1, Number(m[1])));
-    const cols = Math.min(10, Math.max(1, Number(m[2])));
+  const handleInsertTable = (rows: number, cols: number) => {
+    const safeRows = Math.min(20, Math.max(1, rows));
+    const safeCols = Math.min(10, Math.max(1, cols));
     const rowCells = (cells: string) =>
-      `<tr>${Array.from({ length: cols }).map(() => cells).join("")}</tr>`;
+      `<tr>${Array.from({ length: safeCols }).map(() => cells).join("")}</tr>`;
     const html =
-      `<table><thead>${rowCells("<th><br></th>")}</thead><tbody>${Array.from({ length: rows - 1 })
+      `<table><thead>${rowCells("<th><br></th>")}</thead><tbody>${Array.from({ length: safeRows - 1 })
         .map(() => rowCells("<td><br></td>"))
         .join("")}</tbody></table><p><br></p>`;
     editorRef.current?.focus();
@@ -742,6 +743,140 @@ export function BriefEditor(props: BriefEditorProps) {
   );
 }
 
+function ScoreInfoTrigger() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Comment est calculé le score SEO ?"
+        className="ml-1 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border border-[var(--border-strong)] text-[9px] font-bold text-[var(--text-muted)] align-middle hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+      >
+        i
+      </button>
+      {open && typeof document !== "undefined" &&
+        createPortal(<ScoreInfoModal onClose={() => setOpen(false)} />, document.body)}
+    </>
+  );
+}
+
+function ScoreInfoModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const criteres = [
+    { name: "Couverture sémantique (NLP)", pts: 27, hint: "Présence des termes essentiels et importants vus chez les top 10 concurrents" },
+    { name: "Mot-clé principal", pts: 15, hint: "Couverture des tokens + bonus correspondance exacte" },
+    { name: "Titres (H1/H2/H3)", pts: 13, hint: "H1 unique, KW dans H1, nombre de H2, KW dans H2, au moins 2 H3" },
+    { name: "Placement du mot-clé", pts: 13, hint: "KW dans les 100 premiers mots, 1re phrase, 100 derniers mots, distribution" },
+    { name: "Sémantique paragraphe (IA)", pts: 10, hint: "Cosinus moyen de tes paragraphes vs centroïde sémantique top 10 (embeddings bge-m3)" },
+    { name: "Longueur de contenu", pts: 7, hint: "wc dans la fourchette concurrents, ±20 % de la moyenne, au-dessus de la moyenne" },
+    { name: "Structure", pts: 6, hint: "Ratio paragraphes, longueur des paragraphes, contenu ≥ 500 mots" },
+    { name: "Qualité rédactionnelle", pts: 5, hint: "Longueur moyenne des phrases, densité du KW, diversité lexicale ≥ 0,55" },
+    { name: "Images", pts: 4, hint: "Nombre d'images aligné sur la médiane des concurrents" },
+  ];
+  const maxPts = Math.max(...criteres.map((c) => c.pts));
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(0,0,0,0.45)] backdrop-blur-sm"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] shadow-[var(--shadow-lg)] max-w-[560px] w-full max-h-[85vh] overflow-y-auto p-7 pt-9 relative"
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fermer"
+          className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)]"
+        >
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+            <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+        </button>
+        <h3 className="font-[family-name:var(--font-display)] text-[20px] mb-3">Comment est calculé le score ?</h3>
+        <p className="text-[13px] leading-[1.55] text-[var(--text-secondary)] mb-5">
+          Le score Datafer est <strong>calibré sur tes concurrents</strong> du top 10 Google.
+          La médiane des scores bruts concurrents = 50, médiane × 1,5 = 100. Sur les requêtes
+          à concurrence faible, on remonte la médiane à 60 pour rester ambitieux. Ce n'est
+          pas une note absolue : un score de 70 signifie que ton contenu fait ~40 % de mieux
+          que la médiane des concurrents qui rankent déjà.
+        </p>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-3">
+          Pondération SEO (92 % du score total)
+        </div>
+        <ul className="text-[12px] space-y-[8px] mb-5">
+          {criteres.map((c) => (
+            <li key={c.name} className="flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold">{c.name}</div>
+                <div className="text-[11px] text-[var(--text-muted)] leading-[1.4]">{c.hint}</div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 pt-[2px]">
+                <div className="w-[80px] h-[5px] bg-[var(--bg-warm)] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[var(--accent)]"
+                    style={{ width: `${(c.pts / maxPts) * 100}%` }}
+                  />
+                </div>
+                <span className="font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-secondary)] w-[24px] text-right">
+                  {c.pts}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="text-[12px] leading-[1.55] text-[var(--text-secondary)] bg-[var(--bg-warm)] rounded-[var(--radius-xs)] p-3 border border-[var(--border)]">
+          <strong className="text-[var(--text)]">Signaux GEO (8 % du score)</strong> : citations,
+          listes, FAQ, schémas et autres marqueurs qui aident à apparaître dans les réponses
+          générées par ChatGPT, Perplexity et Google AI Overviews.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const NLP_JUNK_TOKENS = new Set([
+  "est", "ce", "qui", "que", "quoi", "qu", "où", "quand",
+  "comment", "pourquoi", "combien", "quel", "quelle", "quels", "quelles",
+  "le", "la", "les", "un", "une", "des", "du", "de", "en", "et", "ou",
+  "à", "au", "aux", "pour", "par", "sur", "sous", "dans", "avec", "sans",
+  "plus", "moins", "très", "tout", "tous", "toute", "toutes",
+  "bien", "mieux", "aussi", "encore", "déjà", "même", "non", "oui",
+  "fait", "faire", "peut", "peuvent", "sont", "etre", "avoir",
+]);
+
+function isJunkNlpTerm(term: string, targetKeyword?: string | null): boolean {
+  const tokens = normalize(term)
+    .replace(/[^a-z0-9\s'-]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  const kwTokens = new Set<string>();
+  if (targetKeyword) {
+    normalize(targetKeyword)
+      .replace(/[^a-z0-9\s'-]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 1)
+      .forEach((w) => {
+        kwTokens.add(w);
+        if (w.endsWith("s")) kwTokens.add(w.slice(0, -1));
+        else kwTokens.add(w + "s");
+      });
+  }
+
+  return tokens.every((t) => NLP_JUNK_TOKENS.has(t) || kwTokens.has(t));
+}
+
 function EditorSidebar({
   briefId,
   scoreTotal,
@@ -837,11 +972,14 @@ function EditorSidebar({
   const essential: NlpTerm[] = [];
   const important: NlpTerm[] = [];
   const opportunity: NlpTerm[] = [];
-  (nlp?.nlpTerms ?? []).slice(0, 40).forEach((k) => {
-    if (k.presence >= 70) essential.push(k);
-    else if (k.presence >= 40) important.push(k);
-    else opportunity.push(k);
-  });
+  (nlp?.nlpTerms ?? [])
+    .slice(0, 40)
+    .filter((k) => !isJunkNlpTerm(k.term, nlp?.exactKeyword?.keyword))
+    .forEach((k) => {
+      if (k.presence >= 70) essential.push(k);
+      else if (k.presence >= 40) important.push(k);
+      else opportunity.push(k);
+    });
 
   const ek = nlp?.exactKeyword;
   let kwCount = 0;
@@ -891,9 +1029,9 @@ function EditorSidebar({
           </div>
         </div>
         <div className="flex flex-col gap-[4px] min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
+          <span className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] inline-flex items-center">
             Score SEO
-            <InfoBubble text="Score /100 calibré sur la médiane des concurrents top 10 : médiane = 50, médiane × 1.5 = 100. Sur les KW à concurrence faible, on remonte la médiane à 60 pour rester ambitieux. Composé de 9 critères : mot-clé, NLP, longueur, titres, placement, structure, qualité, images, sémantique paragraphe + signaux GEO." />
+            <ScoreInfoTrigger />
           </span>
           <span className="text-[13px] font-semibold leading-tight">{scoreHint}</span>
           {nlp?.intent && (
@@ -936,8 +1074,6 @@ function EditorSidebar({
       <Section
         title="Score détaillé"
         dotColor="var(--bg-black)"
-        collapsible
-        defaultOpen={false}
         info="Décomposition du score SEO en 9 critères pondérés sur 100. Chaque barre indique ta progression sur le critère (vert ≥70%, orange 40-69%, rouge <40%). La somme pondérée donne le score affiché en haut."
       >
         {subItems.map((i) => {
@@ -966,8 +1102,6 @@ function EditorSidebar({
         <Section
           title="Mot-clé exact (densité)"
           dotColor="var(--accent)"
-          collapsible
-          defaultOpen={false}
           info="Densité = (occurrences × longueur du KW) / nombre total de mots × 100. La fourchette idéale est calculée d'après les concurrents top 10. Trop bas = mot-clé sous-représenté, trop haut = bourrage (risque de pénalité Google)."
         >
           <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold px-3 py-[7px] bg-[var(--bg-warm)] rounded-[var(--radius-xs)] mb-[10px] text-center">
@@ -986,6 +1120,7 @@ function EditorSidebar({
         <Section
           title="Champ sémantique"
           dotColor="var(--purple)"
+          defaultOpen
           info="Termes que les concurrents top 10 utilisent fréquemment sur ce KW. Plus la présence est haute, plus le terme est attendu par Google. 3 tiers : Essentiels (≥70%), Importants (40-69%), Opportunités (<40%)."
         >
           {(nlp.keywordTerms?.length ?? 0) > 0 && (
@@ -1020,7 +1155,7 @@ function EditorSidebar({
       )}
 
       {nlp?.semanticClusters && nlp.semanticClusters.length > 0 && (
-        <Section title="Clusters thématiques (IA)" dotColor="var(--blue)" collapsible defaultOpen={false}>
+        <Section title="Clusters thématiques (IA)" dotColor="var(--blue)">
           <div className="text-[10px] text-[var(--text-muted)] mb-[8px] italic">
             Termes regroupés par champ lexical via embeddings.
           </div>
@@ -1031,13 +1166,12 @@ function EditorSidebar({
               </div>
               <div className="flex flex-wrap gap-[3px]">
                 {c.terms.map((t) => (
-                  <button
+                  <span
                     key={t}
-                    onClick={() => insertTermAtCursor(t)}
-                    className="inline-flex items-center px-[7px] py-[2px] rounded-full text-[10px] bg-[var(--bg-warm)] border border-[var(--border)] hover:bg-[var(--bg-olive-light)]"
+                    className="inline-flex items-center px-[7px] py-[2px] rounded-full text-[10px] bg-[var(--bg-warm)] border border-[var(--border)]"
                   >
                     {t}
-                  </button>
+                  </span>
                 ))}
               </div>
             </div>
@@ -1091,8 +1225,6 @@ function EditorSidebar({
         <Section
           title="People Also Ask"
           dotColor="var(--blue)"
-          collapsible
-          defaultOpen={false}
           info="Questions affichées par Google dans le bloc 'Autres questions posées' sur ce KW. Couvrir ces questions dans tes H2 améliore la pertinence et peut déclencher un rich snippet."
         >
           <PaaCoverageList paa={paa} editorText={editorText} keyword={ek?.keyword ?? ""} onInsert={insertPaaAsH2} />
@@ -1103,8 +1235,6 @@ function EditorSidebar({
         <Section
           title="Benchmarks SERP"
           dotColor="var(--green)"
-          collapsible
-          defaultOpen={false}
           info="Statistiques calculées sur les 10 premières pages Google (concurrents). Sert de référence pour calibrer ton contenu : viser dans la fourchette est généralement bon, viser la moyenne est sûr."
         >
           <BenchRow label="Plage de mots" value={`${nlp.minWordCount} à ${nlp.maxWordCount}`} />
@@ -1194,37 +1324,23 @@ function EditorSidebar({
 function Section({
   title,
   dotColor,
-  defaultOpen = true,
-  collapsible = false,
+  defaultOpen = false,
   info,
   children,
 }: {
   title: string;
   dotColor: string;
   defaultOpen?: boolean;
-  collapsible?: boolean;
   /** Tooltip d'aide affiché via une bulle "i" à côté du titre. */
   info?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
-  if (!collapsible) {
-    return (
-      <div className="mb-5">
-        <div className="flex items-center gap-[6px] text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-[10px]">
-          <span className="w-[6px] h-[6px] rounded-full" style={{ background: dotColor }} />
-          {title}
-          {info && <InfoBubble text={info} />}
-        </div>
-        {children}
-      </div>
-    );
-  }
-
   return (
     <div className="mb-3">
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between gap-[6px] text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-[10px] hover:text-[var(--text)] transition-colors"
       >
@@ -1238,7 +1354,7 @@ function Section({
           height="10"
           viewBox="0 0 20 20"
           fill="none"
-          className="transition-transform"
+          className="transition-transform shrink-0"
           style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
         >
           <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -1372,11 +1488,10 @@ function EntityList({
       </div>
       <div className="flex flex-wrap gap-[5px]">
         {rows.map(({ entity, mentioned }) => (
-          <button
+          <span
             key={entity.label}
-            onClick={() => onInsert(entity.label)}
             title={`Cité par ${entity.hits}/${entity.total} concurrents (${entity.totalOccurrences} occurrences)`}
-            className="inline-flex items-center gap-[5px] px-[9px] py-[3px] rounded-full text-[11px] font-medium border hover:scale-[1.03] transition-transform"
+            className="inline-flex items-center gap-[5px] px-[9px] py-[3px] rounded-full text-[11px] font-medium border"
             style={{
               background: mentioned ? "var(--green-bg)" : "var(--bg-card)",
               borderColor: mentioned ? "var(--green)" : "var(--border)",
@@ -1387,7 +1502,7 @@ function EntityList({
             <span className="text-[9px] font-[family-name:var(--font-mono)] opacity-75">
               {entity.hits}/{entity.total}
             </span>
-          </button>
+          </span>
         ))}
       </div>
     </div>
@@ -1719,9 +1834,8 @@ function KeywordChip({
 
   if (!hasCites) {
     return (
-      <button
-        onClick={() => onInsert(term)}
-        className="inline-flex items-center gap-[5px] px-[10px] py-[4px] rounded-full text-[11px] font-medium border hover:scale-[1.03] transition-transform"
+      <span
+        className="inline-flex items-center gap-[5px] px-[10px] py-[4px] rounded-full text-[11px] font-medium border"
         style={style}
       >
         {term}
@@ -1738,7 +1852,7 @@ function KeywordChip({
             {currentCount}
           </span>
         )}
-      </button>
+      </span>
     );
   }
 
@@ -1760,12 +1874,13 @@ function KeywordChip({
   return (
     <>
       <button
+        type="button"
         ref={btnRef}
-        onClick={() => onInsert(term)}
         onMouseEnter={onEnter}
         onMouseLeave={scheduleClose}
         onFocus={onEnter}
         onBlur={scheduleClose}
+        aria-label={`Voir les citations concurrentes pour ${term}`}
         className="inline-flex items-center gap-[5px] px-[10px] py-[4px] rounded-full text-[11px] font-medium border hover:scale-[1.03] transition-transform"
         style={style}
       >
@@ -1960,9 +2075,8 @@ function KeywordTermsList({
               : null;
         const style = overlay ?? baseStyle;
         return (
-          <button
+          <span
             key={k.term}
-            onClick={() => onInsert(k.term)}
             title={
               k.kind === "extension"
                 ? `Extension détectée chez ${k.presence}% des concurrents`
@@ -1970,7 +2084,7 @@ function KeywordTermsList({
                   ? "Keyword exact"
                   : "Sous-partie du keyword"
             }
-            className="inline-flex items-center gap-[6px] px-[10px] py-[5px] rounded-full text-[12px] font-medium border transition-colors hover:opacity-90"
+            className="inline-flex items-center gap-[6px] px-[10px] py-[5px] rounded-full text-[12px] font-medium border"
             style={style}
           >
             {k.term}
@@ -1984,7 +2098,7 @@ function KeywordTermsList({
                 {currentCount}
               </span>
             )}
-          </button>
+          </span>
         );
       })}
     </div>
@@ -2096,7 +2210,7 @@ function InsightsPane({
               <InsightMetric
                 label="Volume mensuel"
                 value={halo.search_volume.toLocaleString("fr-FR")}
-                tooltip="Recherches mensuelles moyennes (Haloscan)"
+                tooltip="Volume mensuel moyen de recherches Google France sur ce mot-clé exact (source Haloscan, moyenne sur les 12 derniers mois). C'est la demande potentielle : si tu te positionnes en top 3, tu peux espérer capter ~30% à 40% de ce volume."
               />
             )}
             {halo?.cpc != null && (
@@ -2106,7 +2220,7 @@ function InsightsPane({
               <InsightMetric
                 label="KGR"
                 value={halo.kgr.toFixed(2)}
-                tooltip="Keyword Golden Ratio. < 0.25 = excellent, < 1 = correct, > 1 = trop concurrentiel."
+                tooltip="Keyword Golden Ratio = nombre de pages indexées contenant le mot-clé exact dans leur title (allintitle), divisé par le volume de recherche mensuel. Indicateur de facilité à se positionner : < 0.25 = très facile (golden), entre 0.25 et 1 = correct, > 1 = mot-clé saturé, difficile à attaquer sans autorité de domaine."
               />
             )}
             {halo?.allintitleCount != null && (
@@ -2597,7 +2711,7 @@ function CompareCell({
   const color = palette[tone];
   const sign = gap > 0 ? "+" : "";
   return (
-    <div title={tooltip} className="cursor-help">
+    <div title={tooltip}>
       <div className="text-[10px] uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[2px]">{label}</div>
       <div className="flex items-baseline gap-2">
         <span className="font-[family-name:var(--font-mono)] font-semibold text-[15px]">{value}</span>
@@ -2690,7 +2804,7 @@ function KeyStat({
   return (
     <div
       title={tooltip}
-      className="border rounded-[var(--radius-sm)] px-3 py-[10px] flex flex-col items-center cursor-help"
+      className="border rounded-[var(--radius-sm)] px-3 py-[10px] flex flex-col items-center"
       style={{ background: p.bg, borderColor: isBest ? p.border : `${p.border}40` }}
     >
       <span
@@ -2731,13 +2845,11 @@ function InsightMetric({
   tooltip?: string;
 }) {
   return (
-    <div
-      title={tooltip}
-      className={`flex justify-between items-center py-2 border-b border-[var(--border)] last:border-0 ${
-        tooltip ? "cursor-help" : ""
-      }`}
-    >
-      <span className="text-[13px] text-[var(--text-secondary)]">{label}</span>
+    <div className="flex justify-between items-center py-2 border-b border-[var(--border)] last:border-0">
+      <span className="text-[13px] text-[var(--text-secondary)] inline-flex items-center">
+        {label}
+        {tooltip && <InfoBubble text={tooltip} />}
+      </span>
       <span className="font-[family-name:var(--font-mono)] font-semibold text-[14px]">{value}</span>
     </div>
   );
@@ -2898,7 +3010,6 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             (r.score < MIN_VALID_COMPETITOR_SCORE ? (
               <div
                 title="Score non fiable : page probablement mal crawlée (rendu JavaScript non capté, blocage anti-bot...). Exclue du calcul de la moyenne. Ce n'est pas un jugement sur la qualité réelle du concurrent."
-                className="cursor-help"
               >
                 <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold text-[var(--text-muted)]">
                   ⚠

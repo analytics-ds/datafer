@@ -19,12 +19,16 @@ const HEADINGS: Array<{ tag: "h1" | "h2" | "h3" | "p"; label: string; className:
   { tag: "p", label: "¶ Paragraphe", className: "text-[14px] text-[var(--text-secondary)]" },
 ];
 
+const TABLE_GRID_ROWS = 8;
+const TABLE_GRID_COLS = 10;
+const MAX_IMAGE_BYTES = 1_500_000;
+
 type ToolbarProps = {
   currentTag: "h1" | "h2" | "h3" | "p" | null;
   onExec: (cmd: string, value?: string) => void;
   onApplyHeading: (tag: "h1" | "h2" | "h3" | "p") => void;
-  onInsertImage: () => void;
-  onInsertTable: () => void;
+  onInsertImage: (src: string, alt: string) => void;
+  onInsertTable: (rows: number, cols: number) => void;
   onInsertLink: () => void;
   onHighlight: (color: string) => void;
 };
@@ -34,16 +38,21 @@ export function EditorToolbar(p: ToolbarProps) {
   const [alignOpen, setAlignOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [highlightOpen, setHighlightOpen] = useState(false);
+  const [tableOpen, setTableOpen] = useState(false);
+  const [imageOpen, setImageOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  const closeAll = () => {
+    setHeadingOpen(false);
+    setAlignOpen(false);
+    setListOpen(false);
+    setHighlightOpen(false);
+    setTableOpen(false);
+  };
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) {
-        setHeadingOpen(false);
-        setAlignOpen(false);
-        setListOpen(false);
-        setHighlightOpen(false);
-      }
+      if (!ref.current?.contains(e.target as Node)) closeAll();
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -67,10 +76,9 @@ export function EditorToolbar(p: ToolbarProps) {
       <div className="relative">
         <button
           onClick={() => {
-            setHeadingOpen((v) => !v);
-            setAlignOpen(false);
-            setListOpen(false);
-            setHighlightOpen(false);
+            const next = !headingOpen;
+            closeAll();
+            setHeadingOpen(next);
           }}
           className="tb-btn min-w-[48px] px-2 gap-1"
           title="Niveau de titre"
@@ -119,10 +127,9 @@ export function EditorToolbar(p: ToolbarProps) {
       <div className="relative">
         <button
           onClick={() => {
-            setAlignOpen((v) => !v);
-            setHeadingOpen(false);
-            setListOpen(false);
-            setHighlightOpen(false);
+            const next = !alignOpen;
+            closeAll();
+            setAlignOpen(next);
           }}
           className="tb-btn gap-1"
           title="Alignement"
@@ -132,38 +139,10 @@ export function EditorToolbar(p: ToolbarProps) {
         </button>
         {alignOpen && (
           <Menu>
-            <MenuItem
-              onClick={() => {
-                p.onExec("justifyLeft");
-                setAlignOpen(false);
-              }}
-            >
-              Aligner à gauche
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                p.onExec("justifyCenter");
-                setAlignOpen(false);
-              }}
-            >
-              Centrer
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                p.onExec("justifyRight");
-                setAlignOpen(false);
-              }}
-            >
-              Aligner à droite
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                p.onExec("justifyFull");
-                setAlignOpen(false);
-              }}
-            >
-              Justifier
-            </MenuItem>
+            <MenuItem onClick={() => { p.onExec("justifyLeft"); setAlignOpen(false); }}>Aligner à gauche</MenuItem>
+            <MenuItem onClick={() => { p.onExec("justifyCenter"); setAlignOpen(false); }}>Centrer</MenuItem>
+            <MenuItem onClick={() => { p.onExec("justifyRight"); setAlignOpen(false); }}>Aligner à droite</MenuItem>
+            <MenuItem onClick={() => { p.onExec("justifyFull"); setAlignOpen(false); }}>Justifier</MenuItem>
           </Menu>
         )}
       </div>
@@ -172,10 +151,9 @@ export function EditorToolbar(p: ToolbarProps) {
       <div className="relative">
         <button
           onClick={() => {
-            setListOpen((v) => !v);
-            setAlignOpen(false);
-            setHeadingOpen(false);
-            setHighlightOpen(false);
+            const next = !listOpen;
+            closeAll();
+            setListOpen(next);
           }}
           className="tb-btn gap-1"
           title="Liste"
@@ -185,22 +163,8 @@ export function EditorToolbar(p: ToolbarProps) {
         </button>
         {listOpen && (
           <Menu>
-            <MenuItem
-              onClick={() => {
-                p.onExec("insertUnorderedList");
-                setListOpen(false);
-              }}
-            >
-              Liste à puces
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                p.onExec("insertOrderedList");
-                setListOpen(false);
-              }}
-            >
-              Liste numérotée
-            </MenuItem>
+            <MenuItem onClick={() => { p.onExec("insertUnorderedList"); setListOpen(false); }}>Liste à puces</MenuItem>
+            <MenuItem onClick={() => { p.onExec("insertOrderedList"); setListOpen(false); }}>Liste numérotée</MenuItem>
           </Menu>
         )}
       </div>
@@ -211,10 +175,9 @@ export function EditorToolbar(p: ToolbarProps) {
       <div className="relative">
         <button
           onClick={() => {
-            setHighlightOpen((v) => !v);
-            setAlignOpen(false);
-            setListOpen(false);
-            setHeadingOpen(false);
+            const next = !highlightOpen;
+            closeAll();
+            setHighlightOpen(next);
           }}
           className="tb-btn gap-1"
           title="Surlignage"
@@ -227,10 +190,7 @@ export function EditorToolbar(p: ToolbarProps) {
             {HIGHLIGHT_COLORS.map((c) => (
               <button
                 key={c.value || "none"}
-                onClick={() => {
-                  p.onHighlight(c.value);
-                  setHighlightOpen(false);
-                }}
+                onClick={() => { p.onHighlight(c.value); setHighlightOpen(false); }}
                 className="w-full flex items-center gap-3 px-3 py-[7px] text-[13px] text-left hover:bg-[var(--bg-warm)] transition-colors"
               >
                 <span
@@ -245,14 +205,32 @@ export function EditorToolbar(p: ToolbarProps) {
       </div>
 
       {/* Image */}
-      <TbBtn onClick={p.onInsertImage} title="Insérer une image">
+      <TbBtn onClick={() => setImageOpen(true)} title="Insérer une image">
         <ImageIcon />
       </TbBtn>
 
-      {/* Table */}
-      <TbBtn onClick={p.onInsertTable} title="Insérer un tableau">
-        <TableIcon />
-      </TbBtn>
+      {/* Table — grid selector */}
+      <div className="relative">
+        <button
+          onClick={() => {
+            const next = !tableOpen;
+            closeAll();
+            setTableOpen(next);
+          }}
+          className="tb-btn"
+          title="Insérer un tableau"
+        >
+          <TableIcon />
+        </button>
+        {tableOpen && (
+          <TableGridPicker
+            onPick={(rows, cols) => {
+              p.onInsertTable(rows, cols);
+              setTableOpen(false);
+            }}
+          />
+        )}
+      </div>
 
       {/* Link */}
       <TbBtn onClick={p.onInsertLink} title="Insérer un lien">
@@ -276,6 +254,16 @@ export function EditorToolbar(p: ToolbarProps) {
         ✕
       </TbBtn>
 
+      {imageOpen && (
+        <ImageInsertModal
+          onClose={() => setImageOpen(false)}
+          onInsert={(src, alt) => {
+            p.onInsertImage(src, alt);
+            setImageOpen(false);
+          }}
+        />
+      )}
+
       <style jsx>{`
         :global(.tb-btn) {
           display: inline-flex;
@@ -298,6 +286,239 @@ export function EditorToolbar(p: ToolbarProps) {
           color: var(--text);
         }
       `}</style>
+    </div>
+  );
+}
+
+function TableGridPicker({ onPick }: { onPick: (rows: number, cols: number) => void }) {
+  const [hover, setHover] = useState<{ r: number; c: number } | null>(null);
+
+  return (
+    <div
+      className="absolute top-10 left-0 z-30 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] shadow-[var(--shadow-lg)] p-3"
+      onMouseLeave={() => setHover(null)}
+    >
+      <div
+        className="grid gap-[2px] mb-2"
+        style={{ gridTemplateColumns: `repeat(${TABLE_GRID_COLS}, 16px)` }}
+      >
+        {Array.from({ length: TABLE_GRID_ROWS * TABLE_GRID_COLS }).map((_, i) => {
+          const r = Math.floor(i / TABLE_GRID_COLS);
+          const c = i % TABLE_GRID_COLS;
+          const active = hover && r <= hover.r && c <= hover.c;
+          return (
+            <button
+              key={i}
+              type="button"
+              onMouseEnter={() => setHover({ r, c })}
+              onClick={() => onPick(hover ? hover.r + 1 : r + 1, hover ? hover.c + 1 : c + 1)}
+              className="w-4 h-4 rounded-[2px] border transition-colors"
+              style={{
+                background: active ? "var(--accent)" : "var(--bg)",
+                borderColor: active ? "var(--accent-dark)" : "var(--border)",
+              }}
+              aria-label={`${r + 1} lignes × ${c + 1} colonnes`}
+            />
+          );
+        })}
+      </div>
+      <div className="text-center text-[12px] font-[family-name:var(--font-mono)] text-[var(--text-secondary)]">
+        {hover ? `${hover.r + 1} × ${hover.c + 1}` : "Choisis la taille"}
+      </div>
+    </div>
+  );
+}
+
+function ImageInsertModal({
+  onClose,
+  onInsert,
+}: {
+  onClose: () => void;
+  onInsert: (src: string, alt: string) => void;
+}) {
+  const [tab, setTab] = useState<"url" | "upload">("url");
+  const [url, setUrl] = useState("");
+  const [alt, setAlt] = useState("");
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  function ingestFile(file: File | null) {
+    setError(null);
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Le fichier doit être une image (JPG, PNG, WebP, GIF, SVG).");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError(`Image trop lourde : ${(file.size / 1024 / 1024).toFixed(2)} Mo. Limite : ${(MAX_IMAGE_BYTES / 1024 / 1024).toFixed(1)} Mo.`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setDataUrl(typeof reader.result === "string" ? reader.result : null);
+    reader.onerror = () => setError("Lecture du fichier impossible.");
+    reader.readAsDataURL(file);
+  }
+
+  const preview = tab === "url" ? (url || null) : dataUrl;
+  const canInsert = !!preview;
+
+  function handleInsert() {
+    if (!preview) return;
+    onInsert(preview, alt.trim());
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(0,0,0,0.45)] backdrop-blur-sm"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] shadow-[var(--shadow-lg)] w-[520px] max-w-full max-h-[85vh] overflow-y-auto p-6 pt-8 relative"
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fermer"
+          className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)]"
+        >
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+            <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+        </button>
+        <h3 className="font-[family-name:var(--font-display)] text-[18px] mb-4">Insérer une image</h3>
+
+        <div className="flex gap-1 mb-4 border-b border-[var(--border)]">
+          {[
+            { id: "url" as const, label: "Depuis une URL" },
+            { id: "upload" as const, label: "Téléverser un fichier" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => { setTab(t.id); setError(null); }}
+              className={`px-3 py-2 text-[13px] font-semibold border-b-2 transition-colors ${
+                tab === t.id
+                  ? "border-[var(--text)] text-[var(--text)]"
+                  : "border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "url" && (
+          <div className="space-y-3">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[5px] block">
+                URL de l&apos;image
+              </label>
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://exemple.com/image.jpg"
+                autoFocus
+                className="w-full px-3 py-[9px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--accent-dark)] transition-colors text-[13px] font-[family-name:var(--font-mono)]"
+              />
+            </div>
+          </div>
+        )}
+
+        {tab === "upload" && (
+          <div className="space-y-3">
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(false);
+                ingestFile(e.dataTransfer.files?.[0] ?? null);
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-[var(--radius-sm)] p-7 text-center cursor-pointer transition-colors ${
+                dragging
+                  ? "border-[var(--accent-dark)] bg-[var(--bg-olive-light)]"
+                  : "border-[var(--border-strong)] hover:border-[var(--text-muted)] bg-[var(--bg)]"
+              }`}
+            >
+              <div className="text-[13px] font-semibold mb-1">
+                Glisse une image ici ou clique pour parcourir
+              </div>
+              <div className="text-[11px] text-[var(--text-muted)]">
+                JPG, PNG, WebP, GIF, SVG · max {(MAX_IMAGE_BYTES / 1024 / 1024).toFixed(1)} Mo
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => ingestFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-3 text-[12px] text-[var(--red)] bg-[var(--red-bg)] border border-[var(--red)]/30 rounded-[var(--radius-xs)] px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        {preview && (
+          <div className="mt-4">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[5px]">
+              Aperçu
+            </div>
+            <div className="border border-[var(--border)] rounded-[var(--radius-xs)] bg-[var(--bg)] p-2 max-h-[200px] overflow-hidden flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={preview} alt={alt} className="max-h-[180px] max-w-full object-contain" />
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[5px] block">
+            Texte alternatif (alt) <span className="text-[var(--text-muted)] normal-case font-normal">— recommandé pour le SEO</span>
+          </label>
+          <input
+            type="text"
+            value={alt}
+            onChange={(e) => setAlt(e.target.value)}
+            placeholder="Description courte de l'image"
+            className="w-full px-3 py-[9px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--accent-dark)] transition-colors text-[13px]"
+          />
+        </div>
+
+        <div className="flex items-center justify-end gap-2 mt-5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-[9px] rounded-[var(--radius-sm)] text-[13px] font-semibold border border-[var(--border)] hover:bg-[var(--bg-warm)] transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={handleInsert}
+            disabled={!canInsert}
+            className="px-4 py-[9px] rounded-[var(--radius-sm)] text-[13px] font-semibold bg-[var(--bg-black)] text-[var(--text-inverse)] hover:bg-[var(--bg-dark)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Insérer l&apos;image
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
