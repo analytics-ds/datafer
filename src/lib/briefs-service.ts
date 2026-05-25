@@ -389,9 +389,31 @@ async function createBriefAnalysisPayload(
         return crawlMyUrlOnce();
       })()
     : Promise.resolve(null);
+  // Timeout global PAR SITE : crawlPage enchaîne 3 niveaux (fetch direct,
+  // Bright Data Web Unlocker, Bright Data Browser CDP). Chaque niveau a son
+  // propre timeout, mais en cas de chain complète (fetch 10s + BD 50s + BD
+  // Browser 50s+) un site peut prendre 100s+. Pire, si BD Browser hang sans
+  // libérer son timeout (cas observé sur certains sites bijouterie blindés),
+  // Promise.allSettled bloque le worker indéfiniment jusqu'au cpu_ms cap.
+  // Cap à 90s/site = on perd au pire 1 page sur 10 mais on finit le brief.
+  // Bug observé sur "alliance diamant occasion" (2026-05-25).
+  const PER_SITE_TIMEOUT_MS = 90000;
   const settled = await Promise.allSettled(
     results.map(async (r) => {
-      const c = await crawlPage(r.link, env);
+      let c: PageContent | null = null;
+      try {
+        c = await Promise.race([
+          crawlPage(r.link, env),
+          new Promise<null>((resolve) =>
+            setTimeout(() => {
+              console.log(`[crawl] timeout global 90s url=${r.link}`);
+              resolve(null);
+            }, PER_SITE_TIMEOUT_MS),
+          ),
+        ]);
+      } catch (e) {
+        console.log(`[crawl] exception url=${r.link} err=${e instanceof Error ? e.message : String(e)}`);
+      }
       done++;
       // best-effort, on s'en fiche si l'update DB échoue ponctuellement
       void setStep(`crawling:${done}/${results.length}`);
