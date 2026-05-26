@@ -71,6 +71,7 @@ export default async function SharedSingleBriefPage({
           tagsEndpoint={`/api/share-brief/${token}/tags`}
           tagsCreateEndpoint={`/api/share-brief/${token}/tags-create`}
           exportEndpoint={`/api/share-brief/${token}/export`}
+          maillageEndpoint={`/api/share-brief/${token}/maillage`}
           printUrl={`/api/share-brief/${token}/print`}
           hideNewAnalysis
         />

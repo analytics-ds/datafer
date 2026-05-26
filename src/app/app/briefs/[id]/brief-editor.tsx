@@ -22,6 +22,7 @@ import {
 } from "@/lib/geo-scoring";
 import { faviconUrl } from "@/lib/favicon";
 import { EditorToolbar } from "./toolbar";
+import { MaillageSection } from "./maillage-section";
 import { ShareBriefPanel } from "../share-brief-panel";
 import { CompetitorDownloadMenu } from "./competitor-download-menu";
 import { StatusPicker } from "../status-picker";
@@ -72,6 +73,12 @@ type BriefEditorProps = {
    * - `/api/share/<token>/briefs/<id>/export` côté client
    */
   exportEndpoint?: string;
+  /**
+   * Endpoint POST pour les suggestions de maillage interne.
+   * - `/api/briefs/<id>/maillage` côté backoffice
+   * - `/api/share-brief/<token>/maillage` côté partage public
+   */
+  maillageEndpoint?: string;
   /** URL de la page imprimable (PDF via window.print). */
   printUrl?: string;
   /** Masquer le bouton "Nouvelle analyse" (ex. en mode partage). */
@@ -97,7 +104,11 @@ export function BriefEditor(props: BriefEditorProps) {
   const tagsEndpoint = props.tagsEndpoint ?? `/api/briefs/${id}/tags`;
   const tagsCreateEndpoint = props.tagsCreateEndpoint ?? `/api/tags`;
   const exportEndpoint = props.exportEndpoint ?? `/api/briefs/${id}/export`;
+  const maillageEndpoint = props.maillageEndpoint ?? `/api/briefs/${id}/maillage`;
   const printUrl = props.printUrl ?? `/api/briefs/${id}/print`;
+  // Indique le mode partage : les UI d'édition (boutons "Insérer" du maillage,
+  // etc.) sont en read-only quand on est sur la vue share du client lecteur.
+  const isShareMode = !!props.saveEndpoint && props.saveEndpoint.startsWith("/api/share");
   const hideNewAnalysis = props.hideNewAnalysis ?? false;
 
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus>(props.workflowStatus);
@@ -427,6 +438,55 @@ export function BriefEditor(props: BriefEditorProps) {
     readEditor();
   };
 
+  // Récupère l'HTML courant pour le passer au moteur de suggestions maillage.
+  const getEditorHtml = useCallback(() => editorRef.current?.innerHTML ?? "", []);
+
+  // Insère le lien suggéré par le moteur de maillage : trouve le n-ième <p>
+  // de l'éditeur, wrap la première occurrence du texte d'ancre dans un <a>.
+  // Garantie : on n'écrit jamais dans un heading (h1/h2/h3) car le moteur
+  // de suggestions ne retourne que des paragraphIndex pointant sur des <p>.
+  const handleInsertMaillageLink = useCallback(
+    (paragraphIndex: number, anchor: string, url: string): boolean => {
+      const el = editorRef.current;
+      if (!el) return false;
+      const ps = el.querySelectorAll("p");
+      if (paragraphIndex < 0 || paragraphIndex >= ps.length) return false;
+      const p = ps[paragraphIndex];
+      const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+      let textNode = walker.nextNode() as Text | null;
+      while (textNode) {
+        const text = textNode.textContent ?? "";
+        const idx = text.indexOf(anchor);
+        if (idx !== -1) {
+          const before = text.slice(0, idx);
+          const after = text.slice(idx + anchor.length);
+          const a = document.createElement("a");
+          a.href = url;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.textContent = anchor;
+          const parent = textNode.parentNode!;
+          if (before) parent.insertBefore(document.createTextNode(before), textNode);
+          parent.insertBefore(a, textNode);
+          if (after) parent.insertBefore(document.createTextNode(after), textNode);
+          parent.removeChild(textNode);
+          readEditor();
+          // Save immédiat car l'autosave debouncé watch innerText qui n'a
+          // pas changé : seul le innerHTML a changé (ajout d'une balise <a>).
+          fetch(saveEndpoint, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ editorHtml: el.innerHTML }),
+          }).catch(() => {});
+          return true;
+        }
+        textNode = walker.nextNode() as Text | null;
+      }
+      return false;
+    },
+    [readEditor, saveEndpoint],
+  );
+
   const handleInsertTable = (rows: number, cols: number) => {
     const safeRows = Math.min(20, Math.max(1, rows));
     const safeCols = Math.min(10, Math.max(1, cols));
@@ -610,6 +670,13 @@ export function BriefEditor(props: BriefEditorProps) {
                 data-placeholder="Commencez à rédiger votre contenu optimisé ici…"
               />
             </div>
+
+            <MaillageSection
+              endpoint={maillageEndpoint}
+              getEditorHtml={getEditorHtml}
+              onInsertLink={handleInsertMaillageLink}
+              readOnly={isShareMode}
+            />
           </div>
 
           {/* Sidebar */}
@@ -806,7 +873,7 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
         <p className="text-[13px] leading-[1.55] text-[var(--text-secondary)] mb-5">
           Le score RankShaker est <strong>calibré sur tes concurrents</strong> du top 10 Google.
           La médiane des scores bruts concurrents = 50, médiane × 1,5 = 100. Sur les requêtes
-          à concurrence faible, on remonte la médiane à 60 pour rester ambitieux. Ce n'est
+          à concurrence faible, on remonte la médiane à 60 pour rester ambitieux. Ce n&apos;est
           pas une note absolue : un score de 70 signifie que ton contenu fait ~40 % de mieux
           que la médiane des concurrents qui rankent déjà.
         </p>

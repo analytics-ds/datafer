@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, blob, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 // ─── Better-auth tables (names must match better-auth defaults) ──────────────
@@ -77,9 +77,64 @@ export const client = sqliteTable("client", {
   // Partage externe : si shareToken est présent, le dossier est accessible
   // en lecture seule sur /share/<token> (sans auth).
   shareToken: text("share_token").unique(),
+  // Sitemap source pour le maillage interne. Si null, pas d'index URL et la
+  // section Maillage interne reste vide côté brief.
+  sitemapUrl: text("sitemap_url"),
+  sitemapLastSyncAt: integer("sitemap_last_sync_at", { mode: "timestamp" }),
+  // 'idle' = pas en cours, 'syncing' = en cours, 'failed' = dernier run KO.
+  sitemapStatus: text("sitemap_status", { enum: ["idle", "syncing", "failed"] })
+    .notNull()
+    .default("idle"),
+  sitemapError: text("sitemap_error"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
+
+// Index des URLs publiques d'un client, alimenté à partir de son sitemap.
+// Sert au moteur de suggestions de maillage interne dans les briefs : pour
+// chaque paragraphe du brief en cours d'édition, on cherche la ou les URLs
+// du client sémantiquement les plus proches via cosinus(embedding).
+//
+// Refresh : pas de dépendance au lastmod du sitemap (souvent absent ou
+// mensonger). À chaque sync incrémental, HEAD request -> compare
+// Last-Modified/ETag -> sinon GET direct (gratuit) + hash du contenu
+// extrait -> skip embedding si hash inchangé. Voir src/lib/maillage/sync.ts.
+export const clientUrlIndex = sqliteTable(
+  "client_url_index",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id").notNull().references(() => client.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    title: text("title"),
+    h1: text("h1"),
+    metaDescription: text("meta_description"),
+    // Premier paragraphe extrait (200 mots max) pour donner du contexte
+    // à l'embedding. Stocké aussi pour pouvoir le ré-embedder en cas de
+    // changement de modèle sans re-crawler.
+    firstParagraph: text("first_paragraph"),
+    // Embedding bge-m3 (1024 dim, float32) sérialisé en BLOB.
+    // Float32Array(1024).buffer côté écriture / lecture.
+    embedding: blob("embedding"),
+    // Hash SHA-256 du concat normalisé (title + h1 + meta + firstParagraph).
+    // Permet de skipper le re-embedding si le contenu pertinent n'a pas
+    // bougé même quand le HTML complet a changé (changement de footer, etc.).
+    contentHash: text("content_hash"),
+    // Headers HTTP capturés au dernier check, pour faire un HEAD ultra léger
+    // au prochain run et skip le GET complet si rien n'a bougé.
+    etag: text("etag"),
+    lastModifiedHeader: text("last_modified_header"),
+    // Timestamps de cycle de vie.
+    lastCheckedAt: integer("last_checked_at", { mode: "timestamp" }),
+    lastChangedAt: integer("last_changed_at", { mode: "timestamp" }),
+    discoveredAt: integer("discovered_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    // false = URL retirée du sitemap au dernier sync (on garde la row pour
+    // pouvoir détecter une réapparition sans tout re-crawler).
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  },
+  (t) => [
+    uniqueIndex("client_url_index_url_unique").on(t.clientId, t.url),
+  ],
+);
 
 // Favoris de dossiers, per-user. Les dossiers favoris remontent dans la
 // sidebar gauche.

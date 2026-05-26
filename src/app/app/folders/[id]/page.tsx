@@ -4,13 +4,14 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { brief, client, folderFavorite, user } from "@/db/schema";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { brief, client, clientUrlIndex, folderFavorite, user } from "@/db/schema";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../../_ui";
 import { FolderFavicon } from "../page";
 import { FavoriteButton } from "../favorite-button";
 import { SharePanel } from "../share-panel";
 import { DeleteFolderButton } from "../delete-folder";
+import { SitemapPanel } from "./sitemap-panel";
 import { SearchableBriefList } from "../../briefs/searchable-brief-list";
 import { listTagsForBriefs, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "../../briefs/workflow-status";
@@ -38,7 +39,7 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
     .where(and(eq(folderFavorite.userId, session.user.id), eq(folderFavorite.folderId, folder.id)))
     .limit(1);
 
-  const [briefs, folders, availableTags] = await Promise.all([
+  const [briefs, folders, availableTags, urlIndexCountRow] = await Promise.all([
     db
       .select({
         id: brief.id,
@@ -70,7 +71,13 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
       .orderBy(asc(client.name)),
     // Tags scopés à ce folder uniquement : c'est le seul scope visible ici.
     listTagsForClient(folder.id),
+    db
+      .select({ n: count() })
+      .from(clientUrlIndex)
+      .where(and(eq(clientUrlIndex.clientId, folder.id), eq(clientUrlIndex.isActive, true)))
+      .limit(1),
   ]);
+  const urlIndexCount = urlIndexCountRow[0]?.n ?? 0;
 
   const tagsByBrief = await listTagsForBriefs(briefs.map((b) => b.id));
   // Le SearchableBriefList attend des tags scopés ; on injecte clientId.
@@ -105,6 +112,15 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
             </Link>
           </div>
         }
+      />
+
+      <SitemapPanel
+        clientId={folder.id}
+        initialSitemapUrl={folder.sitemapUrl}
+        initialStatus={folder.sitemapStatus}
+        initialLastSyncAt={folder.sitemapLastSyncAt}
+        initialUrlCount={urlIndexCount}
+        initialError={folder.sitemapError}
       />
 
       {briefs.length === 0 ? (

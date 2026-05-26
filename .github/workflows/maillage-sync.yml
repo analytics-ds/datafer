@@ -1,0 +1,36 @@
+name: Maillage interne sync
+
+on:
+  schedule:
+    # Toutes les heures. Le tick traite jusqu'à 5 clients dans un budget de
+    # ~22s, en privilégiant les clients dont la dernière sync est la plus
+    # ancienne. Un client à 50k URLs en mode initial est traité progressivement
+    # sur plusieurs ticks (~50 URLs / batch, fetch direct + embedding bge-m3).
+    - cron: "17 * * * *"
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: maillage-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/cron/maillage-sync
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          response=$(curl -sS -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            https://datafer.analytics-e0d.workers.dev/api/cron/maillage-sync)
+          body=$(echo "$response" | sed '$d')
+          status=$(echo "$response" | tail -n1)
+          echo "HTTP $status"
+          echo "$body"
+          if [ "$status" != "200" ]; then
+            echo "::error::maillage-sync endpoint returned non-200"
+            exit 1
+          fi
