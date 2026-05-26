@@ -49,24 +49,37 @@ export async function embedTexts(
 
   for (let i = 0; i < nonEmpty.length; i += EMBEDDING_BATCH_SIZE) {
     const batch = nonEmpty.slice(i, i + EMBEDDING_BATCH_SIZE);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const r = (await ai.run(MODEL as any, { text: batch })) as {
-        data?: number[][];
-      };
-      if (!r.data) continue;
-      for (let j = 0; j < r.data.length; j++) {
-        const vec = r.data[j];
-        if (!vec || vec.length !== EMBEDDING_DIM) continue;
-        const f32 = new Float32Array(EMBEDDING_DIM);
-        for (let k = 0; k < EMBEDDING_DIM; k++) f32[k] = vec[k];
-        result[indices[i + j]] = f32;
-      }
-    } catch (e) {
-      console.log(`[maillage] embed batch error : ${(e as Error).message}`);
+    const data = await runWithRetry(ai, batch);
+    if (!data) continue;
+    for (let j = 0; j < data.length; j++) {
+      const vec = data[j];
+      if (!vec || vec.length !== EMBEDDING_DIM) continue;
+      const f32 = new Float32Array(EMBEDDING_DIM);
+      for (let k = 0; k < EMBEDDING_DIM; k++) f32[k] = vec[k];
+      result[indices[i + j]] = f32;
     }
   }
   return result;
+}
+
+// Retry interne pour absorber les erreurs transientes de Workers AI (1031,
+// 429, timeouts). Backoff exponentiel 0 / 500ms / 1500ms.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function runWithRetry(ai: any, batch: string[]): Promise<number[][] | null> {
+  const delays = [0, 500, 1500];
+  for (let attempt = 0; attempt < delays.length; attempt++) {
+    if (delays[attempt] > 0) await new Promise((r) => setTimeout(r, delays[attempt]));
+    try {
+      const r = (await ai.run(MODEL, { text: batch })) as { data?: number[][] };
+      if (r.data && r.data.length > 0) return r.data;
+    } catch (e) {
+      const msg = (e as Error).message;
+      console.log(`[maillage] embed retry=${attempt} : ${msg}`);
+      if (msg.includes("invalid") || msg.includes("input")) return null;
+    }
+  }
+  console.log(`[maillage] embed batch failed after 3 attempts (size=${batch.length})`);
+  return null;
 }
 
 // Sérialise un embedding Float32Array vers Uint8Array prêt pour BLOB D1.
