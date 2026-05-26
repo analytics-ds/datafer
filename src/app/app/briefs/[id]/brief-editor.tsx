@@ -359,10 +359,47 @@ export function BriefEditor(props: BriefEditorProps) {
   // Premier save : on rattrape les briefs avec un score obsolète en BDD
   // (changement de formule, debounce raté à la session précédente…). On
   // déclenche dès le 1er calcul utile et on ne le rejoue pas.
+  //
+  // Bug fix 2026-05-26 : on attend que les embeddings paragraphes soient
+  // arrivés (paragraphScores non vide) AVANT le premier save, sinon on
+  // push un score sous-évalué (sans la composante semantic /10) qui fait
+  // diverger l'affichage liste (snapshot BDD) vs affichage brief (calcul
+  // live avec embeddings). Pierre voyait 84 dans la liste et 85 dans le
+  // brief sur "assurance moto A2" parce que le initial save tirait avant
+  // les fetch async des embeddings.
+  //
+  // Fallback : si après 4s les embeddings ne sont toujours pas arrivés
+  // (brief vide, AI binding down, etc.), on save quand même.
   const initialSaveDone = useRef(false);
+  const initialSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (initialSaveDone.current) return;
     if (editorData.text.length === 0 && !editorRef.current?.innerHTML) return;
+
+    const hasMeaningfulText = editorData.text.length > 100;
+    const embeddingsLoaded = paragraphScores.size > 0;
+    const shouldWait = hasMeaningfulText && !embeddingsLoaded;
+
+    if (shouldWait && !initialSaveTimer.current) {
+      // Arm le fallback timeout : si après 4s on n'a toujours rien, save
+      // quand même pour ne pas bloquer indéfiniment.
+      initialSaveTimer.current = setTimeout(() => {
+        if (initialSaveDone.current) return;
+        initialSaveDone.current = true;
+        fetch(saveEndpoint, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ score: score.total, rawScore: score.rawTotal }),
+        }).catch(() => {});
+      }, 4000);
+      return;
+    }
+    if (shouldWait) return;
+
+    if (initialSaveTimer.current) {
+      clearTimeout(initialSaveTimer.current);
+      initialSaveTimer.current = null;
+    }
     initialSaveDone.current = true;
     fetch(saveEndpoint, {
       method: "PATCH",
@@ -371,7 +408,7 @@ export function BriefEditor(props: BriefEditorProps) {
     }).catch(() => {
       // best-effort : si ça échoue, le debounce save reprendra plus tard.
     });
-  }, [editorData.text, score.total, score.rawTotal, saveEndpoint]);
+  }, [editorData.text, score.total, score.rawTotal, saveEndpoint, paragraphScores.size]);
 
   // Debounced save
   useEffect(() => {
