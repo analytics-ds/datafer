@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Status = "idle" | "syncing" | "failed";
 
@@ -154,6 +154,15 @@ function StatusBadge({
   urlCount: number;
   lastSyncAt: Date | null;
 }) {
+  // timeAgo dépend de Date.now() qui diffère entre rendu SSR et hydratation
+  // client. On rend une string stable côté serveur ("récent") puis on switch
+  // sur le vrai timeAgo après mount pour éviter une erreur React #418
+  // (hydration text mismatch).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   if (status === "syncing") {
     return (
       <span className="rounded-[var(--radius-pill)] bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-700">
@@ -175,9 +184,10 @@ function StatusBadge({
       </span>
     );
   }
+  const when = !lastSyncAt ? "jamais" : mounted ? timeAgo(lastSyncAt) : "récent";
   return (
     <span className="rounded-[var(--radius-pill)] bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
-      {urlCount} URLs · {lastSyncAt ? timeAgo(lastSyncAt) : "jamais"}
+      {urlCount} URLs · {when}
     </span>
   );
 }
