@@ -37,7 +37,13 @@ import type { SitemapSyncMode } from "./types";
 
 const DEFAULT_CPU_BUDGET_MS = 240_000;
 const INCREMENTAL_ROTATION_FRACTION = 1 / 7;
-const URLS_PER_BATCH = 50;
+// Batch volontairement petit : entre 2 batches, on a un point de
+// persistance en BDD. Sur des sites lents (Bright Data, 3-10s par crawl),
+// un batch de 50 peut dépasser le timeout HTTP du worker Next.js (30s)
+// sans avoir pu écrire la moindre row. Avec 10, on a un save garanti
+// toutes les ~30-60s, ce qui rend la sync incrémentale même quand elle
+// est tuée par le timeout.
+const URLS_PER_BATCH = 10;
 
 type DB = DrizzleD1Database<typeof schema>;
 
