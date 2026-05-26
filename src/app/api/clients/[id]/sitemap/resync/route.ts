@@ -46,6 +46,9 @@ export async function POST(_req: Request, context: { params: Promise<{ id: strin
     .limit(1);
   const mode: "initial" | "incremental" = existingCount ? "incremental" : "initial";
 
-  const result = await syncClientSitemap(db, env.AI, id, mode, { cpuBudgetMs: INLINE_BUDGET_MS });
+  const result = await syncClientSitemap(db, env.AI, id, mode, {
+    cpuBudgetMs: INLINE_BUDGET_MS,
+    brightData: { BRIGHTDATA_TOKEN: env.BRIGHTDATA_TOKEN, BRIGHTDATA_ZONE: env.BRIGHTDATA_ZONE },
+  });
   return NextResponse.json(result);
 }

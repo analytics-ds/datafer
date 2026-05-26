@@ -1,4 +1,5 @@
 import { Parser } from "htmlparser2";
+import { brightDataFetch, looksLikeChallengePage, type BrightDataEnv } from "./brightdata-fetch";
 import type { SitemapUrl } from "./types";
 
 const FETCH_TIMEOUT_MS = 15000;
@@ -15,28 +16,23 @@ const MAX_SITEMAP_BYTES = 20 * 1024 * 1024;
 // - Mélange urlset/sitemapindex
 // - URLs sans <lastmod>
 // - HTML servi à la place du XML (retourne [])
+// - Sites protégés (Datadome, etc.) qui répondent 403 sur fetch direct :
+//   fallback Bright Data Web Unlocker si BRIGHTDATA_TOKEN configuré.
 //
 // Ne lit pas <lastmod> pour la décision de fraîcheur : c'est volontaire,
 // on s'appuie sur HEAD + hash de contenu côté sync (cf. sync.ts).
-export async function fetchAndParseSitemap(rootUrl: string): Promise<SitemapUrl[]> {
+export async function fetchAndParseSitemap(
+  rootUrl: string,
+  env: BrightDataEnv = {},
+): Promise<SitemapUrl[]> {
   const seen = new Set<string>();
   const out: SitemapUrl[] = [];
-  await walk(rootUrl, 0, seen, out);
+  await walk(rootUrl, 0, seen, out, env);
   return out;
 }
 
-async function walk(
-  sitemapUrl: string,
-  depth: number,
-  seen: Set<string>,
-  out: SitemapUrl[],
-): Promise<void> {
-  if (depth > MAX_DEPTH) return;
-  if (seen.has(sitemapUrl)) return;
-  seen.add(sitemapUrl);
-  if (out.length >= MAX_URLS) return;
-
-  let xml: string;
+async function fetchSitemapXml(sitemapUrl: string, env: BrightDataEnv): Promise<string | null> {
+  // 1. Fetch direct
   try {
     const res = await fetch(sitemapUrl, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -46,29 +42,66 @@ async function walk(
       },
       redirect: "follow",
     });
-    if (!res.ok) {
-      console.log(`[maillage] sitemap fetch fail ${res.status} url=${sitemapUrl}`);
-      return;
-    }
-    const contentLength = Number(res.headers.get("content-length") || 0);
-    if (contentLength > MAX_SITEMAP_BYTES) {
-      console.log(`[maillage] sitemap too large bytes=${contentLength} url=${sitemapUrl}`);
-      return;
-    }
-    xml = await res.text();
-    if (xml.length > MAX_SITEMAP_BYTES) {
-      console.log(`[maillage] sitemap too large after read bytes=${xml.length} url=${sitemapUrl}`);
-      return;
+    if (res.ok) {
+      const contentLength = Number(res.headers.get("content-length") || 0);
+      if (contentLength > MAX_SITEMAP_BYTES) {
+        console.log(`[maillage] sitemap too large bytes=${contentLength} url=${sitemapUrl}`);
+        return null;
+      }
+      const body = await res.text();
+      if (body.length > MAX_SITEMAP_BYTES) {
+        console.log(`[maillage] sitemap too large after read bytes=${body.length} url=${sitemapUrl}`);
+        return null;
+      }
+      // Si le serveur a répondu 200 avec une page de challenge à la place
+      // du XML attendu, on bascule sur BD comme si c'était un 403.
+      if (!looksLikeChallengePage(body)) {
+        return body;
+      }
+      console.log(`[maillage] sitemap direct ok-but-challenge url=${sitemapUrl}`);
+    } else {
+      console.log(`[maillage] sitemap direct fail ${res.status} url=${sitemapUrl}`);
     }
   } catch (e) {
-    console.log(`[maillage] sitemap fetch error url=${sitemapUrl} err=${(e as Error).message}`);
-    return;
+    console.log(`[maillage] sitemap direct error url=${sitemapUrl} err=${(e as Error).message}`);
   }
+
+  // 2. Fallback Bright Data Web Unlocker pour les sites protégés
+  if (env.BRIGHTDATA_TOKEN && env.BRIGHTDATA_ZONE) {
+    const body = await brightDataFetch(sitemapUrl, env);
+    if (body && body.length > 0 && !looksLikeChallengePage(body)) {
+      if (body.length > MAX_SITEMAP_BYTES) {
+        console.log(`[maillage] sitemap BD too large bytes=${body.length} url=${sitemapUrl}`);
+        return null;
+      }
+      console.log(`[maillage] sitemap via BD ok url=${sitemapUrl} bytes=${body.length}`);
+      return body;
+    }
+    console.log(`[maillage] sitemap BD KO url=${sitemapUrl}`);
+  }
+
+  return null;
+}
+
+async function walk(
+  sitemapUrl: string,
+  depth: number,
+  seen: Set<string>,
+  out: SitemapUrl[],
+  env: BrightDataEnv,
+): Promise<void> {
+  if (depth > MAX_DEPTH) return;
+  if (seen.has(sitemapUrl)) return;
+  seen.add(sitemapUrl);
+  if (out.length >= MAX_URLS) return;
+
+  const xml = await fetchSitemapXml(sitemapUrl, env);
+  if (!xml) return;
 
   const parsed = parseSitemapXml(xml);
   for (const subSitemap of parsed.sitemaps) {
     if (out.length >= MAX_URLS) return;
-    await walk(subSitemap, depth + 1, seen, out);
+    await walk(subSitemap, depth + 1, seen, out, env);
   }
   for (const u of parsed.urls) {
     if (out.length >= MAX_URLS) return;

@@ -74,7 +74,10 @@ export async function POST(req: Request) {
       .limit(1);
     const mode: "initial" | "incremental" = hasUrls ? "incremental" : "initial";
 
-    const r = await syncClientSitemap(db, e.AI, c.id, mode, { cpuBudgetMs: remaining });
+    const r = await syncClientSitemap(db, e.AI, c.id, mode, {
+      cpuBudgetMs: remaining,
+      brightData: { BRIGHTDATA_TOKEN: e.BRIGHTDATA_TOKEN, BRIGHTDATA_ZONE: e.BRIGHTDATA_ZONE },
+    });
     results.push({
       clientId: c.id,
       ok: r.ok,

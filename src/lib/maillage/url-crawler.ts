@@ -1,4 +1,5 @@
 import { Parser } from "htmlparser2";
+import { brightDataFetch, looksLikeChallengePage, type BrightDataEnv } from "./brightdata-fetch";
 import type { CrawledUrlContent } from "./types";
 
 const FETCH_TIMEOUT_MS = 12000;
@@ -8,13 +9,40 @@ const FIRST_PARAGRAPH_MAX_WORDS = 200;
 const FIRST_PARAGRAPH_MIN_WORDS = 15;
 const USER_AGENT = "DataferSitemapBot/1.0 (+https://datafer.analytics-e0d.workers.dev)";
 
-// Niveau 1 du pipeline : fetch direct, gratuit, 70% des sites passent.
-// Bright Data sera ajouté en fallback uniquement si on observe trop d'échecs
-// en prod ; pour l'instant on accepte qu'un site protégé n'indexe pas, le
-// site du client lui-même n'est presque jamais protégé contre lui-même.
+// Pipeline à 2 niveaux :
+// 1. Fetch direct (gratuit, ~70% des sites passent).
+// 2. Bright Data Web Unlocker en fallback (~$1.50/CPM) pour les sites
+//    protégés type Celio/Datadome qui répondent 403 ou avec un challenge JS.
 //
-// Retourne null si HTTP non-OK, timeout, ou contenu non HTML.
-export async function crawlUrlForIndex(url: string): Promise<CrawledUrlContent | null> {
+// Quand on passe par BD, les headers HTTP du serveur d'origine (ETag,
+// Last-Modified) ne sont pas exposés, on stocke null. La détection de
+// changement repose alors uniquement sur le hash de contenu.
+export async function crawlUrlForIndex(
+  url: string,
+  env: BrightDataEnv = {},
+): Promise<CrawledUrlContent | null> {
+  // 1. Fetch direct
+  const direct = await tryFetchDirect(url);
+  if (direct && !looksLikeChallengePage(direct.html)) {
+    return await buildContent(url, direct.html, direct.etag, direct.lastMod);
+  }
+
+  // 2. Fallback Bright Data
+  if (env.BRIGHTDATA_TOKEN && env.BRIGHTDATA_ZONE) {
+    const html = await brightDataFetch(url, env, { timeoutMs: 30000 });
+    if (html && !looksLikeChallengePage(html)) {
+      console.log(`[maillage] crawl via BD ok url=${url} bytes=${html.length}`);
+      return await buildContent(url, html, null, null);
+    }
+    console.log(`[maillage] crawl BD KO url=${url}`);
+  }
+
+  return null;
+}
+
+async function tryFetchDirect(
+  url: string,
+): Promise<{ html: string; etag: string | null; lastMod: string | null } | null> {
   try {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -26,36 +54,45 @@ export async function crawlUrlForIndex(url: string): Promise<CrawledUrlContent |
       redirect: "follow",
     });
     if (!res.ok) {
-      console.log(`[maillage] crawl http=${res.status} url=${url}`);
+      console.log(`[maillage] crawl direct http=${res.status} url=${url}`);
       return null;
     }
     const ct = res.headers.get("content-type") || "";
     if (!ct.includes("html") && !ct.includes("xml")) {
-      console.log(`[maillage] crawl non-html ct=${ct} url=${url}`);
+      console.log(`[maillage] crawl direct non-html ct=${ct} url=${url}`);
       return null;
     }
     const etag = res.headers.get("etag");
     const lastMod = res.headers.get("last-modified");
     const text = await res.text();
     const html = text.length > MAX_HTML_BYTES ? text.slice(0, MAX_HTML_BYTES) : text;
-    const extracted = extractMetadata(html);
-    const contentHash = await sha256(
-      [extracted.title || "", extracted.h1 || "", extracted.metaDescription || "", extracted.firstParagraph || ""].join("|"),
-    );
-    return {
-      url,
-      title: extracted.title,
-      h1: extracted.h1,
-      metaDescription: extracted.metaDescription,
-      firstParagraph: extracted.firstParagraph,
-      etag,
-      lastModifiedHeader: lastMod,
-      contentHash,
-    };
+    return { html, etag, lastMod };
   } catch (e) {
-    console.log(`[maillage] crawl error url=${url} err=${(e as Error).message}`);
+    console.log(`[maillage] crawl direct error url=${url} err=${(e as Error).message}`);
     return null;
   }
+}
+
+async function buildContent(
+  url: string,
+  html: string,
+  etag: string | null,
+  lastMod: string | null,
+): Promise<CrawledUrlContent> {
+  const extracted = extractMetadata(html);
+  const contentHash = await sha256(
+    [extracted.title || "", extracted.h1 || "", extracted.metaDescription || "", extracted.firstParagraph || ""].join("|"),
+  );
+  return {
+    url,
+    title: extracted.title,
+    h1: extracted.h1,
+    metaDescription: extracted.metaDescription,
+    firstParagraph: extracted.firstParagraph,
+    etag,
+    lastModifiedHeader: lastMod,
+    contentHash,
+  };
 }
 
 // HEAD request léger pour vérifier si l'URL a changé sans télécharger le body.

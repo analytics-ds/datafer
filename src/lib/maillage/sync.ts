@@ -32,6 +32,7 @@ import type * as schema from "@/db/schema";
 import { fetchAndParseSitemap } from "./sitemap-parser";
 import { crawlUrlForIndex, headCheck } from "./url-crawler";
 import { buildUrlEmbeddingInput, embedTexts, encodeEmbedding } from "./url-embedder";
+import type { BrightDataEnv } from "./brightdata-fetch";
 import type { SitemapSyncMode } from "./types";
 
 const DEFAULT_CPU_BUDGET_MS = 240_000;
@@ -57,8 +58,9 @@ export async function syncClientSitemap(
   ai: Ai | undefined,
   clientId: string,
   mode: SitemapSyncMode,
-  opts: { cpuBudgetMs?: number } = {},
+  opts: { cpuBudgetMs?: number; brightData?: BrightDataEnv } = {},
 ): Promise<SyncResult> {
+  const brightData = opts.brightData ?? {};
   const t0 = Date.now();
   const budgetMs = opts.cpuBudgetMs ?? DEFAULT_CPU_BUDGET_MS;
   const stopAt = t0 + budgetMs;
@@ -90,7 +92,7 @@ export async function syncClientSitemap(
     .where(eq(client.id, clientId));
 
   try {
-    const sitemapEntries = await fetchAndParseSitemap(clientRow.sitemapUrl);
+    const sitemapEntries = await fetchAndParseSitemap(clientRow.sitemapUrl, brightData);
     if (sitemapEntries.length === 0) {
       result.error = "sitemap vide ou injoignable";
       await db
@@ -164,7 +166,7 @@ export async function syncClientSitemap(
         break;
       }
       const batch = allToProcess.slice(i, i + URLS_PER_BATCH);
-      await processBatch(db, ai, clientId, batch, existingByUrl, result);
+      await processBatch(db, ai, brightData, clientId, batch, existingByUrl, result);
     }
 
     // Mise à jour finale du client
@@ -197,6 +199,7 @@ export async function syncClientSitemap(
 async function processBatch(
   db: DB,
   ai: Ai | undefined,
+  brightData: BrightDataEnv,
   clientId: string,
   batch: { url: string; mustGet: boolean }[],
   existingByUrl: Map<string, typeof clientUrlIndex.$inferSelect>,
@@ -228,7 +231,7 @@ async function processBatch(
       }
     }
 
-    const crawled = await crawlUrlForIndex(url);
+    const crawled = await crawlUrlForIndex(url, brightData);
     if (!crawled) {
       // Crawl raté : on touch lastCheckedAt même en cas d'échec pour ne pas
       // boucler dessus en permanence
