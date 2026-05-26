@@ -44,6 +44,19 @@ max_concurrency = 3
 max_retries = 1
 dead_letter_queue = "datafer-analysis-dlq"
 
+# Queue sitemap maillage interne : un message par client à sync. Le handler
+# tourne syncClientSitemap avec budget ~280s CPU. Si hasMore=true, on
+# ré-enqueue un follow-up pour continuer là où on s'est arrêté. Permet
+# d'indexer un gros e-com protégé (Celio, etc.) progressivement sans
+# bloquer le worker HTTP.
+[[queues.consumers]]
+queue = "datafer-sitemap-sync"
+max_batch_size = 1
+max_batch_timeout = 5
+max_concurrency = 2
+max_retries = 1
+dead_letter_queue = "datafer-sitemap-sync-dlq"
+
 [vars]
 SERP_PROVIDER = "crazyserp"
 

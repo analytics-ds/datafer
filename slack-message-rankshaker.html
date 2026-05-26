@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>RankShaker · Messages Slack</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 24px;
+    background: #F3EDE8;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    color: #101010;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 {
+    font-size: 36px;
+    letter-spacing: -0.8px;
+    margin: 0 0 8px;
+  }
+  .sub {
+    color: #5C5C5C;
+    font-size: 14px;
+    margin: 0 0 32px;
+  }
+  .card {
+    background: #FFFFFF;
+    border: 1px solid #E8E2DC;
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 28px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  }
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .tag {
+    display: inline-block;
+    background: #101010;
+    color: #FFFFFF;
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+  }
+  h2 {
+    font-size: 20px;
+    margin: 0;
+    letter-spacing: -0.3px;
+  }
+  textarea {
+    width: 100%;
+    border: 1px solid #E8E2DC;
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-family: ui-monospace, SF Mono, Menlo, monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+    background: #FAF6F2;
+    color: #101010;
+    resize: vertical;
+    min-height: 220px;
+    outline: none;
+  }
+  textarea:focus { border-color: #ADAC2F; }
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    transition: all .15s;
+  }
+  button.primary {
+    background: #101010;
+    color: #FFFFFF;
+  }
+  button.primary:hover { background: #2A2A2A; }
+  button.primary.copied { background: #2D8C5A; }
+  button.secondary {
+    background: transparent;
+    color: #5C5C5C;
+    border: 1px solid #E8E2DC;
+  }
+  button.secondary:hover { background: #FAF6F2; color: #101010; }
+  .hint {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #8A8A8A;
+  }
+  .footer {
+    text-align: center;
+    font-size: 11px;
+    color: #8A8A8A;
+    margin-top: 16px;
+  }
+  .footer code {
+    background: #FAF6F2;
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid #E8E2DC;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>RankShaker <span style="color:#ADAC2F">·</span> messages Slack</h1>
+    <p class="sub">2 versions au choix. Clic sur <strong>Copier</strong>, colle dans Slack, le mrkdwn sera interprété automatiquement.</p>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Version courte</h2>
+        <span class="tag">Recommandée</span>
+      </div>
+      <textarea id="short" readonly>:rocket: *RankShaker est en ligne pour la team !*
+
+Hello tout le monde,
+
+L'outil d'optimisation sémantique maison est dispo en bêta interne.
+C'est notre alternative à Surfer SEO, construite sur mesure pour nos workflows.
+
+:link: <https://datafer.analytics-e0d.workers.dev|Accès RankShaker>
+:key: Login : `votre.email@datashake.fr` / mdp : `1234` (à changer au 1er login)
+
+*:point_right: Ce qu'on vous demande pendant la bêta :*
+• Stressez l'outil au maximum, on veut tout casser pour solidifier avant release client
+• Testez-le *en parallèle de Surfer* sur vos prochains briefs pour comparer
+• Utilisez-le pour vos rédactions perso, c'est le meilleur moyen de vraiment l'éprouver
+• Tous les bugs / suggestions / questions : *bouton Feedback en bas à droite* (capture d'écran possible direct dans la fenêtre)
+
+*:warning: ATTENTION — Rien ne sort de l'agence pour le moment*
+On est en bêta interne, *ne partagez aucun lien RankShaker à un client*. Continuez vos livrables clients sur Surfer le temps qu'on valide ensemble.
+
+Hâte d'avoir vos retours, vous êtes ceux qui allez le rendre génial :muscle:
+
+— RankShaker by datashake</textarea>
+      <div class="actions">
+        <button class="primary" data-copy="short">Copier</button>
+        <button class="secondary" onclick="document.getElementById('short').select()">Sélectionner tout</button>
+      </div>
+      <div class="hint">Environ 1300 caractères · adaptée aux canaux #general ou un thread d'annonce.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Version longue</h2>
+        <span class="tag" style="background:#5C5C5C">Détaillée</span>
+      </div>
+      <textarea id="long" readonly>:rocket: *RankShaker est en ligne pour la team !*
+
+Hello la team,
+
+Ça y est, *RankShaker* (l'outil d'optimisation sémantique maison qu'on construit depuis quelques semaines) est dispo en *bêta interne*. C'est notre alternative à Surfer SEO, pensée pour nos workflows : dossiers clients, partage de briefs, scoring en temps réel, recommandations NLP par tier (essentiels / importants / opportunités), suggestions GEO, etc.
+
+:link: *Accès :* <https://datafer.analytics-e0d.workers.dev|RankShaker>
+:key: *Login :* votre adresse `@datashake.fr` / mdp `1234` (à changer au 1er login)
+:bust_in_silhouette: Votre photo et votre nom sont déjà configurés, vous êtes prêts.
+
+*:point_right: Ce qu'on attend de vous pendant la bêta :*
+1. *Stressez l'outil au maximum.* Lancez plein d'analyses, testez tous les coins, essayez de casser des trucs. Plus on remonte les bugs maintenant, plus la version client sera solide.
+2. *Testez en parallèle de Surfer.* Sur vos prochains briefs, faites les deux et comparez : suggestions, scoring, ergonomie. C'est le meilleur moyen de savoir où on est meilleurs et où on a encore du gap.
+3. *Utilisez-le pour vos rédactions perso.* PBN, blog perso, side projects, c'est parfait pour s'approprier l'outil sans pression.
+4. *Tout bug ou idée → bouton Feedback en bas à droite.* C'est un mini chat dans lequel vous décrivez ce qui cloche, vous pouvez :
+   • Faire une capture d'écran (drag&drop ou *Cmd+V* après un screenshot système)
+   • Choisir une catégorie : Bug / Suggestion / Question
+   • L'URL et votre identité sont auto-remplies, vous n'avez qu'à écrire
+
+*:warning: ATTENTION — Rien ne sort de l'agence pour l'instant*
+On est en *bêta interne uniquement*. *Aucun lien RankShaker ne doit être envoyé à un client.* Continuez vos livrables clients sur Surfer le temps qu'on valide ensemble la maturité de l'outil.
+
+Si vous avez la moindre question pendant que vous testez, balancez-la via le bouton Feedback ou en MP direct. On va itérer vite sur vos retours pour vous livrer un outil dont vous serez fiers.
+
+Allez, on shake les SERP :muscle:
+
+— *RankShaker* by datashake</textarea>
+      <div class="actions">
+        <button class="primary" data-copy="long">Copier</button>
+        <button class="secondary" onclick="document.getElementById('long').select()">Sélectionner tout</button>
+      </div>
+      <div class="hint">Environ 2200 caractères · adaptée pour un post #annonces qui pose le contexte complet.</div>
+    </div>
+
+    <p class="footer">Slack interprète <code>*gras*</code>, <code>_italique_</code>, <code>:emoji:</code> et <code>&lt;URL|texte&gt;</code> automatiquement à la publication.</p>
+  </div>
+
+<script>
+  document.querySelectorAll('button[data-copy]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-copy');
+      const txt = document.getElementById(id).value;
+      try {
+        await navigator.clipboard.writeText(txt);
+        const original = btn.textContent;
+        btn.textContent = '✓ Copié !';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = original;
+          btn.classList.remove('copied');
+        }, 1800);
+      } catch {
+        // Fallback : sélectionne le textarea pour que l'utilisateur fasse Cmd+C
+        document.getElementById(id).select();
+        alert('Sélectionné. Fais Cmd+C pour copier.');
+      }
+    });
+  });
+</script>
+</body>
+</html>

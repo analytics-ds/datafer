@@ -2,11 +2,9 @@
 //
 // Stratégie : à chaque tick, on prend les N clients dont la dernière sync est
 // la plus ancienne (ou jamais syncés mais avec sitemapUrl configuré), et on
-// les traite en mode "incremental" (ou "initial" si l'index est vide). On
-// alloue un budget CPU global pour rester sous le timeout du worker Next.js
-// (~25s). Si tous les clients ne peuvent pas être traités en un tick, le
-// suivant prendra le relais (les clients déjà traités auront un
-// sitemapLastSyncAt récent et passeront en fin de file).
+// enqueue un message par client dans la queue `datafer-sitemap-sync`. Le
+// consumer dispose de 300s CPU pour traiter chaque message et ré-enqueue
+// automatiquement un follow-up s'il reste du travail.
 //
 // Appelé par .github/workflows/maillage-sync.yml toutes les heures.
 
@@ -15,13 +13,11 @@ import { asc, isNotNull, eq, sql } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/db";
 import { client, clientUrlIndex } from "@/db/schema";
-import { syncClientSitemap } from "@/lib/maillage/sync";
 import type { DataferEnv } from "@/lib/datafer-env";
 
 export const dynamic = "force-dynamic";
 
-const PER_TICK_BUDGET_MS = 22_000;
-const MAX_CLIENTS_PER_TICK = 5;
+const MAX_CLIENTS_PER_TICK = 10;
 
 export async function POST(req: Request) {
   const { env } = getCloudflareContext();
@@ -43,9 +39,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  if (!e.SITEMAP_SYNC_QUEUE) {
+    return NextResponse.json({ error: "queue binding missing" }, { status: 500 });
+  }
+
   const db = getDb();
   const t0 = Date.now();
-  const stopAt = t0 + PER_TICK_BUDGET_MS;
 
   // Sélectionne les clients avec sitemap configuré, ordonnés par dernière sync
   // ASC (les plus en retard d'abord). NULL d'abord (jamais syncés).
@@ -60,33 +59,17 @@ export async function POST(req: Request) {
     .limit(MAX_CLIENTS_PER_TICK)
     .all();
 
-  const results: Array<{ clientId: string; ok: boolean; mode: string; added: number; checked: number; error?: string }> = [];
-
+  const enqueued: Array<{ clientId: string; mode: string }> = [];
   for (const c of clients) {
-    if (Date.now() > stopAt) break;
-    const remaining = stopAt - Date.now();
-    if (remaining < 3000) break;
-
     const [hasUrls] = await db
       .select({ id: clientUrlIndex.id })
       .from(clientUrlIndex)
       .where(eq(clientUrlIndex.clientId, c.id))
       .limit(1);
     const mode: "initial" | "incremental" = hasUrls ? "incremental" : "initial";
-
-    const r = await syncClientSitemap(db, e.AI, c.id, mode, {
-      cpuBudgetMs: remaining,
-      brightData: { BRIGHTDATA_TOKEN: e.BRIGHTDATA_TOKEN, BRIGHTDATA_ZONE: e.BRIGHTDATA_ZONE },
-    });
-    results.push({
-      clientId: c.id,
-      ok: r.ok,
-      mode: r.mode,
-      added: r.urlsAdded,
-      checked: r.urlsChecked,
-      ...(r.error ? { error: r.error } : {}),
-    });
+    await e.SITEMAP_SYNC_QUEUE.send({ type: "sitemap-sync", clientId: c.id, mode });
+    enqueued.push({ clientId: c.id, mode });
   }
 
-  return NextResponse.json({ ok: true, durationMs: Date.now() - t0, processed: results });
+  return NextResponse.json({ ok: true, durationMs: Date.now() - t0, enqueued });
 }

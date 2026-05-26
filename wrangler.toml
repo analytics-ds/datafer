@@ -19,6 +19,15 @@ migrations_dir = "drizzle"
 binding = "ANALYSIS_QUEUE"
 queue = "datafer-analysis"
 
+# Queue dédiée au maillage interne : le bouton "Lancer l'index" / "Resync"
+# côté UI enqueue un message {clientId, mode} au lieu de faire la sync
+# inline (qui timeout à ~30s sur les sites lents type Celio/Datadome qui
+# crawl en 3-10s par URL via Bright Data). Le consumer dispose de 300s CPU
+# par invocation et ré-enqueue un follow-up si hasMore=true.
+[[queues.producers]]
+binding = "SITEMAP_SYNC_QUEUE"
+queue = "datafer-sitemap-sync"
+
 # Cloudflare Workers AI : utilisé pour générer les embeddings sémantiques
 # (modèle bge-m3 multilingue) qui permettent de calculer la similarité entre
 # le keyword et les nlpTerms et de clusteriser les termes par champ lexical.

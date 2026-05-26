@@ -12,6 +12,7 @@
  */
 
 import type { CreateBriefInput } from "./briefs-service-types";
+import type { SitemapSyncMessage } from "./maillage/types";
 
 export type AnalysisMessage = {
   briefId: string;
@@ -24,6 +25,7 @@ export type DataferEnv = {
   DB: D1Database;
   AI?: Ai;
   ANALYSIS_QUEUE?: Queue<AnalysisMessage>;
+  SITEMAP_SYNC_QUEUE?: Queue<SitemapSyncMessage>;
   // Vars
   SERP_PROVIDER?: string;
   CF_ACCOUNT_ID?: string;
