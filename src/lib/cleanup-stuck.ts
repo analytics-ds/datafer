@@ -57,13 +57,11 @@ export async function cleanupStuckBriefs(db: D1Database): Promise<CleanupResult>
 
   if (stuck.length === 0) return { cleaned: 0, ids: [] };
 
+  // Auto-delete sur worker stuck (demande Pierre 2026-05-26) : aligné sur
+  // completeBriefAnalysis qui supprime aussi le brief en cas d'échec.
+  // L'user ne voit plus de briefs ratés traîner et peut recréer.
   await orm
-    .update(brief)
-    .set({
-      status: "failed",
-      errorMessage: "analysis timed out (worker crashed before status update)",
-      updatedAt: new Date(),
-    })
+    .delete(brief)
     .where(
       and(
         eq(brief.status, "pending"),
@@ -72,7 +70,7 @@ export async function cleanupStuckBriefs(db: D1Database): Promise<CleanupResult>
       ),
     );
 
-  console.log("[cleanup-stuck] forced failed", {
+  console.log("[cleanup-stuck] deleted stuck briefs", {
     count: stuck.length,
     ids: stuck.map((s) => s.id),
   });

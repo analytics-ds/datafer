@@ -351,36 +351,52 @@ async function fetchCrazyserpPage(
     googleDomain,
   });
   const url = `https://crazyserp.com/api/search?${params.toString()}`;
-  // try/catch obligatoire : sans lui, un timeout (AbortSignal.timeout) ou une
-  // erreur réseau lève "The operation was aborted due to timeout" qui remonte
-  // jusqu'au catch global de runBriefAnalysis et tue tout le brief. Tous les
-  // appelants (fetchSerpFromCrazyserp, fetchCrazyserpTop100) attendent `null`
-  // en cas d'échec pour déclencher la bascule clé fallback. Bug remonté par
-  // Pierre le 2026-05-22 (brief "idée recette repas").
-  try {
-    const r = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      // 45s (au lieu de 25s) : "idée recette repas" et autres KW génériques
-      // lourds dépassaient les 25s sur la page 2 CrazySerp et faisaient échouer
-      // le brief. 45s × 2 pages = 90s max, ce qui laisse encore ~90s dans le
-      // deadline global de 180s (cf. ANALYSIS_DEADLINE_MS) pour crawl + NLP.
-      signal: AbortSignal.timeout(45000),
-    });
-    if (!r.ok) return null;
-    const d = (await r.json()) as CrazySerpResponse;
-    if (!d.success) return null;
-    return d;
-  } catch (e) {
-    console.error("[crazyserp] page fetch failed", {
-      page,
-      keyword,
-      error: e instanceof Error ? e.message : String(e),
-    });
-    return null;
+  // 3 tentatives par appel avec backoff 0s / 1s / 2s pour absorber les
+  // latences transient de CrazySerp (le service a parfois des pics de
+  // latence >30s qui causent des timeouts puis se résorbent dans la seconde
+  // suivante). Demande Pierre 2026-05-26 (brief "piercing oreille" qui a
+  // timeout sur les 2 clés en même temps).
+  //
+  // Timeout 30s par tentative × 3 max = 90s worst case par appel. Combiné
+  // avec la cascade primary → fallback côté caller, on reste sous le
+  // deadline ANALYSIS_DEADLINE_MS de 180s.
+  const maxAttempts = 3;
+  let lastError: string = "";
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
+    }
+    try {
+      const r = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!r.ok) {
+        lastError = `http ${r.status}`;
+        continue;
+      }
+      const d = (await r.json()) as CrazySerpResponse;
+      if (!d.success) {
+        lastError = "success=false";
+        continue;
+      }
+      if (attempt > 0) {
+        console.log("[crazyserp] page fetch ok after retry", { page, keyword, attempt });
+      }
+      return d;
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
+    }
   }
+  console.error("[crazyserp] page fetch failed after 3 attempts", {
+    page,
+    keyword,
+    error: lastError,
+  });
+  return null;
 }
 
 async function fetchSerpFromCrazyserp(

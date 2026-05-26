@@ -261,10 +261,13 @@ export async function completeBriefAnalysis(
       error: res.ok ? undefined : res.error,
     });
     if (!res.ok) {
-      await db
-        .update(brief)
-        .set({ status: "failed", errorMessage: res.error, updatedAt: new Date() })
-        .where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
+      // Auto-delete sur échec analyse plutôt que de garder le brief en
+      // "failed" (demande Pierre 2026-05-26) : l'user ne voit pas le brief
+      // raté traîner dans sa liste, et il peut juste recréer un brief
+      // identique sans avoir à cleanup le précédent. Le motif d'échec est
+      // loggé côté worker pour debug.
+      console.log("[brief-analysis] deleting failed brief", { briefId, error: res.error });
+      await db.delete(brief).where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
       return;
     }
     // Filtrer sur status="pending" : si le cron cleanup-stuck a déjà
@@ -294,10 +297,8 @@ export async function completeBriefAnalysis(
       .where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown error";
-    await db
-      .update(brief)
-      .set({ status: "failed", errorMessage: msg.slice(0, 500), updatedAt: new Date() })
-      .where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
+    console.log("[brief-analysis] deleting brief after uncaught error", { briefId, error: msg });
+    await db.delete(brief).where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
   }
 }
 
