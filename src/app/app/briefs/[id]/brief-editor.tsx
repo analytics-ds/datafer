@@ -24,6 +24,11 @@ import { faviconUrl } from "@/lib/favicon";
 import { EditorToolbar } from "./toolbar";
 import { MaillageSection } from "./maillage-section";
 import { ShareBriefPanel } from "../share-brief-panel";
+
+// Feature flag : maillage interne masqué côté UI le 2026-05-26 sur demande
+// de Pierre (projet en pause). Repasse à `true` pour réafficher la
+// MaillageSection sous l'éditeur (consultant + share).
+const MAILLAGE_ENABLED = false;
 import { CompetitorDownloadMenu } from "./competitor-download-menu";
 import { StatusPicker } from "../status-picker";
 import { TagPicker, type TagDTO } from "../tag-picker";
@@ -671,12 +676,16 @@ export function BriefEditor(props: BriefEditorProps) {
               />
             </div>
 
-            <MaillageSection
-              endpoint={maillageEndpoint}
-              getEditorHtml={getEditorHtml}
-              onInsertLink={handleInsertMaillageLink}
-              readOnly={isShareMode}
-            />
+            {/* Feature maillage interne mise de côté 2026-05-26. Le code
+                reste en place pour réactivation via MAILLAGE_ENABLED. */}
+            {MAILLAGE_ENABLED && (
+              <MaillageSection
+                endpoint={maillageEndpoint}
+                getEditorHtml={getEditorHtml}
+                onInsertLink={handleInsertMaillageLink}
+                readOnly={isShareMode}
+              />
+            )}
           </div>
 
           {/* Sidebar */}

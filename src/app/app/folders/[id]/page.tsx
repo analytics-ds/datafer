@@ -16,6 +16,11 @@ import { SearchableBriefList } from "../../briefs/searchable-brief-list";
 import { listTagsForBriefs, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "../../briefs/workflow-status";
 
+// Feature flag : maillage interne masqué côté UI le 2026-05-26 sur demande
+// de Pierre (projet en pause). Repasse à `true` pour réactiver le
+// SitemapPanel sur cette page + la MaillageSection dans BriefEditor.
+const MAILLAGE_ENABLED = false;
+
 export const dynamic = "force-dynamic";
 
 export default async function FolderDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -114,14 +119,18 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
         }
       />
 
-      <SitemapPanel
-        clientId={folder.id}
-        initialSitemapUrl={folder.sitemapUrl}
-        initialStatus={folder.sitemapStatus}
-        initialLastSyncAt={folder.sitemapLastSyncAt}
-        initialUrlCount={urlIndexCount}
-        initialError={folder.sitemapError}
-      />
+      {/* Feature maillage interne mise de côté 2026-05-26. Le code reste
+          en place pour réactivation rapide via le flag MAILLAGE_ENABLED. */}
+      {MAILLAGE_ENABLED && (
+        <SitemapPanel
+          clientId={folder.id}
+          initialSitemapUrl={folder.sitemapUrl}
+          initialStatus={folder.sitemapStatus}
+          initialLastSyncAt={folder.sitemapLastSyncAt}
+          initialUrlCount={urlIndexCount}
+          initialError={folder.sitemapError}
+        />
+      )}
 
       {briefs.length === 0 ? (
         <EmptyState

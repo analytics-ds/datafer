@@ -1,12 +1,12 @@
 name: Maillage interne sync
 
 on:
-  schedule:
-    # Toutes les heures. Le tick traite jusqu'à 5 clients dans un budget de
-    # ~22s, en privilégiant les clients dont la dernière sync est la plus
-    # ancienne. Un client à 50k URLs en mode initial est traité progressivement
-    # sur plusieurs ticks (~50 URLs / batch, fetch direct + embedding bge-m3).
-    - cron: "17 * * * *"
+  # Feature maillage interne mise de côté 2026-05-26 : cron désactivé pour
+  # ne plus enqueue de sync et donc ne plus consommer Bright Data en
+  # background. Garde workflow_dispatch pour relancer manuellement si on
+  # réactive le projet.
+  # schedule:
+  #   - cron: "17 * * * *"
   workflow_dispatch: {}
 
 permissions: {}
