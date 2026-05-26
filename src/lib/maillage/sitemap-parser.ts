@@ -27,7 +27,120 @@ export async function fetchAndParseSitemap(
 ): Promise<SitemapUrl[]> {
   const seen = new Set<string>();
   const out: SitemapUrl[] = [];
+
+  // 1. Tente d'abord l'URL fournie par l'utilisateur.
   await walk(rootUrl, 0, seen, out, env);
+  if (out.length > 0) return out;
+
+  // 2. Si rien, lance une discovery automatique : on tente plusieurs
+  // typologies courantes + on parse le robots.txt pour les directives
+  // Sitemap:. Couvre les CMS qui exposent leur sitemap sous un nom
+  // différent du défaut (sitemap_index.xml pour WordPress/Yoast,
+  // sitemap-index.xml pour certains Salesforce, multi-sitemap par section,
+  // etc.).
+  const discovered = await discoverSitemapCandidates(rootUrl, env);
+  for (const candidate of discovered) {
+    if (out.length >= MAX_URLS) break;
+    if (seen.has(candidate)) continue;
+    await walk(candidate, 0, seen, out, env);
+    if (out.length > 0) {
+      console.log(`[maillage] sitemap discovered via fallback url=${candidate} urls=${out.length}`);
+      return out;
+    }
+  }
+  return out;
+}
+
+// Candidates classiques explorés par toutes les typologies de CMS.
+const COMMON_SITEMAP_PATHS = [
+  "/sitemap.xml",
+  "/sitemap_index.xml",
+  "/sitemap-index.xml",
+  "/sitemap1.xml",
+  "/sitemap/sitemap.xml",
+  "/wp-sitemap.xml",
+  "/sitemap.aspx",
+  "/sitemaps/sitemap.xml",
+];
+
+// Cherche tous les sitemaps possibles à partir d'une URL de base ou d'un
+// sitemap qui a échoué. Stratégie :
+//   1. Parse robots.txt pour les lignes "Sitemap: ..." (RFC standard).
+//   2. Probe les chemins communs sur le hostname.
+// Retourne les URLs candidates dans l'ordre de priorité.
+async function discoverSitemapCandidates(
+  rootUrl: string,
+  env: BrightDataEnv,
+): Promise<string[]> {
+  let base: URL;
+  try {
+    base = new URL(rootUrl);
+  } catch {
+    return [];
+  }
+
+  const candidates: string[] = [];
+  const seen = new Set<string>([rootUrl]);
+
+  // Lignes Sitemap: du robots.txt (souvent l'info la plus fiable).
+  const robotsSitemaps = await parseRobotsSitemaps(base.origin, env);
+  for (const u of robotsSitemaps) {
+    if (!seen.has(u)) {
+      candidates.push(u);
+      seen.add(u);
+    }
+  }
+
+  // Chemins communs sur le hostname.
+  for (const path of COMMON_SITEMAP_PATHS) {
+    const u = `${base.origin}${path}`;
+    if (!seen.has(u)) {
+      candidates.push(u);
+      seen.add(u);
+    }
+  }
+
+  console.log(`[maillage] sitemap discovery candidates=${candidates.length} base=${base.origin}`);
+  return candidates;
+}
+
+async function parseRobotsSitemaps(origin: string, env: BrightDataEnv): Promise<string[]> {
+  const robotsUrl = `${origin}/robots.txt`;
+  let body: string | null = null;
+  try {
+    const res = await fetch(robotsUrl, {
+      signal: AbortSignal.timeout(8000),
+      headers: { "User-Agent": "DataferSitemapBot/1.0 (+https://datafer.analytics-e0d.workers.dev)" },
+      redirect: "follow",
+    });
+    if (res.ok) {
+      const txt = await res.text();
+      if (txt.length < 1_000_000) body = txt;
+    }
+  } catch {
+    // ignore, on tentera BD
+  }
+  if (!body && env.BRIGHTDATA_TOKEN && env.BRIGHTDATA_ZONE) {
+    body = await brightDataFetch(robotsUrl, env, { timeoutMs: 20000 });
+  }
+  if (!body) return [];
+
+  const out: string[] = [];
+  for (const line of body.split(/\r?\n/)) {
+    const m = line.match(/^\s*sitemap\s*:\s*(.+)$/i);
+    if (m) {
+      const url = m[1].trim();
+      try {
+        new URL(url);
+        out.push(url);
+      } catch {
+        // skip invalid URL
+      }
+    }
+  }
+  if (out.length > 0) {
+    console.log(`[maillage] robots.txt sitemaps found=${out.length} origin=${origin}`);
+  }
   return out;
 }
 
