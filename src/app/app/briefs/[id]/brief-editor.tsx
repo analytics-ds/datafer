@@ -589,16 +589,6 @@ export function BriefEditor(props: BriefEditorProps) {
           {saveStatus === "saved" && <span className="text-[11px] text-[var(--green)] font-semibold">✓ Enregistré</span>}
           <ExportMenu exportEndpoint={exportEndpoint} printUrl={printUrl} />
           {!hideNewAnalysis && (
-            <button
-              onClick={() => setSettingsOpen(true)}
-              title="Paramètres du brief (back-office)"
-              aria-label="Paramètres du brief"
-              className="px-3 py-[8px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[14px] hover:bg-[var(--bg-warm)] transition-colors leading-none"
-            >
-              ⚙
-            </button>
-          )}
-          {!hideNewAnalysis && (
             <ShareBriefPanel briefId={id} initialToken={props.shareToken ?? null} />
           )}
           {!hideNewAnalysis && (
@@ -608,6 +598,16 @@ export function BriefEditor(props: BriefEditorProps) {
             >
               + Nouvelle analyse
             </Link>
+          )}
+          {!hideNewAnalysis && (
+            <button
+              onClick={() => setSettingsOpen(true)}
+              title="Paramètres du brief"
+              aria-label="Paramètres du brief"
+              className="ml-1 inline-flex items-center justify-center w-[38px] h-[38px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] transition-colors"
+            >
+              <SettingsGearIcon />
+            </button>
           )}
         </div>
       </div>
@@ -3366,4 +3366,25 @@ function spellcheckLang(country: string): string {
     case "fr":
     default: return "fr-FR";
   }
+}
+
+// Icône engrenage paramètres (Lucide-style, stroke 1.75, 18px) pour le
+// bouton "Paramètres du brief" en barre d'actions.
+function SettingsGearIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
 }

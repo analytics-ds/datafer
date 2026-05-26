@@ -1,26 +1,13 @@
 "use client";
 
 /**
- * Petite bulle "i" cliquable qui affiche un tooltip natif au hover (via
- * attribut HTML `title`). Utilisée à côté des termes techniques (KGR,
- * cosinus, médiane, presence...) pour expliquer ce que c'est sans
- * encombrer l'UI. Volontairement minimaliste : pas de portail, pas de
- * stateful tooltip, le navigateur affiche le title au survol.
+ * Désactivé 2026-05-26 : les bulles "i" affichaient des tooltips natifs via
+ * l'attribut `title`, mais le comportement était inconsistant (jamais visible
+ * dans certains navigateurs/contexts). Retiré de l'UI à la demande de Pierre.
+ * Le composant retourne null pour ne pas avoir à toucher tous les sites
+ * d'appel ; les props sont conservées pour rester compatible.
  */
-export function InfoBubble({
-  text,
-  className = "",
-}: {
-  text: string;
-  className?: string;
-}) {
-  return (
-    <span
-      title={text}
-      className={`ml-1 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border border-[var(--border-strong)] text-[9px] font-bold text-[var(--text-muted)] align-middle hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors ${className}`}
-      aria-label="Plus d'infos"
-    >
-      i
-    </span>
-  );
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function InfoBubble(_props: { text: string; className?: string }) {
+  return null;
 }
