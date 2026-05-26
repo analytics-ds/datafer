@@ -44,6 +44,14 @@ export async function brightDataFetch(
       return null;
     }
     const body = await r.text();
+    if (body.length === 0) {
+      console.log(`[maillage:bd] empty body url=${url}`);
+      return null;
+    }
+    if (looksLikeChallengePage(body)) {
+      console.log(`[maillage:bd] BD returned challenge page url=${url} sample="${body.slice(0, 120).replace(/\s+/g, " ")}"`);
+      return null;
+    }
     return body;
   } catch (e) {
     console.log(`[maillage:bd] exception url=${url} err=${(e as Error).message}`);
