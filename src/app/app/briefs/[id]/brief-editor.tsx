@@ -1193,6 +1193,16 @@ function EditorSidebar({
           dotColor="var(--purple)"
           defaultOpen
           info="Termes que les concurrents top 10 utilisent fréquemment sur ce KW. Plus la présence est haute, plus le terme est attendu par Google. 3 tiers : Essentiels (≥70%), Importants (40-69%), Opportunités (<40%)."
+          headerAction={
+            <CopyTermsButton
+              terms={[
+                ...(nlp.keywordTerms ?? []).filter((k) => k.kind === "exact").map((k) => k.term),
+                ...essential.map((t) => t.term),
+                ...important.map((t) => t.term),
+                ...opportunity.map((t) => t.term),
+              ]}
+            />
+          }
         >
           <TierTags
             label="Essentiels"
@@ -1390,6 +1400,7 @@ function Section({
   dotColor,
   defaultOpen = false,
   info,
+  headerAction,
   children,
 }: {
   title: string;
@@ -1397,35 +1408,99 @@ function Section({
   defaultOpen?: boolean;
   /** Tooltip d'aide affiché via une bulle "i" à côté du titre. */
   info?: string;
+  /** Élément cliquable affiché à droite du titre (ex : bouton "Copier").
+   * Doit gérer son propre `e.stopPropagation()` pour ne pas toggle la section. */
+  headerAction?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
     <div className="mb-3">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-[6px] text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-[10px] hover:text-[var(--text)] transition-colors"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((v) => !v);
+          }
+        }}
+        className="w-full flex items-center justify-between gap-[6px] text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-[10px] hover:text-[var(--text)] transition-colors cursor-pointer select-none"
       >
         <span className="flex items-center gap-[6px]">
           <span className="w-[6px] h-[6px] rounded-full" style={{ background: dotColor }} />
           {title}
           {info && <InfoBubble text={info} />}
         </span>
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 20 20"
-          fill="none"
-          className="transition-transform shrink-0"
-          style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
-        >
-          <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
+        <span className="flex items-center gap-[8px]">
+          {headerAction}
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 20 20"
+            fill="none"
+            className="transition-transform shrink-0"
+            style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+          >
+            <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </div>
       {open && children}
     </div>
+  );
+}
+
+// Bouton de copie compact à insérer dans le header d'une Section. Stoppe la
+// propagation du click pour ne pas déclencher le toggle de la Section parent.
+function CopyTermsButton({ terms }: { terms: string[] }) {
+  const [copied, setCopied] = useState(false);
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (terms.length === 0) return;
+    const text = terms.join(", ");
+    navigator.clipboard.writeText(text).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      },
+      () => {},
+    );
+  };
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={handleClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          handleClick(e as unknown as React.MouseEvent);
+        }
+      }}
+      title={copied ? "Copié" : `Copier les ${terms.length} mots-clés`}
+      className="inline-flex items-center gap-[3px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-[6px] py-[2px] text-[9px] font-semibold normal-case tracking-normal text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
+    >
+      {copied ? (
+        <>
+          <svg width="10" height="10" viewBox="0 0 20 20" fill="none" aria-hidden>
+            <path d="M5 10l3 3 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Copié
+        </>
+      ) : (
+        <>
+          <svg width="10" height="10" viewBox="0 0 20 20" fill="none" aria-hidden>
+            <rect x="6" y="6" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            <path d="M4 14V5a1 1 0 0 1 1-1h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+          </svg>
+          Copier
+        </>
+      )}
+    </span>
   );
 }
 
