@@ -658,11 +658,10 @@ export function BriefEditor(props: BriefEditorProps) {
           />
         </div>
         <div className="flex items-center gap-2">
-          {/* Indicateur de save : on n'affiche QUE l'état "saving" (silencieux par défaut).
-              Le flash "✓ Enregistré" était trop fréquent (toutes les 2s pendant la
-              rédaction), demande Pierre 2026-05-28. Si un save échoue, on pourrait
-              afficher un état "erreur" plus tard. */}
-          {saveStatus === "saving" && <span className="text-[11px] text-[var(--text-muted)]">Enregistrement…</span>}
+          {/* Indicateur de save complètement silencieux côté UI (demande Pierre
+              2026-05-28). Le save reste opérationnel via le debounce dans le
+              useEffect plus bas, juste rien n'apparaît à l'écran. On pourra
+              afficher un état "erreur" plus tard si besoin de signaler un fail. */}
           <ExportMenu exportEndpoint={exportEndpoint} printUrl={printUrl} />
           {!hideNewAnalysis && (
             <ShareBriefPanel briefId={id} initialToken={props.shareToken ?? null} />
