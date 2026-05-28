@@ -57,11 +57,18 @@ export async function cleanupStuckBriefs(db: D1Database): Promise<CleanupResult>
 
   if (stuck.length === 0) return { cleaned: 0, ids: [] };
 
-  // Auto-delete sur worker stuck (demande Pierre 2026-05-26) : aligné sur
-  // completeBriefAnalysis qui supprime aussi le brief en cas d'échec.
-  // L'user ne voit plus de briefs ratés traîner et peut recréer.
+  // Bascule en status='failed' au lieu de supprimer (changement 2026-05-28) :
+  // l'ancien auto-delete cachait les bugs aux clients API qui voyaient un 404
+  // sur le GET (ex : brief IT qui atteint "saving" puis worker meurt avant
+  // l'UPDATE final). En gardant le brief en failed avec un errorMessage
+  // explicite, on peut diagnostiquer et le client API a une réponse propre.
   await orm
-    .delete(brief)
+    .update(brief)
+    .set({
+      status: "failed",
+      errorMessage: "worker stuck > 180s (likely crash during analysis)",
+      updatedAt: new Date(),
+    })
     .where(
       and(
         eq(brief.status, "pending"),
@@ -70,7 +77,7 @@ export async function cleanupStuckBriefs(db: D1Database): Promise<CleanupResult>
       ),
     );
 
-  console.log("[cleanup-stuck] deleted stuck briefs", {
+  console.log("[cleanup-stuck] marked stuck briefs as failed", {
     count: stuck.length,
     ids: stuck.map((s) => s.id),
   });
