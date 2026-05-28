@@ -3327,14 +3327,26 @@ export async function computeSemanticCentroid(
 ): Promise<{ centroid: number[]; competitorScores: number[] } | null> {
   if (!ai || contents.length === 0) return null;
 
+  // Cap par paragraphe à 1500 chars (~250 tokens) pour rester sous le
+  // context window bge-m3 (8192 tokens/input). Sans ça, un paragraphe issu
+  // d'un PDF universitaire (cas tesi.luiss.it sur "intelligenza artificiale
+  // hr", 2026-05-28) peut dépasser 7000 tokens à lui seul et faire sauter
+  // tout le batch (limit 60k tokens sur Workers AI). La sémantique d'un
+  // paragraphe est capturée largement par ses 1500 premiers caractères.
+  const MAX_PARAGRAPH_CHARS = 1500;
   const competitorParagraphs: string[][] = contents.map((c) =>
-    extractParagraphsFromHtml(c.structuredHtml ?? "", 40),
+    extractParagraphsFromHtml(c.structuredHtml ?? "", 40).map((p) =>
+      p.length > MAX_PARAGRAPH_CHARS ? p.slice(0, MAX_PARAGRAPH_CHARS) : p,
+    ),
   );
   const allParagraphs = competitorParagraphs.flat();
   if (allParagraphs.length === 0) return null;
 
-  // Batch par 50 pour rester sous le timeout Workers AI (~30s par run).
-  const batchSize = 50;
+  // Batch par 25 pour rester sous la limite Workers AI 60k tokens/batch :
+  // 25 × 1500 chars = ~6250 tokens max d'input + ~25k tokens d'output
+  // estimé par le runtime AI. Sous l'ancien batchSize=50 + paragraphes
+  // non cappés, un PDF universitaire faisait sauter le batch (376k tokens).
+  const batchSize = 25;
   // Robustesse (review 2026-05-08, H2) : un échec de batch ne doit pas
   // annuler tous les batches précédents. On marque les indices manquants
   // comme `null` dans `allEmbeddings` et on les exclut du centroïde.

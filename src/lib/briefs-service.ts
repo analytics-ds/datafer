@@ -435,6 +435,17 @@ async function createBriefAnalysisPayload(
   );
   const crawled = settled.map((s) => (s.status === "fulfilled" ? s.value : null));
   const pageContents: PageContent[] = [];
+  // Cap text/structuredHtml par concurrent avant persistance dans serpJson :
+  // un PDF universitaire de 20k+ mots (cas "intelligenza artificiale hr" sur
+  // tesi.luiss.it, 2026-05-28) produit ~150KB de text + autant de
+  // structuredHtml, multiplié par 10 concurrents = serpJson > 2MB qui fait
+  // sauter l'UPDATE D1 final (row size limit) et laisse le brief en pending.
+  // L'analyse NLP/scoring/sémantique a déjà tourné sur le contenu complet via
+  // pageContents — on ne perd rien côté analyse, juste le snapshot affiché
+  // dans l'onglet SERP qui n'a pas besoin du PDF in extenso.
+  const MAX_TEXT_CHARS = 30_000;
+  const MAX_STRUCTURED_HTML_CHARS = 30_000;
+  const truncate = (s: string, max: number) => (s.length > max ? s.slice(0, max) : s);
   const enrichedResults: SerpResult[] = results.map((r, i) => {
     const c = crawled[i];
     if (c) {
@@ -448,8 +459,8 @@ async function createBriefAnalysisPayload(
         h2: c.h2,
         h3: c.h3,
         outline: c.outline,
-        text: c.text,
-        structuredHtml: c.structuredHtml,
+        text: truncate(c.text, MAX_TEXT_CHARS),
+        structuredHtml: truncate(c.structuredHtml, MAX_STRUCTURED_HTML_CHARS),
         imageCount: c.imageCount,
       };
     }
