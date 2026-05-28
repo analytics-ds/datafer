@@ -74,7 +74,7 @@ export default async function SharedSingleBriefPage({
           maillageEndpoint={`/api/share-brief/${token}/maillage`}
           printUrl={`/api/share-brief/${token}/print`}
           commentsEndpoint={`/api/share-brief/${token}/comments`}
-          commentAuthor={{ type: "client", name: "" }}
+          commentAuthor={{ type: "client", name: folder?.name?.trim() || "Client" }}
           hideNewAnalysis
         />
       </div>

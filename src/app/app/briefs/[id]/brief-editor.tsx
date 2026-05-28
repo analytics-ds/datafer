@@ -24,7 +24,10 @@ import { faviconUrl } from "@/lib/favicon";
 import { EditorToolbar } from "./toolbar";
 import { MaillageSection } from "./maillage-section";
 import { ShareBriefPanel } from "../share-brief-panel";
-import { CommentLayer, type CommentAuthor } from "./comment-layer";
+import { CommentLayer } from "./comment-layer";
+import { CommentsTab } from "./comments-tab";
+import { useBriefComments } from "./use-brief-comments";
+import type { CommentAuthor } from "./comment-layer-types";
 
 // Feature flag : maillage interne masqué côté UI le 2026-05-26 sur demande
 // de Pierre (projet en pause). Repasse à `true` pour réafficher la
@@ -116,7 +119,7 @@ type BriefEditorProps = {
   commentAuthor?: CommentAuthor;
 };
 
-type Tab = "editor" | "serp" | "insights";
+type Tab = "editor" | "serp" | "insights" | "comments";
 
 export function BriefEditor(props: BriefEditorProps) {
   const { id, keyword, country, folder, initialHtml, nlp, serp, paa, haloscan, position } = props;
@@ -127,7 +130,8 @@ export function BriefEditor(props: BriefEditorProps) {
   const maillageEndpoint = props.maillageEndpoint ?? `/api/briefs/${id}/maillage`;
   const printUrl = props.printUrl ?? `/api/briefs/${id}/print`;
   const commentsEndpoint = props.commentsEndpoint ?? `/api/briefs/${id}/comments`;
-  const commentAuthor = props.commentAuthor ?? { type: "user", name: "Consultant" };
+  const commentAuthor: CommentAuthor = props.commentAuthor ?? { type: "user", name: "Consultant" };
+  const commentsState = useBriefComments(commentsEndpoint, commentAuthor);
   // Indique le mode partage : les UI d'édition (boutons "Insérer" du maillage,
   // etc.) sont en read-only quand on est sur la vue share du client lecteur.
   const isShareMode = !!props.saveEndpoint && props.saveEndpoint.startsWith("/api/share");
@@ -682,6 +686,13 @@ export function BriefEditor(props: BriefEditorProps) {
         <TabButton active={tab === "insights"} onClick={() => setTab("insights")}>
           Insights
         </TabButton>
+        <TabButton
+          active={tab === "comments"}
+          onClick={() => setTab("comments")}
+          count={commentsState.comments.filter((c) => !c.parentId && !c.resolvedAt).length || undefined}
+        >
+          Commentaires
+        </TabButton>
       </div>
 
       <div className={tab === "editor" ? "flex-1 grid grid-cols-[1fr_380px] overflow-hidden" : "hidden"}>
@@ -732,9 +743,11 @@ export function BriefEditor(props: BriefEditorProps) {
             <CommentLayer
               editorRef={editorRef}
               saveEditorHtml={readEditor}
-              commentsEndpoint={commentsEndpoint}
               author={commentAuthor}
-              needsClientNameSetup={commentAuthor.type === "client" && !commentAuthor.name}
+              comments={commentsState.comments}
+              create={commentsState.create}
+              patch={commentsState.patch}
+              remove={commentsState.remove}
             />
 
             {/* Feature maillage interne mise de côté 2026-05-26. Le code
@@ -798,6 +811,38 @@ export function BriefEditor(props: BriefEditorProps) {
           userWordCount={wc}
           userH2Count={editorData.h2s.length}
           userH3Count={editorData.h3s.length}
+        />
+      </div>
+
+      <div className={tab === "comments" ? "flex-1 overflow-y-auto" : "hidden"}>
+        <CommentsTab
+          comments={commentsState.comments}
+          author={commentAuthor}
+          editorRef={editorRef}
+          patch={commentsState.patch}
+          remove={commentsState.remove}
+          reply={(input) =>
+            commentsState.create({
+              anchorId: input.anchorId,
+              anchorText: input.anchorText,
+              body: input.body,
+              parentId: input.parentId,
+            })
+          }
+          onJumpToAnchor={(anchorId) => {
+            setTab("editor");
+            // Laisse le DOM monter avant de scroller.
+            setTimeout(() => {
+              const span = editorRef.current?.querySelector<HTMLSpanElement>(
+                `span.df-comment-anchor[data-comment-id="${anchorId.replace(/"/g, '\\"')}"]`,
+              );
+              if (span) {
+                span.scrollIntoView({ block: "center", behavior: "smooth" });
+                span.classList.add("df-comment-anchor-active");
+                setTimeout(() => span.classList.remove("df-comment-anchor-active"), 1600);
+              }
+            }, 50);
+          }}
         />
       </div>
 

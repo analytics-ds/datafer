@@ -1,53 +1,48 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import type { CommentAuthor, CommentDTO } from "./comment-layer-types";
+
+export type { CommentAuthor, CommentDTO };
 
 /**
- * Couche de commentaires inline « façon Google Docs » au-dessus du
- * contentEditable de l'éditeur de brief. Le composant ne possède pas
- * l'éditeur : il reçoit `editorRef` et :
- *   - écoute les sélections de texte pour proposer un bouton « 💬 »
- *   - injecte/lit les ancres `<span data-comment-id="…">` dans innerHTML
- *   - fetch + render les threads dans un popover ancré sur la sélection
- *   - persiste via les endpoints `commentsEndpoint` (back-office OU share).
+ * Couche de commentaires inline au-dessus du contentEditable de l'éditeur.
+ * - écoute les sélections pour proposer un bouton « 💬 »
+ * - injecte/lit les ancres `<span data-comment-id="…" contenteditable="false">`
+ *   (le contenteditable=false empêche la frappe de propager le commentaire
+ *   au paragraphe entier).
+ * - affiche les threads en popover. Quand un thread est résolu, l'ancre est
+ *   conservée mais son style devient totalement transparent et la popover
+ *   ne s'ouvre plus au clic depuis l'éditeur (accès uniquement via l'onglet
+ *   Commentaires).
+ *
+ * La state des comments est gérée par `useBriefComments` côté parent et passée
+ * via les props ci-dessous, pour rester synchro avec l'onglet Commentaires.
  */
 
-export type CommentDTO = {
-  id: string;
-  briefId: string;
-  anchorId: string;
-  anchorText: string;
-  parentId: string | null;
-  authorType: "user" | "client";
-  authorId: string | null;
-  authorName: string;
-  body: string;
-  resolvedAt: string | null;
-  resolvedByName: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type CommentAuthor =
-  | { type: "user"; name: string }
-  | { type: "client"; name: string };
+const ANCHOR_CLASS = "df-comment-anchor";
+const ANCHOR_RESOLVED_CLASS = "df-comment-anchor-resolved";
+const ANCHOR_ACTIVE_CLASS = "df-comment-anchor-active";
 
 type Props = {
   editorRef: React.RefObject<HTMLDivElement | null>;
-  /** Garantit la persistance de l'editorHtml après ajout/résolution d'ancres. */
   saveEditorHtml: () => void;
-  /** Endpoint REST : back-office = `/api/briefs/<id>/comments`, share = `/api/share-brief/<token>/comments`. */
-  commentsEndpoint: string;
-  /** Identité de l'auteur courant. Côté share = client; côté back-office = user identifié. */
   author: CommentAuthor;
-  /**
-   * Si vrai, on demande au client de saisir son prénom au 1er commentaire.
-   * Utilisé sur le partage public où on ne connaît pas l'auteur a priori.
-   */
-  needsClientNameSetup?: boolean;
-  /** Appelé quand le client saisit son prénom (côté share). */
-  onClientNameChange?: (name: string) => void;
+  comments: CommentDTO[];
+  create: (input: {
+    anchorId: string;
+    anchorText: string;
+    body: string;
+    parentId?: string | null;
+  }) => Promise<CommentDTO | null>;
+  patch: (
+    commentId: string,
+    changes: { body?: string; resolved?: boolean },
+  ) => Promise<CommentDTO | null>;
+  remove: (
+    commentId: string,
+  ) => Promise<{ ok: boolean; threadDeleted: boolean; anchorId?: string }>;
 };
 
 type DraftState =
@@ -55,45 +50,23 @@ type DraftState =
   | { kind: "new"; anchorId: string; anchorText: string; rect: DOMRect }
   | { kind: "thread"; anchorId: string; rect: DOMRect };
 
-const ANCHOR_CLASS = "df-comment-anchor";
-const ANCHOR_RESOLVED_CLASS = "df-comment-anchor-resolved";
-const ANCHOR_ACTIVE_CLASS = "df-comment-anchor-active";
-
 export function CommentLayer({
   editorRef,
   saveEditorHtml,
-  commentsEndpoint,
   author,
-  needsClientNameSetup,
-  onClientNameChange,
+  comments,
+  create,
+  patch,
+  remove,
 }: Props) {
-  const [comments, setComments] = useState<CommentDTO[]>([]);
-  const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<DraftState>({ kind: "idle" });
   const [selectionBtn, setSelectionBtn] = useState<{
     rect: DOMRect;
     text: string;
     range: Range;
   } | null>(null);
-  const [clientName, setClientName] = useState(author.type === "client" ? author.name : "");
 
-  // Fetch initial des comments + refresh sur reload de l'éditeur.
-  const refresh = useCallback(async () => {
-    try {
-      const r = await fetch(commentsEndpoint, { cache: "no-store" });
-      if (r.ok) {
-        const data = (await r.json()) as { comments: CommentDTO[] };
-        setComments(data.comments);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [commentsEndpoint]);
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  // Index par anchorId pour le rendu et la résolution.
+  // Index par anchorId.
   const byAnchor = useMemo(() => {
     const m = new Map<string, CommentDTO[]>();
     for (const c of comments) {
@@ -105,18 +78,22 @@ export function CommentLayer({
     return m;
   }, [comments]);
 
-  // Au mount + à chaque update de comments, applique la classe "resolved"
-  // sur les ancres dont TOUS les root + replies sont résolus, sinon retire.
+  // À chaque update des comments OU du editorHtml chargé, on resynchronise
+  // les classes CSS des ancres : active/resolved + on garantit
+  // contentEditable=false sur toutes les ancres (y compris celles qui
+  // viennent d'innerHTML au mount, pour empêcher la propagation lors de la
+  // frappe juste après l'ancre).
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
     const anchors = el.querySelectorAll<HTMLSpanElement>(`span.${ANCHOR_CLASS}[data-comment-id]`);
     anchors.forEach((span) => {
+      span.contentEditable = "false";
       const aid = span.dataset.commentId;
       if (!aid) return;
       const thread = byAnchor.get(aid);
       if (!thread || thread.length === 0) {
-        // Anchor sans commentaire (sans doute supprimé) : on déballe le span.
+        // Anchor orpheline (commentaire supprimé) : on déballe.
         unwrapSpan(span);
         return;
       }
@@ -124,9 +101,9 @@ export function CommentLayer({
       const resolved = !!root?.resolvedAt;
       span.classList.toggle(ANCHOR_RESOLVED_CLASS, resolved);
     });
-  }, [byAnchor, editorRef]);
+  }, [byAnchor, editorRef, comments]);
 
-  // Detection des sélections : on écoute mouseup et keyup sur le contentEditable.
+  // Detection sélection.
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
@@ -146,7 +123,6 @@ export function CommentLayer({
         setSelectionBtn(null);
         return;
       }
-      // Si la sélection chevauche déjà une ancre, on n'affiche pas le bouton.
       if (rangeIntersectsAnchor(range, el)) {
         setSelectionBtn(null);
         return;
@@ -164,7 +140,7 @@ export function CommentLayer({
     };
   }, [editorRef]);
 
-  // Click sur une ancre existante → ouvre le thread.
+  // Click sur ancre = ouvre thread (si pas résolu).
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
@@ -172,6 +148,9 @@ export function CommentLayer({
       const target = e.target as HTMLElement | null;
       const span = target?.closest<HTMLSpanElement>(`span.${ANCHOR_CLASS}[data-comment-id]`);
       if (!span) return;
+      // Ancre résolue = aucun comportement (le commentaire « disparaît »
+      // côté éditeur ; il reste accessible via l'onglet Commentaires).
+      if (span.classList.contains(ANCHOR_RESOLVED_CLASS)) return;
       e.preventDefault();
       const aid = span.dataset.commentId;
       if (!aid) return;
@@ -183,7 +162,7 @@ export function CommentLayer({
     return () => el.removeEventListener("click", onClick);
   }, [editorRef]);
 
-  // Highlight visuel : on toggle la classe "active" sur l'ancre du draft.
+  // Toggle classe active pour highlight visuel pendant édition.
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
@@ -198,48 +177,34 @@ export function CommentLayer({
 
   const startNewComment = useCallback(() => {
     if (!selectionBtn) return;
-    if (author.type === "client" && needsClientNameSetup && !clientName.trim()) {
-      const name = window.prompt("Ton prénom (affiché à côté de tes commentaires) :", "");
-      if (!name?.trim()) return;
-      setClientName(name.trim());
-      onClientNameChange?.(name.trim());
-    }
     const anchorId = cryptoRandomId();
-    // Wrap la sélection avec une span d'ancre directement dans le DOM, puis
-    // déclenche le save de editorHtml pour persister le span.
     try {
       const span = document.createElement("span");
       span.className = ANCHOR_CLASS;
       span.dataset.commentId = anchorId;
+      span.contentEditable = "false";
       selectionBtn.range.surroundContents(span);
       const rect = span.getBoundingClientRect();
       saveEditorHtml();
       setSelectionBtn(null);
       setDraft({ kind: "new", anchorId, anchorText: selectionBtn.text, rect });
     } catch {
-      // surroundContents échoue si la sélection traverse des bordures de
-      // noeuds. Dans ce cas on fallback : on ne crée pas l'ancre.
+      // surroundContents échoue si la sélection traverse plusieurs balises.
+      // On laisse simplement tomber le draft.
       setSelectionBtn(null);
     }
-  }, [selectionBtn, saveEditorHtml, author.type, needsClientNameSetup, clientName, onClientNameChange]);
+  }, [selectionBtn, saveEditorHtml]);
 
   const submitNew = useCallback(
     async (body: string) => {
       if (draft.kind !== "new") return;
-      const payload: Record<string, unknown> = {
+      const c = await create({
         anchorId: draft.anchorId,
         anchorText: draft.anchorText,
         body,
-      };
-      if (author.type === "client") payload.authorName = clientName;
-      const r = await fetch(commentsEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
       });
-      if (!r.ok) {
-        // Si la création serveur échoue, on retire l'ancre du DOM pour ne
-        // pas laisser de fantôme.
+      if (!c) {
+        // Si la création serveur échoue, retire l'ancre du DOM.
         const el = editorRef.current;
         const span = el?.querySelector<HTMLSpanElement>(
           `span.${ANCHOR_CLASS}[data-comment-id="${cssEscape(draft.anchorId)}"]`,
@@ -249,77 +214,39 @@ export function CommentLayer({
         setDraft({ kind: "idle" });
         return;
       }
-      const data = (await r.json()) as { comment: CommentDTO };
-      setComments((prev) => [...prev, data.comment]);
       setDraft({ kind: "thread", anchorId: draft.anchorId, rect: draft.rect });
     },
-    [draft, commentsEndpoint, author.type, clientName, editorRef, saveEditorHtml],
+    [draft, create, editorRef, saveEditorHtml],
   );
 
   const submitReply = useCallback(
     async (anchorId: string, body: string, parentId: string) => {
       const thread = byAnchor.get(anchorId) ?? [];
       const anchorText = thread[0]?.anchorText ?? "";
-      const payload: Record<string, unknown> = {
-        anchorId,
-        anchorText,
-        body,
-        parentId,
-      };
-      if (author.type === "client") payload.authorName = clientName;
-      const r = await fetch(commentsEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!r.ok) return;
-      const data = (await r.json()) as { comment: CommentDTO };
-      setComments((prev) => [...prev, data.comment]);
+      await create({ anchorId, anchorText, body, parentId });
     },
-    [byAnchor, commentsEndpoint, author.type, clientName],
+    [byAnchor, create],
   );
 
   const toggleResolved = useCallback(
     async (commentId: string, current: boolean) => {
-      const url = `${commentsEndpoint}/${commentId}`;
-      const payload: Record<string, unknown> = { resolved: !current };
-      if (author.type === "client") payload.authorName = clientName;
-      const r = await fetch(url, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!r.ok) return;
-      const data = (await r.json()) as { comment: CommentDTO };
-      setComments((prev) => prev.map((c) => (c.id === commentId ? data.comment : c)));
+      const updated = await patch(commentId, { resolved: !current });
+      if (!updated) return;
+      // Si on vient de résoudre depuis le thread popover, on ferme la popover
+      // (le surlignage disparaît et le clic n'ouvrira plus).
+      if (!current) setDraft({ kind: "idle" });
     },
-    [commentsEndpoint, author.type, clientName],
+    [patch],
   );
 
   const deleteOne = useCallback(
     async (commentId: string) => {
-      const url = `${commentsEndpoint}/${commentId}`;
-      const init: RequestInit = { method: "DELETE" };
-      if (author.type === "client") {
-        init.headers = { "Content-Type": "application/json" };
-        init.body = JSON.stringify({ authorName: clientName });
-      }
-      const r = await fetch(url, init);
-      if (!r.ok) return;
-      const deleted = comments.find((c) => c.id === commentId);
-      setComments((prev) => {
-        // Si on supprime un root, le serveur a supprimé tout le thread :
-        // on retire localement tout ce qui partageait l'anchorId.
-        if (deleted && !deleted.parentId) {
-          return prev.filter((c) => c.anchorId !== deleted.anchorId);
-        }
-        return prev.filter((c) => c.id !== commentId);
-      });
-      // Si le thread a été supprimé entièrement, retire aussi l'ancre du DOM.
-      if (deleted && !deleted.parentId) {
+      const res = await remove(commentId);
+      if (!res.ok) return;
+      if (res.threadDeleted && res.anchorId) {
         const el = editorRef.current;
         const span = el?.querySelector<HTMLSpanElement>(
-          `span.${ANCHOR_CLASS}[data-comment-id="${cssEscape(deleted.anchorId)}"]`,
+          `span.${ANCHOR_CLASS}[data-comment-id="${cssEscape(res.anchorId)}"]`,
         );
         if (span) {
           unwrapSpan(span);
@@ -328,18 +255,15 @@ export function CommentLayer({
         setDraft({ kind: "idle" });
       }
     },
-    [commentsEndpoint, author.type, clientName, comments, editorRef, saveEditorHtml],
+    [remove, editorRef, saveEditorHtml],
   );
 
   const closeDraft = () => setDraft({ kind: "idle" });
 
-  // Render
   return (
     <>
       <CommentStyles />
-      {selectionBtn && (
-        <SelectionButton rect={selectionBtn.rect} onClick={startNewComment} />
-      )}
+      {selectionBtn && <SelectionButton rect={selectionBtn.rect} onClick={startNewComment} />}
       {draft.kind === "new" && (
         <NewCommentPopover
           rect={draft.rect}
@@ -363,21 +287,18 @@ export function CommentLayer({
           rect={draft.rect}
           thread={byAnchor.get(draft.anchorId) ?? []}
           author={author}
-          authorClientName={clientName}
           onClose={closeDraft}
           onReply={(body, parentId) => submitReply(draft.anchorId, body, parentId)}
           onToggleResolved={toggleResolved}
           onDelete={deleteOne}
         />
       )}
-      {loading && null}
     </>
   );
 }
 
 function SelectionButton({ rect, onClick }: { rect: DOMRect; onClick: () => void }) {
   if (typeof window === "undefined") return null;
-  // Positionne juste en-dessous de la sélection, à droite.
   const top = rect.bottom + window.scrollY + 6;
   const left = rect.right + window.scrollX - 28;
   return createPortal(
@@ -407,21 +328,14 @@ function NewCommentPopover({
   onCancel: () => void;
 }) {
   const [body, setBody] = useState("");
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
   if (typeof window === "undefined") return null;
   const top = rect.bottom + window.scrollY + 8;
   const left = Math.max(8, rect.left + window.scrollX - 16);
   return createPortal(
-    <div
-      className="df-comment-popover"
-      style={{ position: "absolute", top, left, zIndex: 51 }}
-    >
+    <div className="df-comment-popover" style={{ position: "absolute", top, left, zIndex: 51 }}>
       <blockquote className="df-comment-snippet">{truncate(anchorText, 160)}</blockquote>
       <textarea
-        ref={ref}
+        autoFocus
         value={body}
         onChange={(e) => setBody(e.target.value)}
         placeholder="Ton commentaire…"
@@ -450,7 +364,6 @@ function ThreadPopover({
   rect,
   thread,
   author,
-  authorClientName,
   onClose,
   onReply,
   onToggleResolved,
@@ -459,7 +372,6 @@ function ThreadPopover({
   rect: DOMRect;
   thread: CommentDTO[];
   author: CommentAuthor;
-  authorClientName: string;
   onClose: () => void;
   onReply: (body: string, parentId: string) => void;
   onToggleResolved: (commentId: string, current: boolean) => void;
@@ -474,16 +386,12 @@ function ThreadPopover({
   const top = rect.bottom + window.scrollY + 8;
   const left = Math.max(8, rect.left + window.scrollX - 16);
   const resolved = !!root.resolvedAt;
-
   const canEdit = (c: CommentDTO) =>
     (author.type === "user" && c.authorType === "user") ||
-    (author.type === "client" && c.authorType === "client" && c.authorName === authorClientName);
+    (author.type === "client" && c.authorType === "client" && c.authorName === author.name);
 
   return createPortal(
-    <div
-      className="df-comment-popover df-comment-thread"
-      style={{ position: "absolute", top, left, zIndex: 51 }}
-    >
+    <div className="df-comment-popover df-comment-thread" style={{ position: "absolute", top, left, zIndex: 51 }}>
       <header className="df-comment-thread-header">
         <span className="df-comment-thread-title">
           {resolved ? "Résolu" : `${thread.length} commentaire${thread.length > 1 ? "s" : ""}`}
@@ -566,7 +474,7 @@ function ThreadPopover({
   );
 }
 
-function CommentStyles() {
+export function CommentStyles() {
   return (
     <style>{`
       .${ANCHOR_CLASS} {
@@ -584,9 +492,9 @@ function CommentStyles() {
       }
       .${ANCHOR_CLASS}.${ANCHOR_RESOLVED_CLASS} {
         background: transparent;
-        border-bottom: 1px dotted rgba(120, 120, 120, 0.5);
-        color: inherit;
-        opacity: 0.85;
+        border-bottom: 0;
+        cursor: default;
+        padding: 0;
       }
       .df-comment-btn {
         background: #fff;
