@@ -79,16 +79,16 @@ export function CommentLayer({
   }, [comments]);
 
   // À chaque update des comments OU du editorHtml chargé, on resynchronise
-  // les classes CSS des ancres : active/resolved + on garantit
-  // contentEditable=false sur toutes les ancres (y compris celles qui
-  // viennent d'innerHTML au mount, pour empêcher la propagation lors de la
-  // frappe juste après l'ancre).
+  // les classes CSS des ancres (active / resolved) et on retire les ancres
+  // orphelines (commentaire supprimé). On laisse les ancres éditables pour
+  // permettre la modification du texte commenté ; la garde anti-propagation
+  // est faite par le handler beforeinput plus bas.
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
     const anchors = el.querySelectorAll<HTMLSpanElement>(`span.${ANCHOR_CLASS}[data-comment-id]`);
     anchors.forEach((span) => {
-      span.contentEditable = "false";
+      if (span.contentEditable === "false") span.removeAttribute("contenteditable");
       const aid = span.dataset.commentId;
       if (!aid) return;
       const thread = byAnchor.get(aid);
@@ -102,6 +102,42 @@ export function CommentLayer({
       span.classList.toggle(ANCHOR_RESOLVED_CLASS, resolved);
     });
   }, [byAnchor, editorRef, comments]);
+
+  // Empêche la frappe d'étendre un span d'ancre quand le curseur est
+  // strictement au début ou à la fin de l'ancre. Au milieu, on laisse le
+  // user modifier le texte commenté (c'est exactement le cas où il veut
+  // reformuler le passage). Sur les bords, on redirige l'insertion juste
+  // avant ou juste après le span pour ne pas le grossir.
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const onBeforeInput = (e: Event) => {
+      const ev = e as InputEvent;
+      if (ev.inputType !== "insertText" || !ev.data) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.isCollapsed || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      const span = findAncestorAnchor(range.startContainer, el);
+      if (!span) return;
+      const last = lastTextNodeInside(span);
+      const first = firstTextNodeInside(span);
+      const atEnd =
+        !!last && range.startContainer === last && range.startOffset === last.textContent!.length;
+      const atStart =
+        !!first && range.startContainer === first && range.startOffset === 0;
+      if (!atEnd && !atStart) return;
+      ev.preventDefault();
+      const r = document.createRange();
+      if (atEnd) r.setStartAfter(span);
+      else r.setStartBefore(span);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      document.execCommand("insertText", false, ev.data);
+    };
+    el.addEventListener("beforeinput", onBeforeInput);
+    return () => el.removeEventListener("beforeinput", onBeforeInput);
+  }, [editorRef]);
 
   // Detection sélection.
   useEffect(() => {
@@ -182,9 +218,20 @@ export function CommentLayer({
       const span = document.createElement("span");
       span.className = ANCHOR_CLASS;
       span.dataset.commentId = anchorId;
-      span.contentEditable = "false";
       selectionBtn.range.surroundContents(span);
       const rect = span.getBoundingClientRect();
+      // Replace la sélection juste après l'ancre, sinon le contentEditable
+      // garde le focus à l'intérieur du span et la frappe suivante l'étend.
+      // La popover ouvre dans la foulée donc le user tape dans la textarea ;
+      // mais si la popover est fermée puis on tape, on ne grossit pas l'ancre.
+      const sel = window.getSelection();
+      if (sel) {
+        const r = document.createRange();
+        r.setStartAfter(span);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }
       saveEditorHtml();
       setSelectionBtn(null);
       setDraft({ kind: "new", anchorId, anchorText: selectionBtn.text, rect });
@@ -623,6 +670,32 @@ function rangeIntersectsAnchor(range: Range, root: HTMLElement): boolean {
     node = node.parentNode;
   }
   return false;
+}
+
+function findAncestorAnchor(node: Node, root: HTMLElement): HTMLSpanElement | null {
+  let cursor: Node | null = node;
+  while (cursor && cursor !== root) {
+    if (
+      cursor.nodeType === Node.ELEMENT_NODE &&
+      (cursor as HTMLElement).classList?.contains(ANCHOR_CLASS)
+    ) {
+      return cursor as HTMLSpanElement;
+    }
+    cursor = cursor.parentNode;
+  }
+  return null;
+}
+
+function firstTextNodeInside(el: Element): Text | null {
+  let n: Node | null = el;
+  while (n && n.firstChild) n = n.firstChild;
+  return n && n.nodeType === Node.TEXT_NODE ? (n as Text) : null;
+}
+
+function lastTextNodeInside(el: Element): Text | null {
+  let n: Node | null = el;
+  while (n && n.lastChild) n = n.lastChild;
+  return n && n.nodeType === Node.TEXT_NODE ? (n as Text) : null;
 }
 
 function unwrapSpan(span: HTMLSpanElement) {
