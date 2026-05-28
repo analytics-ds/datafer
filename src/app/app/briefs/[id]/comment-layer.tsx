@@ -105,9 +105,10 @@ export function CommentLayer({
 
   // Empêche la frappe d'étendre un span d'ancre quand le curseur est
   // strictement au début ou à la fin de l'ancre. Au milieu, on laisse le
-  // user modifier le texte commenté (c'est exactement le cas où il veut
-  // reformuler le passage). Sur les bords, on redirige l'insertion juste
-  // avant ou juste après le span pour ne pas le grossir.
+  // user modifier le texte commenté (cas typique : reformuler le passage).
+  // Sur les bords, on annule l'insertion native via beforeinput puis on
+  // insère manuellement les caractères dans le text node voisin (hors span),
+  // et on émet un input event pour que le readEditor débouncé sauve l'état.
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
@@ -127,13 +128,43 @@ export function CommentLayer({
         !!first && range.startContainer === first && range.startOffset === 0;
       if (!atEnd && !atStart) return;
       ev.preventDefault();
-      const r = document.createRange();
-      if (atEnd) r.setStartAfter(span);
-      else r.setStartBefore(span);
-      r.collapse(true);
+      const data = ev.data;
+      const parent = span.parentNode;
+      if (!parent) return;
+      let cursorNode: Text;
+      let cursorOffset: number;
+      if (atEnd) {
+        const next = span.nextSibling;
+        if (next && next.nodeType === Node.TEXT_NODE) {
+          (next as Text).insertData(0, data);
+          cursorNode = next as Text;
+          cursorOffset = data.length;
+        } else {
+          const newNode = document.createTextNode(data);
+          parent.insertBefore(newNode, next);
+          cursorNode = newNode;
+          cursorOffset = data.length;
+        }
+      } else {
+        const prev = span.previousSibling;
+        if (prev && prev.nodeType === Node.TEXT_NODE) {
+          (prev as Text).appendData(data);
+          cursorNode = prev as Text;
+          cursorOffset = (prev as Text).length;
+        } else {
+          const newNode = document.createTextNode(data);
+          parent.insertBefore(newNode, span);
+          cursorNode = newNode;
+          cursorOffset = data.length;
+        }
+      }
+      const newRange = document.createRange();
+      newRange.setStart(cursorNode, cursorOffset);
+      newRange.collapse(true);
       sel.removeAllRanges();
-      sel.addRange(r);
-      document.execCommand("insertText", false, ev.data);
+      sel.addRange(newRange);
+      // Notifie React onInput pour que la sauvegarde débouncée se déclenche.
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data }));
     };
     el.addEventListener("beforeinput", onBeforeInput);
     return () => el.removeEventListener("beforeinput", onBeforeInput);
