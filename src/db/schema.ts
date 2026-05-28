@@ -270,3 +270,30 @@ export const feedback = sqliteTable("feedback", {
   resolvedAt: integer("resolved_at", { mode: "timestamp" }),
   resolvedNote: text("resolved_note"),
 });
+
+// Commentaires inline ancrés sur une portion du editorHtml d'un brief,
+// façon Google Docs. Chaque commentaire « root » (parent_id = null) cible une
+// ancre `<span data-comment-id="<anchor_id>">` injectée dans editorHtml ;
+// les réponses au même thread partagent le même anchor_id et ont
+// parent_id = id du root. Deux types d'auteurs : `user` (consultant
+// connecté en back-office, userId rempli) ou `client` (visiteur via
+// /share-brief/<token>, userId null, authorName fourni à la main).
+export const briefComment = sqliteTable("brief_comment", {
+  id: text("id").primaryKey(),
+  briefId: text("brief_id").notNull().references(() => brief.id, { onDelete: "cascade" }),
+  // anchor_id : identifiant partagé par toutes les réponses d'un même thread.
+  // Côté editorHtml, on injecte `<span data-comment-id="<anchor_id>">` autour
+  // de la portion commentée. On stocke aussi le snippet commenté pour pouvoir
+  // l'afficher dans la liste latérale même si l'utilisateur supprime la span.
+  anchorId: text("anchor_id").notNull(),
+  anchorText: text("anchor_text").notNull(),
+  parentId: text("parent_id"),
+  authorType: text("author_type", { enum: ["user", "client"] }).notNull(),
+  authorId: text("author_id").references(() => user.id, { onDelete: "set null" }),
+  authorName: text("author_name").notNull(),
+  body: text("body").notNull(),
+  resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  resolvedByName: text("resolved_by_name"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});

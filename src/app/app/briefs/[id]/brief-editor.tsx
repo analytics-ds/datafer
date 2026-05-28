@@ -24,6 +24,7 @@ import { faviconUrl } from "@/lib/favicon";
 import { EditorToolbar } from "./toolbar";
 import { MaillageSection } from "./maillage-section";
 import { ShareBriefPanel } from "../share-brief-panel";
+import { CommentLayer, type CommentAuthor } from "./comment-layer";
 
 // Feature flag : maillage interne masqué côté UI le 2026-05-26 sur demande
 // de Pierre (projet en pause). Repasse à `true` pour réafficher la
@@ -99,6 +100,20 @@ type BriefEditorProps = {
   rawSerp?: SerpResult[];
   /** Termes NLP bruts (avant filtre nlpTermsRemoved) pour piloter la modal. */
   rawNlpTerms?: NlpTerm[];
+  /**
+   * Endpoint REST des commentaires inline (CommentLayer).
+   * - `/api/briefs/<id>/comments` côté back-office
+   * - `/api/share-brief/<token>/comments` côté partage public
+   * Si omis, on dérive depuis `saveEndpoint`.
+   */
+  commentsEndpoint?: string;
+  /**
+   * Identité de l'auteur courant pour les commentaires. En back-office, on
+   * passe `{ type: "user", name: prénom }`. En share, on passe
+   * `{ type: "client", name: "" }` (le client renseignera son prénom au 1er
+   * commentaire).
+   */
+  commentAuthor?: CommentAuthor;
 };
 
 type Tab = "editor" | "serp" | "insights";
@@ -111,6 +126,8 @@ export function BriefEditor(props: BriefEditorProps) {
   const exportEndpoint = props.exportEndpoint ?? `/api/briefs/${id}/export`;
   const maillageEndpoint = props.maillageEndpoint ?? `/api/briefs/${id}/maillage`;
   const printUrl = props.printUrl ?? `/api/briefs/${id}/print`;
+  const commentsEndpoint = props.commentsEndpoint ?? `/api/briefs/${id}/comments`;
+  const commentAuthor = props.commentAuthor ?? { type: "user", name: "Consultant" };
   // Indique le mode partage : les UI d'édition (boutons "Insérer" du maillage,
   // etc.) sont en read-only quand on est sur la vue share du client lecteur.
   const isShareMode = !!props.saveEndpoint && props.saveEndpoint.startsWith("/api/share");
@@ -712,6 +729,13 @@ export function BriefEditor(props: BriefEditorProps) {
                 data-placeholder="Commencez à rédiger votre contenu optimisé ici…"
               />
             </div>
+            <CommentLayer
+              editorRef={editorRef}
+              saveEditorHtml={readEditor}
+              commentsEndpoint={commentsEndpoint}
+              author={commentAuthor}
+              needsClientNameSetup={commentAuthor.type === "client" && !commentAuthor.name}
+            />
 
             {/* Feature maillage interne mise de côté 2026-05-26. Le code
                 reste en place pour réactivation via MAILLAGE_ENABLED. */}

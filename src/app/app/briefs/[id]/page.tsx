@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { brief, client } from "@/db/schema";
+import { brief, client, user as userTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
 import { ensureCompetitorScores } from "@/lib/scoring";
@@ -49,12 +49,19 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
   const paa = b.paaJson ? (JSON.parse(b.paaJson) as Paa[]) : [];
   const haloscan = b.haloscanJson ? (JSON.parse(b.haloscanJson) as HaloscanOverview) : null;
 
-  const [initialTags, availableTags] = await Promise.all([
+  const [initialTags, availableTags, [me]] = await Promise.all([
     listTagsForBrief(b.id),
     // Tags scopés au client du brief : impossible d'attacher un tag d'un
     // autre client. Si le brief n'a pas de client, pas de tags possibles.
     b.clientId ? listTagsForClient(b.clientId) : Promise.resolve([]),
+    db
+      .select({ firstName: userTable.firstName, name: userTable.name, email: userTable.email })
+      .from(userTable)
+      .where(eq(userTable.id, session.user.id))
+      .limit(1),
   ]);
+  const consultantName =
+    me?.firstName?.trim() || me?.name?.trim() || me?.email?.split("@")[0] || "Consultant";
 
   return (
     <BriefEditor
@@ -84,6 +91,7 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
       workflowStatus={b.workflowStatus as WorkflowStatus}
       initialTags={initialTags}
       availableTags={availableTags}
+      commentAuthor={{ type: "user", name: consultantName }}
     />
   );
 }
