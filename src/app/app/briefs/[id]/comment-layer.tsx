@@ -163,12 +163,14 @@ export function CommentLayer({
       newRange.collapse(true);
       sel.removeAllRanges();
       sel.addRange(newRange);
-      // Notifie React onInput pour que la sauvegarde débouncée se déclenche.
-      el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data }));
+      // React onInput n'écoute pas les events dispatchés manuellement →
+      // on appelle directement le hook qui rafraîchit l'état éditeur et
+      // déclenche la sauvegarde débouncée.
+      saveEditorHtml();
     };
     el.addEventListener("beforeinput", onBeforeInput);
     return () => el.removeEventListener("beforeinput", onBeforeInput);
-  }, [editorRef]);
+  }, [editorRef, saveEditorHtml]);
 
   // Detection sélection.
   useEffect(() => {
