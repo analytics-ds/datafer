@@ -270,10 +270,12 @@ export function BriefEditor(props: BriefEditorProps) {
     semanticDebounce.current = setTimeout(async () => {
       const el = editorRef.current;
       if (!el) return;
-      // Inclut les <li> en plus des <p> : sans ça les bullet points (souvent
-      // de vrais blocs de contenu autoportants) ne recevaient ni embedding
-      // ni bordure colorée. Demande Pierre 2026-05-28.
-      const paragraphs = Array.from(el.querySelectorAll("p, li"));
+      // Inclut les listes (ul/ol) en plus des <p>. On embed le textContent
+      // de la liste COMPLÈTE (l'agrégation de tous les <li>), pas chaque
+      // bullet pris isolément : un bullet seul n'a pas assez de contexte
+      // sémantique pour être scoré (demande Pierre 2026-05-28). La bordure
+      // colorée s'applique sur tout le bloc liste.
+      const paragraphs = Array.from(el.querySelectorAll("p, ul, ol"));
       const toFetch: string[] = [];
       for (const p of paragraphs) {
         const text = (p.textContent || "").trim();
@@ -325,7 +327,7 @@ export function BriefEditor(props: BriefEditorProps) {
   useEffect(() => {
     if (!editorRef.current) return;
     const colorMap = { green: "#10b981", yellow: "#f59e0b", red: "#ef4444" } as const;
-    const paragraphs = editorRef.current.querySelectorAll("p, li");
+    const paragraphs = editorRef.current.querySelectorAll("p, ul, ol");
     for (const p of paragraphs) {
       const text = (p.textContent || "").trim();
       const hash = paragraphCacheKey(text);
@@ -351,7 +353,7 @@ export function BriefEditor(props: BriefEditorProps) {
   const semanticParagraphScores = useMemo(() => {
     if (!editorRef.current) return [];
     const liveKeys = new Set<string>();
-    for (const p of editorRef.current.querySelectorAll("p, li")) {
+    for (const p of editorRef.current.querySelectorAll("p, ul, ol")) {
       const text = (p.textContent || "").trim();
       if (text.split(/\s+/).filter(Boolean).length < 5) continue;
       liveKeys.add(paragraphCacheKey(text));
