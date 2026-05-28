@@ -2588,7 +2588,7 @@ function InsightsPane({
           </>
         ) : (
           <p className="text-[12px] text-[var(--text-muted)]">
-            Métriques Haloscan non disponibles pour ce mot-clé (souvent le cas pour la longue traîne ou les sujets adultes).
+            Aucune donnée Haloscan trouvée pour ce mot-clé.
           </p>
         )}
       </InsightCard>
