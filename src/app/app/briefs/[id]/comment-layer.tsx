@@ -484,14 +484,11 @@ function ThreadPopover({
         {[root, ...replies].map((c) => (
           <li key={c.id} className="df-comment-item">
             <div className="df-comment-row">
-              <span
-                className={
-                  "df-comment-avatar" + (c.authorType === "client" ? " df-comment-avatar-client" : "")
-                }
-                aria-hidden
-              >
-                {initialsOf(c.authorName)}
-              </span>
+              <CommentAvatar
+                name={c.authorName}
+                image={c.authorImage}
+                isClient={c.authorType === "client"}
+              />
               <div className="df-comment-content">
                 <div className="df-comment-meta">
                   <strong>{c.authorName}</strong>
@@ -765,6 +762,16 @@ export function CommentStyles() {
         color: var(--accent-dark);
         box-shadow: inset 0 0 0 1px var(--border-strong);
       }
+      .df-comment-avatar-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: inherit;
+      }
+      .df-comment-avatar:has(.df-comment-avatar-img) {
+        padding: 0;
+        overflow: hidden;
+      }
       .df-comment-content { flex: 1; min-width: 0; }
 
       .df-comment-meta {
@@ -822,6 +829,31 @@ export function CommentStyles() {
         border-top: 1px solid var(--border);
       }
     `}</style>
+  );
+}
+
+function CommentAvatar({
+  name,
+  image,
+  isClient,
+}: {
+  name: string;
+  image: string | null;
+  isClient: boolean;
+}) {
+  const cls = "df-comment-avatar" + (isClient ? " df-comment-avatar-client" : "");
+  if (image) {
+    return (
+      <span className={cls} aria-hidden>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={image} alt="" width={28} height={28} className="df-comment-avatar-img" />
+      </span>
+    );
+  }
+  return (
+    <span className={cls} aria-hidden>
+      {initialsOf(name)}
+    </span>
   );
 }
 

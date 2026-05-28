@@ -3348,11 +3348,8 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             if (isPdf) {
               return (
                 <div title="Document PDF : pas de structure HTML (titres, images) donc le score automatique n'est pas comparable. Le contenu textuel a bien été crawlé et alimente les mots-clés / NLP. Exclu du calcul de la médiane de référence.">
-                  <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold text-[var(--text-muted)]">
+                  <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold text-[var(--red)]">
                     PDF
-                  </div>
-                  <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
-                    score n/a
                   </div>
                 </div>
               );

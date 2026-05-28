@@ -7,6 +7,8 @@ export type CommentDTO = {
   authorType: "user" | "client";
   authorId: string | null;
   authorName: string;
+  /** Image avatar : user.image côté user, favicon du folder côté client. */
+  authorImage: string | null;
   body: string;
   resolvedAt: string | null;
   resolvedByName: string | null;

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
-import { brief, briefComment } from "@/db/schema";
+import { brief, briefComment, client, user as userTable } from "@/db/schema";
+import { faviconUrl } from "@/lib/favicon";
 
 export type CommentDTO = {
   id: string;
@@ -12,6 +13,15 @@ export type CommentDTO = {
   authorType: "user" | "client";
   authorId: string | null;
   authorName: string;
+  /**
+   * URL d'avatar à afficher à côté du nom :
+   * - pour les commentaires `user`, `user.image` rejoint sur authorId
+   *   (typiquement /avatars/<prénom>.jpeg)
+   * - pour les commentaires `client`, favicon du site du dossier rattaché au
+   *   brief (résolu via faviconUrl(client.website))
+   * Null si on n'a rien à afficher (fallback initiales côté UI).
+   */
+  authorImage: string | null;
   body: string;
   resolvedAt: string | null;
   resolvedByName: string | null;
@@ -19,7 +29,10 @@ export type CommentDTO = {
   updatedAt: string;
 };
 
-function rowToDto(row: typeof briefComment.$inferSelect): CommentDTO {
+function rowToDto(
+  row: typeof briefComment.$inferSelect,
+  authorImage: string | null,
+): CommentDTO {
   return {
     id: row.id,
     briefId: row.briefId,
@@ -29,6 +42,7 @@ function rowToDto(row: typeof briefComment.$inferSelect): CommentDTO {
     authorType: row.authorType,
     authorId: row.authorId ?? null,
     authorName: row.authorName,
+    authorImage,
     body: row.body,
     resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
     resolvedByName: row.resolvedByName ?? null,
@@ -39,12 +53,35 @@ function rowToDto(row: typeof briefComment.$inferSelect): CommentDTO {
 
 export async function listCommentsForBrief(briefId: string, db?: Db): Promise<CommentDTO[]> {
   const orm = db ?? getDb();
+  // On résout l'avatar du dossier client une fois (favicon du site rattaché)
+  // pour tous les commentaires client, et l'image user via join sur authorId
+  // pour chaque commentaire user.
+  const [b] = await orm
+    .select({ clientId: brief.clientId })
+    .from(brief)
+    .where(eq(brief.id, briefId))
+    .limit(1);
+  let clientImage: string | null = null;
+  if (b?.clientId) {
+    const [c] = await orm
+      .select({ website: client.website })
+      .from(client)
+      .where(eq(client.id, b.clientId))
+      .limit(1);
+    clientImage = faviconUrl(c?.website ?? null, 64);
+  }
   const rows = await orm
-    .select()
+    .select({
+      comment: briefComment,
+      userImage: userTable.image,
+    })
     .from(briefComment)
+    .leftJoin(userTable, eq(userTable.id, briefComment.authorId))
     .where(eq(briefComment.briefId, briefId))
     .orderBy(asc(briefComment.createdAt));
-  return rows.map(rowToDto);
+  return rows.map((r) =>
+    rowToDto(r.comment, r.comment.authorType === "user" ? r.userImage ?? null : clientImage),
+  );
 }
 
 export type CreateCommentInput = {
@@ -107,7 +144,7 @@ export async function createComment(
   });
 
   const [row] = await orm.select().from(briefComment).where(eq(briefComment.id, id)).limit(1);
-  return { ok: true, comment: rowToDto(row) };
+  return { ok: true, comment: rowToDto(row, await resolveAuthorImage(orm, row)) };
 }
 
 export type UpdateCommentInput = {
@@ -173,7 +210,41 @@ export async function updateComment(
 
   await orm.update(briefComment).set(patch).where(eq(briefComment.id, input.commentId));
   const [updated] = await orm.select().from(briefComment).where(eq(briefComment.id, input.commentId)).limit(1);
-  return { ok: true, comment: rowToDto(updated) };
+  return { ok: true, comment: rowToDto(updated, await resolveAuthorImage(orm, updated)) };
+}
+
+/**
+ * Helper utilisé après create/update pour reconstruire l'image avatar :
+ * - user → user.image rejoint par authorId
+ * - client → favicon du folder rattaché au brief
+ */
+async function resolveAuthorImage(
+  orm: Db,
+  row: typeof briefComment.$inferSelect,
+): Promise<string | null> {
+  if (row.authorType === "user" && row.authorId) {
+    const [u] = await orm
+      .select({ image: userTable.image })
+      .from(userTable)
+      .where(eq(userTable.id, row.authorId))
+      .limit(1);
+    return u?.image ?? null;
+  }
+  if (row.authorType === "client") {
+    const [b] = await orm
+      .select({ clientId: brief.clientId })
+      .from(brief)
+      .where(eq(brief.id, row.briefId))
+      .limit(1);
+    if (!b?.clientId) return null;
+    const [c] = await orm
+      .select({ website: client.website })
+      .from(client)
+      .where(eq(client.id, b.clientId))
+      .limit(1);
+    return faviconUrl(c?.website ?? null, 64);
+  }
+  return null;
 }
 
 export type DeleteCommentInput = {

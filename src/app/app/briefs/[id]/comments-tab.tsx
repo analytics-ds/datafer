@@ -141,7 +141,7 @@ export function CommentsTab({
                   <div key={c.id} className="flex items-start gap-3 group">
                     <span
                       className={
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold uppercase tracking-wide " +
+                        "relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold uppercase tracking-wide " +
                         (c.authorType === "client"
                           ? "bg-[var(--bg-warm)] text-[var(--accent-dark)] ring-1 ring-[var(--border-strong)]"
                           : "bg-[var(--bg-olive-light)] text-[var(--accent-dark)]")
@@ -149,7 +149,18 @@ export function CommentsTab({
                       style={{ fontFamily: "var(--font-mono)" }}
                       aria-hidden
                     >
-                      {initialsOf(c.authorName)}
+                      {c.authorImage ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={c.authorImage}
+                          alt=""
+                          width={32}
+                          height={32}
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                      ) : (
+                        initialsOf(c.authorName)
+                      )}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2">
