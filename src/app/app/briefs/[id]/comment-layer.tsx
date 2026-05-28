@@ -30,6 +30,12 @@ type Props = {
   saveEditorHtml: () => void;
   author: CommentAuthor;
   comments: CommentDTO[];
+  /**
+   * `false` quand l'éditeur n'est plus l'onglet actif. On en profite pour
+   * fermer toute popover ouverte : sans ça la popover (portalée dans body)
+   * resterait visible par-dessus l'onglet SERP / Insights / Commentaires.
+   */
+  active?: boolean;
   create: (input: {
     anchorId: string;
     anchorText: string;
@@ -55,6 +61,7 @@ export function CommentLayer({
   saveEditorHtml,
   author,
   comments,
+  active = true,
   create,
   patch,
   remove,
@@ -65,6 +72,15 @@ export function CommentLayer({
     text: string;
     range: Range;
   } | null>(null);
+
+  // Quand on quitte l'onglet Éditeur, ferme la popover et le bouton flottant
+  // pour qu'ils ne restent pas affichés par-dessus l'onglet voisin.
+  useEffect(() => {
+    if (!active) {
+      setDraft({ kind: "idle" });
+      setSelectionBtn(null);
+    }
+  }, [active]);
 
   // Index par anchorId.
   const byAnchor = useMemo(() => {

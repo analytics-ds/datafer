@@ -748,6 +748,7 @@ export function BriefEditor(props: BriefEditorProps) {
               saveEditorHtml={readEditor}
               author={commentAuthor}
               comments={commentsState.comments}
+              active={tab === "editor"}
               create={commentsState.create}
               patch={commentsState.patch}
               remove={commentsState.remove}
