@@ -83,140 +83,180 @@ export function CommentsTab({
     (author.type === "client" && c.authorType === "client" && c.authorName === author.name);
 
   return (
-    <div className="px-8 py-6">
-      <div className="mb-4 flex items-center gap-2">
-        <FilterBtn active={filter === "open"} onClick={() => setFilter("open")}>
-          Actifs <span className="opacity-70">({counts.open})</span>
-        </FilterBtn>
-        <FilterBtn active={filter === "resolved"} onClick={() => setFilter("resolved")}>
-          Résolus <span className="opacity-70">({counts.resolved})</span>
-        </FilterBtn>
-        <FilterBtn active={filter === "all"} onClick={() => setFilter("all")}>
-          Tous <span className="opacity-70">({counts.total})</span>
-        </FilterBtn>
+    <div className="mx-auto max-w-[820px] px-8 py-8">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-[18px] font-semibold leading-tight">Commentaires</h2>
+          <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">
+            {counts.open} actif{counts.open > 1 ? "s" : ""} · {counts.resolved} résolu{counts.resolved > 1 ? "s" : ""}
+          </p>
+        </div>
+        <div className="inline-flex rounded-[var(--radius-pill)] border border-[var(--border)] bg-[var(--bg-card)] p-1 shadow-[var(--shadow-sm)]">
+          <FilterBtn active={filter === "open"} onClick={() => setFilter("open")}>
+            Actifs <span className="ml-1 opacity-70">{counts.open}</span>
+          </FilterBtn>
+          <FilterBtn active={filter === "resolved"} onClick={() => setFilter("resolved")}>
+            Résolus <span className="ml-1 opacity-70">{counts.resolved}</span>
+          </FilterBtn>
+          <FilterBtn active={filter === "all"} onClick={() => setFilter("all")}>
+            Tous <span className="ml-1 opacity-70">{counts.total}</span>
+          </FilterBtn>
+        </div>
       </div>
 
       {filtered.length === 0 && (
-        <p className="text-sm text-[var(--text-muted)]">
-          {filter === "open"
-            ? "Aucun commentaire actif pour le moment. Surligne du texte dans l'éditeur pour en ajouter un."
-            : filter === "resolved"
-              ? "Aucun commentaire résolu."
-              : "Aucun commentaire."}
-        </p>
+        <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--border)] bg-[var(--bg-warm)] px-6 py-10 text-center">
+          <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--bg-card)] text-[18px] shadow-[var(--shadow-sm)]">
+            💬
+          </div>
+          <p className="text-[13px] text-[var(--text-secondary)]">
+            {filter === "open"
+              ? "Aucun commentaire actif. Surligne du texte dans l'éditeur pour en ajouter un."
+              : filter === "resolved"
+                ? "Aucun commentaire résolu."
+                : "Aucun commentaire sur ce brief."}
+          </p>
+        </div>
       )}
 
-      <ul className="space-y-4">
+      <ul className="space-y-3">
         {filtered.map((t) => (
           <li
             key={t.anchorId}
-            className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4"
+            className="overflow-hidden rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)] transition-shadow hover:shadow-[var(--shadow)]"
           >
             <button
               type="button"
               onClick={() => onJumpToAnchor(t.anchorId)}
-              className="mb-3 block w-full rounded border-l-[3px] border-amber-400 bg-amber-50 px-3 py-1.5 text-left text-[12px] italic text-[var(--text-muted)] hover:bg-amber-100"
+              className="block w-full border-b border-[var(--border)] bg-[var(--bg-warm)] px-5 py-3 text-left text-[12.5px] italic text-[var(--text-secondary)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,var(--bg-warm))]"
               title="Aller à l'ancre dans l'éditeur"
             >
+              <span className="mr-2 inline-block h-3 w-[3px] -mb-px align-middle bg-[var(--accent)]" />
               {truncate(t.anchorText, 240)}
             </button>
 
-            {[t.root, ...t.replies].map((c) => (
-              <div
-                key={c.id}
-                className="border-b border-[var(--border)] py-2 last:border-b-0"
-              >
-                <div className="flex items-baseline gap-2">
-                  <strong className="text-sm">{c.authorName}</strong>
-                  <span className="text-[11px] text-[var(--text-muted)]">
-                    {formatDateFull(c.createdAt)}
-                  </span>
-                  {c.authorType === "client" && (
-                    <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-900">
-                      client
+            <div className="px-5 pb-4 pt-3">
+              <div className="space-y-3">
+                {[t.root, ...t.replies].map((c) => (
+                  <div key={c.id} className="flex items-start gap-3 group">
+                    <span
+                      className={
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold uppercase tracking-wide " +
+                        (c.authorType === "client"
+                          ? "bg-[var(--bg-warm)] text-[var(--accent-dark)] ring-1 ring-[var(--border-strong)]"
+                          : "bg-[var(--bg-olive-light)] text-[var(--accent-dark)]")
+                      }
+                      style={{ fontFamily: "var(--font-mono)" }}
+                      aria-hidden
+                    >
+                      {initialsOf(c.authorName)}
                     </span>
-                  )}
-                </div>
-                <p className="mt-1 whitespace-pre-wrap break-words text-sm">{c.body}</p>
-                {canEdit(c) && (
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <strong className="text-[13px] font-semibold text-[var(--text)]">
+                          {c.authorName}
+                        </strong>
+                        <span
+                          className="text-[10.5px] text-[var(--text-muted)]"
+                          style={{ fontFamily: "var(--font-mono)" }}
+                        >
+                          {formatDateFull(c.createdAt)}
+                        </span>
+                        {c.authorType === "client" && (
+                          <span className="rounded-full bg-[var(--bg-olive-light)] px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-[var(--accent-dark)]">
+                            client
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-[var(--text)]">
+                        {c.body}
+                      </p>
+                      {canEdit(c) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm("Supprimer ce commentaire ?")) remove(c.id);
+                          }}
+                          className="mt-1 text-[10.5px] font-semibold text-[var(--red)] opacity-0 transition-opacity hover:underline group-hover:opacity-100"
+                        >
+                          Supprimer
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {t.resolved && t.root.resolvedByName && (
+                <p
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[var(--green-bg)] px-2.5 py-0.5 text-[10.5px] font-semibold text-[var(--green)]"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  ✓ Résolu par {t.root.resolvedByName} · {formatDateFull(t.root.resolvedAt!)}
+                </p>
+              )}
+
+              <div className="mt-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => patch(t.root.id, { resolved: !t.resolved })}
+                  className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-1.5 text-[12px] font-semibold text-[var(--text)] transition-colors hover:bg-[var(--bg-warm)] hover:border-[var(--border-strong)]"
+                >
+                  {t.resolved ? "Rouvrir" : "Résoudre"}
+                </button>
+                {!t.resolved && (
                   <button
                     type="button"
                     onClick={() => {
-                      if (window.confirm("Supprimer ce commentaire ?")) remove(c.id);
-                    }}
-                    className="mt-1 text-[11px] text-red-700 hover:underline"
-                  >
-                    Supprimer
-                  </button>
-                )}
-              </div>
-            ))}
-
-            {t.resolved && t.root.resolvedByName && (
-              <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-                Résolu par {t.root.resolvedByName} · {formatDateFull(t.root.resolvedAt!)}
-              </p>
-            )}
-
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => patch(t.root.id, { resolved: !t.resolved })}
-                className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-[12px] hover:bg-[var(--bg-soft)]"
-              >
-                {t.resolved ? "Rouvrir" : "Résoudre"}
-              </button>
-              {!t.resolved && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReplyTo(replyTo === t.root.id ? null : t.root.id);
-                    setReplyBody("");
-                  }}
-                  className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-[12px] hover:bg-[var(--bg-soft)]"
-                >
-                  Répondre
-                </button>
-              )}
-            </div>
-
-            {replyTo === t.root.id && (
-              <div className="mt-2">
-                <textarea
-                  value={replyBody}
-                  onChange={(e) => setReplyBody(e.target.value)}
-                  placeholder="Ta réponse…"
-                  rows={2}
-                  className="w-full rounded border border-[var(--border)] bg-[var(--bg-card)] p-2 text-sm"
-                />
-                <div className="mt-1 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setReplyTo(null)}
-                    className="rounded-md border border-[var(--border)] px-3 py-1 text-[12px]"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!replyBody.trim()}
-                    onClick={async () => {
-                      await reply({
-                        anchorId: t.anchorId,
-                        anchorText: t.anchorText,
-                        parentId: t.root.id,
-                        body: replyBody.trim(),
-                      });
-                      setReplyTo(null);
+                      setReplyTo(replyTo === t.root.id ? null : t.root.id);
                       setReplyBody("");
                     }}
-                    className="rounded-md bg-amber-500 px-3 py-1 text-[12px] font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+                    className="rounded-[var(--radius-xs)] bg-[var(--bg-black)] px-3 py-1.5 text-[12px] font-semibold text-[var(--text-inverse)] transition-colors hover:bg-[var(--bg-dark)]"
                   >
                     Répondre
                   </button>
-                </div>
+                )}
               </div>
-            )}
+
+              {replyTo === t.root.id && (
+                <div className="mt-3 rounded-[var(--radius-xs)] bg-[var(--bg-warm)] p-3">
+                  <textarea
+                    autoFocus
+                    value={replyBody}
+                    onChange={(e) => setReplyBody(e.target.value)}
+                    placeholder="Ta réponse…"
+                    rows={2}
+                    className="w-full rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-[13px] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--accent)_20%,transparent)]"
+                  />
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReplyTo(null)}
+                      className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-1.5 text-[12px] font-semibold hover:bg-[var(--bg-warm)]"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!replyBody.trim()}
+                      onClick={async () => {
+                        await reply({
+                          anchorId: t.anchorId,
+                          anchorText: t.anchorText,
+                          parentId: t.root.id,
+                          body: replyBody.trim(),
+                        });
+                        setReplyTo(null);
+                        setReplyBody("");
+                      }}
+                      className="rounded-[var(--radius-xs)] bg-[var(--bg-black)] px-3 py-1.5 text-[12px] font-semibold text-[var(--text-inverse)] hover:bg-[var(--bg-dark)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)]"
+                    >
+                      Répondre
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </li>
         ))}
       </ul>
@@ -238,15 +278,23 @@ function FilterBtn({
       type="button"
       onClick={onClick}
       className={
-        "rounded-md border px-3 py-1 text-[12px] transition-colors " +
+        "rounded-[var(--radius-pill)] px-3 py-1 text-[11.5px] font-semibold transition-colors " +
         (active
-          ? "border-amber-400 bg-amber-50 text-amber-900"
-          : "border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-soft)]")
+          ? "bg-[var(--bg-black)] text-[var(--text-inverse)]"
+          : "text-[var(--text-secondary)] hover:bg-[var(--bg-warm)]")
       }
     >
       {children}
     </button>
   );
+}
+
+function initialsOf(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "?";
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function truncate(s: string, n: number): string {

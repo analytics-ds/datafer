@@ -483,25 +483,37 @@ function ThreadPopover({
       <ul className="df-comment-list">
         {[root, ...replies].map((c) => (
           <li key={c.id} className="df-comment-item">
-            <div className="df-comment-meta">
-              <strong>{c.authorName}</strong>
-              <span className="df-comment-date">{formatDate(c.createdAt)}</span>
-              {c.authorType === "client" && <span className="df-comment-tag">client</span>}
-            </div>
-            <div className="df-comment-body">{c.body}</div>
-            {canEdit(c) && (
-              <div className="df-comment-row-actions">
-                <button
-                  type="button"
-                  className="df-comment-link"
-                  onClick={() => {
-                    if (window.confirm("Supprimer ce commentaire ?")) onDelete(c.id);
-                  }}
-                >
-                  Supprimer
-                </button>
+            <div className="df-comment-row">
+              <span
+                className={
+                  "df-comment-avatar" + (c.authorType === "client" ? " df-comment-avatar-client" : "")
+                }
+                aria-hidden
+              >
+                {initialsOf(c.authorName)}
+              </span>
+              <div className="df-comment-content">
+                <div className="df-comment-meta">
+                  <strong>{c.authorName}</strong>
+                  <span className="df-comment-date">{formatDate(c.createdAt)}</span>
+                  {c.authorType === "client" && <span className="df-comment-tag">client</span>}
+                </div>
+                <div className="df-comment-body">{c.body}</div>
+                {canEdit(c) && (
+                  <div className="df-comment-row-actions">
+                    <button
+                      type="button"
+                      className="df-comment-link"
+                      onClick={() => {
+                        if (window.confirm("Supprimer ce commentaire ?")) onDelete(c.id);
+                      }}
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </li>
         ))}
       </ul>
@@ -558,113 +570,267 @@ export function CommentStyles() {
   return (
     <style>{`
       .${ANCHOR_CLASS} {
-        background: rgba(255, 213, 79, 0.45);
-        border-bottom: 1px dotted rgba(180, 130, 0, 0.7);
+        background-color: color-mix(in srgb, var(--accent) 18%, transparent);
+        box-shadow: 0 1px 0 color-mix(in srgb, var(--accent-dark) 50%, transparent);
         cursor: pointer;
         padding: 0 1px;
-        border-radius: 2px;
-        transition: background-color 120ms;
+        border-radius: 3px;
+        transition: background-color 160ms var(--transition, ease);
       }
-      .${ANCHOR_CLASS}:hover { background: rgba(255, 193, 7, 0.65); }
+      .${ANCHOR_CLASS}:hover {
+        background-color: color-mix(in srgb, var(--accent) 30%, transparent);
+      }
       .${ANCHOR_CLASS}.${ANCHOR_ACTIVE_CLASS} {
-        background: rgba(255, 193, 7, 0.85);
-        outline: 1px solid rgba(180, 130, 0, 0.55);
+        background-color: color-mix(in srgb, var(--accent) 38%, transparent);
+        box-shadow: 0 0 0 1px var(--accent-dark);
+        border-radius: 3px;
       }
       .${ANCHOR_CLASS}.${ANCHOR_RESOLVED_CLASS} {
         background: transparent;
-        border-bottom: 0;
+        box-shadow: none;
         cursor: default;
         padding: 0;
       }
+
       .df-comment-btn {
-        background: #fff;
-        border: 1px solid #d4d4d8;
-        border-radius: 999px;
-        padding: 4px 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-pill);
         font-size: 14px;
         line-height: 1;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+        box-shadow: var(--shadow-lg);
         cursor: pointer;
+        transition: transform 120ms ease, background-color 160ms ease, border-color 160ms ease;
       }
-      .df-comment-btn:hover { background: #fef9c3; }
+      .df-comment-btn:hover {
+        background: var(--bg-warm);
+        border-color: var(--border-strong);
+        transform: translateY(-1px);
+      }
+      .df-comment-btn:active { transform: translateY(0); }
+
       .df-comment-popover {
-        background: #fff;
-        border: 1px solid #d4d4d8;
-        border-radius: 8px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.14);
-        padding: 12px;
-        width: 320px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        box-shadow: var(--shadow-lg);
+        padding: 14px 14px 12px;
+        width: 340px;
         max-width: calc(100vw - 24px);
-        font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        color: #18181b;
+        font: 13px/1.5 var(--font-sans);
+        color: var(--text);
+        animation: df-pop-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
       }
-      .df-comment-thread { width: 360px; }
+      @keyframes df-pop-in {
+        from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      .df-comment-thread { width: 380px; }
+
       .df-comment-thread-header {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 8px;
-        padding-bottom: 6px;
-        border-bottom: 1px solid #f1f1f3;
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 10px;
       }
-      .df-comment-thread-title { font-weight: 600; color: #3f3f46; font-size: 12px; }
+      .df-comment-thread-title {
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
       .df-comment-close {
-        background: transparent; border: 0; cursor: pointer; font-size: 18px; line-height: 1;
-        color: #71717a; padding: 0 4px;
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+        font-size: 20px;
+        line-height: 1;
+        color: var(--text-muted);
+        padding: 0 4px;
+        border-radius: var(--radius-xs);
+        transition: color 120ms, background-color 120ms;
       }
+      .df-comment-close:hover { color: var(--text); background: var(--bg-warm); }
+
       .df-comment-snippet {
-        margin: 0 0 8px 0;
-        padding: 6px 10px;
-        border-left: 3px solid #fcd34d;
-        background: #fffbeb;
+        margin: 0 0 12px 0;
+        padding: 8px 10px 8px 12px;
+        border-left: 3px solid var(--accent);
+        background: var(--bg-warm);
         font-style: italic;
         font-size: 12px;
-        color: #52525b;
-        border-radius: 0 4px 4px 0;
+        color: var(--text-secondary);
+        border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+        line-height: 1.45;
       }
+
       .df-comment-textarea {
         width: 100%;
         box-sizing: border-box;
-        border: 1px solid #d4d4d8;
-        border-radius: 6px;
-        padding: 6px 8px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xs);
+        padding: 8px 10px;
         font: inherit;
         font-size: 13px;
         resize: vertical;
-        background: #fff;
-        color: #18181b;
+        min-height: 56px;
+        background: var(--bg-card);
+        color: var(--text);
+        transition: border-color 120ms, box-shadow 120ms;
       }
-      .df-comment-textarea:focus { outline: 2px solid #fcd34d; outline-offset: -1px; }
+      .df-comment-textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+      }
+      .df-comment-textarea::placeholder { color: var(--text-muted); }
+
       .df-comment-actions {
-        display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+        margin-top: 10px;
       }
       .df-comment-primary, .df-comment-secondary {
-        font: inherit; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 12px;
+        border-radius: var(--radius-xs);
+        cursor: pointer;
+        transition: background-color 120ms, color 120ms, border-color 120ms;
       }
       .df-comment-primary {
-        background: #f59e0b; color: #fff; border: 1px solid #d97706;
+        background: var(--bg-black);
+        color: var(--text-inverse);
+        border: 1px solid var(--bg-black);
       }
-      .df-comment-primary:hover { background: #d97706; }
-      .df-comment-primary:disabled { background: #d4d4d8; border-color: #d4d4d8; cursor: not-allowed; }
-      .df-comment-secondary { background: #f4f4f5; color: #18181b; border: 1px solid #d4d4d8; }
-      .df-comment-secondary:hover { background: #e4e4e7; }
-      .df-comment-list { list-style: none; padding: 0; margin: 0 0 8px 0; max-height: 280px; overflow-y: auto; }
-      .df-comment-item { padding: 6px 0; border-top: 1px solid #f4f4f5; }
+      .df-comment-primary:hover { background: var(--bg-dark); border-color: var(--bg-dark); }
+      .df-comment-primary:disabled {
+        background: var(--border-strong);
+        border-color: var(--border-strong);
+        color: var(--text-muted);
+        cursor: not-allowed;
+      }
+      .df-comment-secondary {
+        background: var(--bg-card);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .df-comment-secondary:hover {
+        background: var(--bg-warm);
+        border-color: var(--border-strong);
+      }
+
+      .df-comment-list {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 4px 0;
+        max-height: 320px;
+        overflow-y: auto;
+      }
+      .df-comment-item {
+        padding: 10px 0;
+        border-top: 1px solid var(--border);
+      }
       .df-comment-item:first-child { border-top: 0; padding-top: 0; }
-      .df-comment-meta { display: flex; gap: 6px; align-items: baseline; }
-      .df-comment-meta strong { font-weight: 600; font-size: 12px; }
-      .df-comment-date { font-size: 11px; color: #71717a; }
-      .df-comment-tag {
-        font-size: 10px; padding: 1px 5px; border-radius: 999px;
-        background: #fef3c7; color: #92400e; text-transform: uppercase; letter-spacing: 0.04em;
+
+      .df-comment-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
       }
-      .df-comment-body { white-space: pre-wrap; word-break: break-word; margin: 2px 0 4px 0; font-size: 13px; }
-      .df-comment-row-actions { display: flex; gap: 6px; font-size: 11px; }
+      .df-comment-avatar {
+        flex: 0 0 28px;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-pill);
+        background: var(--bg-olive-light);
+        color: var(--accent-dark);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        font-family: var(--font-mono);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+      .df-comment-avatar-client {
+        background: var(--bg-warm);
+        color: var(--accent-dark);
+        box-shadow: inset 0 0 0 1px var(--border-strong);
+      }
+      .df-comment-content { flex: 1; min-width: 0; }
+
+      .df-comment-meta {
+        display: flex; gap: 6px; align-items: baseline;
+        margin-bottom: 2px;
+      }
+      .df-comment-meta strong {
+        font-weight: 600;
+        font-size: 12.5px;
+        color: var(--text);
+      }
+      .df-comment-date {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+      }
+      .df-comment-tag {
+        font-size: 9.5px;
+        padding: 1px 6px;
+        border-radius: var(--radius-pill);
+        background: var(--bg-olive-light);
+        color: var(--accent-dark);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 700;
+      }
+      .df-comment-body {
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--text);
+      }
+      .df-comment-row-actions {
+        display: flex; gap: 8px;
+        margin-top: 4px;
+        opacity: 0;
+        transition: opacity 120ms;
+      }
+      .df-comment-item:hover .df-comment-row-actions { opacity: 1; }
       .df-comment-link {
-        background: transparent; border: 0; padding: 0; cursor: pointer; color: #b91c1c; font-size: 11px;
+        background: transparent;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+        color: var(--red);
+        font-size: 11px;
+        font-weight: 600;
       }
       .df-comment-link:hover { text-decoration: underline; }
-      .df-comment-reply { margin-top: 8px; padding-top: 8px; border-top: 1px solid #f4f4f5; }
+
+      .df-comment-reply {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+      }
     `}</style>
   );
+}
+
+function initialsOf(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "?";
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function truncate(s: string, n: number): string {
