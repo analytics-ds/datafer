@@ -261,13 +261,17 @@ export async function completeBriefAnalysis(
       error: res.ok ? undefined : res.error,
     });
     if (!res.ok) {
-      // Auto-delete sur échec analyse plutôt que de garder le brief en
-      // "failed" (demande Pierre 2026-05-26) : l'user ne voit pas le brief
-      // raté traîner dans sa liste, et il peut juste recréer un brief
-      // identique sans avoir à cleanup le précédent. Le motif d'échec est
-      // loggé côté worker pour debug.
-      console.log("[brief-analysis] deleting failed brief", { briefId, error: res.error });
-      await db.delete(brief).where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
+      // Bascule en status='failed' + errorMessage explicite (au lieu de l'ancien
+      // auto-delete 2026-05-26) : sans ça, un GET /api/v1/briefs/{id} renvoyait
+      // 404 "not found" alors que le brief avait été créé OK, ce qui ressemblait
+      // à un bug de mapping côté client (cas observé sur country=it / "no SERP
+      // results" — Pierre 2026-05-28). On veut que le client API puisse voir
+      // pourquoi l'analyse a planté.
+      console.log("[brief-analysis] marking brief failed", { briefId, error: res.error });
+      await db
+        .update(brief)
+        .set({ status: "failed", errorMessage: res.error, updatedAt: new Date() })
+        .where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
       return;
     }
     // Filtrer sur status="pending" : si le cron cleanup-stuck a déjà
@@ -297,8 +301,11 @@ export async function completeBriefAnalysis(
       .where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown error";
-    console.log("[brief-analysis] deleting brief after uncaught error", { briefId, error: msg });
-    await db.delete(brief).where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
+    console.log("[brief-analysis] marking brief failed after uncaught error", { briefId, error: msg });
+    await db
+      .update(brief)
+      .set({ status: "failed", errorMessage: msg, updatedAt: new Date() })
+      .where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
   }
 }
 

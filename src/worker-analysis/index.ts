@@ -71,10 +71,12 @@ async function handleAnalysisBatch(
       await completeBriefAnalysis(env, briefId, userId, input);
       msg.ack();
     } catch (err) {
-      // completeBriefAnalysis catch déjà ses propres erreurs et update le
-      // status à "failed". Si on arrive ici, c'est un truc inattendu : on
-      // laisse la queue retry (pas de msg.ack()) — sauf si c'est le dernier
-      // essai, auquel cas la message file dans la DLQ.
+      // completeBriefAnalysis catch déjà ses propres erreurs et bascule le
+      // brief en status="failed" avec errorMessage. Si on arrive ici, c'est un
+      // truc inattendu (ex : exception avant le try/catch interne) : on laisse
+      // la queue retry (pas de msg.ack()) — sauf si c'est le dernier essai,
+      // auquel cas le message file dans la DLQ et le cron cleanup-stuck (2 min)
+      // ramassera le brief resté pending.
       console.error("[analysis-consumer] uncaught error", { briefId, err: String(err) });
       msg.retry();
     }

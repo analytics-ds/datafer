@@ -41,9 +41,16 @@ export async function POST(req: Request) {
     input,
   });
 
+  // Renvoie keyword/country/folderId dans la réponse pour que les clients
+  // qui POST en parallèle (ex : `&` shell, Promise.all) puissent mapper chaque
+  // réponse à sa requête sans avoir à enchaîner un GET V2. Sans ça, l'ordre
+  // des réponses n'est pas garanti et le mapping ID → keyword peut être faux.
   return NextResponse.json({
     id: created.id,
     status: "pending",
+    keyword: input.keyword,
+    country: (input.country || "fr").toLowerCase(),
+    folderId: input.folderId ?? null,
     message: "brief en cours d'analyse, interroger GET /api/v1/briefs/{id}",
   });
 }
