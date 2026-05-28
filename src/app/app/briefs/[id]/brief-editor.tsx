@@ -648,8 +648,11 @@ export function BriefEditor(props: BriefEditorProps) {
           />
         </div>
         <div className="flex items-center gap-2">
+          {/* Indicateur de save : on n'affiche QUE l'état "saving" (silencieux par défaut).
+              Le flash "✓ Enregistré" était trop fréquent (toutes les 2s pendant la
+              rédaction), demande Pierre 2026-05-28. Si un save échoue, on pourrait
+              afficher un état "erreur" plus tard. */}
           {saveStatus === "saving" && <span className="text-[11px] text-[var(--text-muted)]">Enregistrement…</span>}
-          {saveStatus === "saved" && <span className="text-[11px] text-[var(--green)] font-semibold">✓ Enregistré</span>}
           <ExportMenu exportEndpoint={exportEndpoint} printUrl={printUrl} />
           {!hideNewAnalysis && (
             <ShareBriefPanel briefId={id} initialToken={props.shareToken ?? null} />
@@ -3335,8 +3338,26 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
           </div>
         </a>
         <div className="flex items-center gap-4 text-center">
-          {r.score != null &&
-            (r.score < MIN_VALID_COMPETITOR_SCORE ? (
+          {r.score != null && (() => {
+            // Détecte les PDF : leur structure HTML est absente (0 H1/H2/H3,
+            // 0 images), ce qui fait chuter le score sous le seuil même quand
+            // le crawl du texte a parfaitement réussi (ex : tesi.luiss.it/...
+            // .pdf, 22670 mots remontés en italien). On les distingue avec un
+            // badge "PDF" neutre plutôt que "crawl ✗" qui induit en erreur.
+            const isPdf = /\.pdf(?:$|[?#])/i.test(r.link ?? "");
+            if (isPdf) {
+              return (
+                <div title="Document PDF : pas de structure HTML (titres, images) donc le score automatique n'est pas comparable. Le contenu textuel a bien été crawlé et alimente les mots-clés / NLP. Exclu du calcul de la médiane de référence.">
+                  <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold text-[var(--text-muted)]">
+                    PDF
+                  </div>
+                  <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
+                    score n/a
+                  </div>
+                </div>
+              );
+            }
+            return r.score < MIN_VALID_COMPETITOR_SCORE ? (
               <div
                 title="Score non fiable : page probablement mal crawlée (rendu JavaScript non capté, blocage anti-bot...). Exclue du calcul de la moyenne. Ce n'est pas un jugement sur la qualité réelle du concurrent."
               >
@@ -3362,7 +3383,8 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
                   score
                 </div>
               </div>
-            ))}
+            );
+          })()}
           <div>
             <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
               {r.wordCount ? r.wordCount : "N/A"}
