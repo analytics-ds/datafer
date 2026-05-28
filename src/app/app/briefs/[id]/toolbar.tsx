@@ -31,6 +31,10 @@ type ToolbarProps = {
   onInsertTable: (rows: number, cols: number) => void;
   onInsertLink: () => void;
   onHighlight: (color: string) => void;
+  /** Mode source HTML actif (textarea brute au lieu du WYSIWYG). */
+  htmlMode?: boolean;
+  /** Bascule entre WYSIWYG et source HTML. */
+  onToggleHtmlMode?: () => void;
 };
 
 export function EditorToolbar(p: ToolbarProps) {
@@ -209,6 +213,21 @@ export function EditorToolbar(p: ToolbarProps) {
         <ImageIcon />
       </TbBtn>
 
+      {/* HTML source toggle */}
+      {p.onToggleHtmlMode && (
+        <button
+          onClick={p.onToggleHtmlMode}
+          className={"tb-btn" + (p.htmlMode ? " tb-btn-active" : "")}
+          title={
+            p.htmlMode
+              ? "Revenir à l'éditeur visuel (le HTML saisi sera rendu)"
+              : "Coller / éditer le HTML source directement"
+          }
+        >
+          <CodeIcon />
+        </button>
+      )}
+
       {/* Table — grid selector */}
       <div className="relative">
         <button
@@ -284,6 +303,11 @@ export function EditorToolbar(p: ToolbarProps) {
         :global(.tb-btn:hover) {
           background: var(--bg-card);
           color: var(--text);
+        }
+        :global(.tb-btn-active),
+        :global(.tb-btn-active:hover) {
+          background: var(--bg-black);
+          color: var(--text-inverse);
         }
       `}</style>
     </div>
@@ -608,6 +632,20 @@ function ImageIcon() {
       <rect x="2.5" y="3.5" width="15" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
       <circle cx="7" cy="8" r="1.3" fill="currentColor" />
       <path d="M3 14l4-4 4 4 3-3 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CodeIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+      <path
+        d="M7 6L3 10l4 4M13 6l4 4-4 4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

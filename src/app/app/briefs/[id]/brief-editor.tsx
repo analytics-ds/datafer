@@ -212,6 +212,11 @@ export function BriefEditor(props: BriefEditorProps) {
   const [paragraphScores, setParagraphScores] = useState<Map<string, { score: number; color: "green" | "yellow" | "red" }>>(new Map());
   const semanticDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const semanticInflight = useRef<Set<string>>(new Set());
+  // Mode "source HTML" : remplace l'éditeur visuel par une textarea de HTML
+  // brut. Au toggle on, on capture l'innerHTML courant ; au toggle off, on
+  // ré-injecte la textarea dans l'éditeur (rendu HTML normal).
+  const [htmlMode, setHtmlMode] = useState(false);
+  const [htmlSource, setHtmlSource] = useState("");
 
   useEffect(() => {
     if (editorRef.current && !editorRef.current.innerHTML && initialHtml) {
@@ -731,9 +736,25 @@ export function BriefEditor(props: BriefEditorProps) {
               onInsertTable={handleInsertTable}
               onInsertLink={handleInsertLink}
               onHighlight={handleHighlight}
+              htmlMode={htmlMode}
+              onToggleHtmlMode={() => {
+                if (!htmlMode) {
+                  // ON : capture le HTML courant pour l'afficher en textarea.
+                  setHtmlSource(editorRef.current?.innerHTML ?? "");
+                  setHtmlMode(true);
+                } else {
+                  // OFF : ré-injecte le HTML édité dans l'éditeur visuel.
+                  if (editorRef.current) {
+                    editorRef.current.innerHTML = htmlSource;
+                  }
+                  setHtmlMode(false);
+                  // Laisse React monter le contentEditable avant de lire.
+                  setTimeout(() => readEditor(), 0);
+                }
+              }}
             />
 
-            {/* Editor */}
+            {/* Editor — visuel ou source HTML selon htmlMode */}
             <div className="flex-1 overflow-y-auto bg-[var(--bg-card)]">
               <div
                 ref={editorRef}
@@ -744,16 +765,29 @@ export function BriefEditor(props: BriefEditorProps) {
                 onInput={readEditor}
                 onKeyUp={updateCurrentTag}
                 onMouseUp={updateCurrentTag}
-                className="rich-editor min-h-full px-8 py-7 outline-none text-[16px] leading-[1.85]"
+                className={
+                  "rich-editor min-h-full px-8 py-7 outline-none text-[16px] leading-[1.85] " +
+                  (htmlMode ? "hidden" : "")
+                }
                 data-placeholder="Commencez à rédiger votre contenu optimisé ici…"
               />
+              {htmlMode && (
+                <textarea
+                  value={htmlSource}
+                  onChange={(e) => setHtmlSource(e.target.value)}
+                  spellCheck={false}
+                  className="block min-h-full w-full resize-none border-0 bg-[var(--bg-card)] px-8 py-7 font-mono text-[13px] leading-[1.6] text-[var(--text)] outline-none"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                  placeholder="Colle ton HTML ici. Reclique sur <> pour repasser en mode visuel."
+                />
+              )}
             </div>
             <CommentLayer
               editorRef={editorRef}
               saveEditorHtml={readEditor}
               author={commentAuthor}
               comments={commentsState.comments}
-              active={tab === "editor"}
+              active={tab === "editor" && !htmlMode}
               create={commentsState.create}
               patch={commentsState.patch}
               remove={commentsState.remove}
