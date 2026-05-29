@@ -204,11 +204,22 @@ export function BriefCard({
   }
 
   const countryLabel = COUNTRY_LABELS[brief.country] ?? brief.country.toUpperCase();
+  // Carte cliquable : un clic n'importe où sur la zone blanche ouvre le brief
+  // (uniquement quand l'analyse est terminée). Les contrôles interactifs
+  // (picker client, tags, statut, suppression) stoppent la propagation pour ne
+  // pas déclencher l'ouverture.
+  const openable = !isPending && !isFailed;
   return (
     <div
-      className="group relative bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] px-5 py-[14px] hover:border-[var(--border-strong)] transition-colors"
+      className={
+        "group relative bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] px-5 py-[14px] hover:border-[var(--border-strong)] transition-colors" +
+        (openable ? " cursor-pointer" : "")
+      }
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onClick={() => {
+        if (openable) router.push(`/app/briefs/${brief.id}`);
+      }}
     >
       <div className="grid grid-cols-[56px_1fr_auto] items-center gap-4">
         {isPending ? (
@@ -235,6 +246,7 @@ export function BriefCard({
           ) : (
             <Link
               href={`/app/briefs/${brief.id}`}
+              onClick={(e) => e.stopPropagation()}
               className="font-semibold text-[15px] leading-tight hover:underline truncate block"
             >
               {brief.keyword}
@@ -288,7 +300,10 @@ export function BriefCard({
           )}
 
           {/* L3 : tags */}
-          <div className="flex items-center gap-[6px] flex-wrap">
+          <div
+            className="flex items-center gap-[6px] flex-wrap"
+            onClick={(e) => e.stopPropagation()}
+          >
             <TagPicker
               attached={tags}
               available={availableTags}
@@ -311,7 +326,10 @@ export function BriefCard({
         </div>
 
         {/* Colonne droite : statut + bouton delete */}
-        <div className="flex flex-col items-end gap-2 shrink-0 self-start">
+        <div
+          className="flex flex-col items-end gap-2 shrink-0 self-start"
+          onClick={(e) => e.stopPropagation()}
+        >
           <StatusPicker status={status} onChange={onStatusChange} size="sm" />
           <button
             type="button"
@@ -401,7 +419,10 @@ function DeleteBriefConfirm({
   return (
     <div
       className="fixed inset-0 bg-[rgba(0,0,0,0.45)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={() => !pending && onCancel()}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!pending) onCancel();
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -604,7 +625,7 @@ function FolderPickerInline({
   }, []);
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={ref} onClick={(e) => e.stopPropagation()}>
       <button
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-[6px] px-[10px] py-[3px] text-[12px] text-[var(--text-secondary)] bg-[var(--bg)] hover:bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] transition-colors"

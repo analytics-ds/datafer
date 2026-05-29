@@ -253,42 +253,38 @@ export function CommentLayer({
     if (!el) return;
     el.querySelectorAll(`.${ANCHOR_ACTIVE_CLASS}`).forEach((n) => n.classList.remove(ANCHOR_ACTIVE_CLASS));
     if (draft.kind === "thread" || draft.kind === "new") {
-      const span = el.querySelector<HTMLSpanElement>(
+      el.querySelectorAll<HTMLSpanElement>(
         `span.${ANCHOR_CLASS}[data-comment-id="${cssEscape(draft.anchorId)}"]`,
-      );
-      span?.classList.add(ANCHOR_ACTIVE_CLASS);
+      ).forEach((span) => span.classList.add(ANCHOR_ACTIVE_CLASS));
     }
   }, [draft, editorRef]);
 
   const startNewComment = useCallback(() => {
     if (!selectionBtn) return;
     const anchorId = cryptoRandomId();
-    try {
-      const span = document.createElement("span");
-      span.className = ANCHOR_CLASS;
-      span.dataset.commentId = anchorId;
-      selectionBtn.range.surroundContents(span);
-      const rect = span.getBoundingClientRect();
-      // Replace la sélection juste après l'ancre, sinon le contentEditable
-      // garde le focus à l'intérieur du span et la frappe suivante l'étend.
-      // La popover ouvre dans la foulée donc le user tape dans la textarea ;
-      // mais si la popover est fermée puis on tape, on ne grossit pas l'ancre.
-      const sel = window.getSelection();
-      if (sel) {
-        const r = document.createRange();
-        r.setStartAfter(span);
-        r.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(r);
-      }
-      saveEditorHtml();
+    const spans = wrapRangeWithAnchor(selectionBtn.range, anchorId);
+    if (spans.length === 0) {
+      // Cas extrême : sélection non emballable. On abandonne proprement.
       setSelectionBtn(null);
-      setDraft({ kind: "new", anchorId, anchorText: selectionBtn.text, rect });
-    } catch {
-      // surroundContents échoue si la sélection traverse plusieurs balises.
-      // On laisse simplement tomber le draft.
-      setSelectionBtn(null);
+      return;
     }
+    const rect = spans[0].getBoundingClientRect();
+    // Replace la sélection juste après la dernière ancre, sinon le
+    // contentEditable garde le focus à l'intérieur du span et la frappe
+    // suivante l'étend. La popover ouvre dans la foulée donc le user tape
+    // dans la textarea ; mais si la popover est fermée puis on tape, on ne
+    // grossit pas l'ancre.
+    const sel = window.getSelection();
+    if (sel) {
+      const r = document.createRange();
+      r.setStartAfter(spans[spans.length - 1]);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    saveEditorHtml();
+    setSelectionBtn(null);
+    setDraft({ kind: "new", anchorId, anchorText: selectionBtn.text, rect });
   }, [selectionBtn, saveEditorHtml]);
 
   const submitNew = useCallback(
@@ -300,12 +296,9 @@ export function CommentLayer({
         body,
       });
       if (!c) {
-        // Si la création serveur échoue, retire l'ancre du DOM.
+        // Si la création serveur échoue, retire les ancres du DOM.
         const el = editorRef.current;
-        const span = el?.querySelector<HTMLSpanElement>(
-          `span.${ANCHOR_CLASS}[data-comment-id="${cssEscape(draft.anchorId)}"]`,
-        );
-        if (span) unwrapSpan(span);
+        if (el) unwrapAllAnchors(el, draft.anchorId);
         saveEditorHtml();
         setDraft({ kind: "idle" });
         return;
@@ -341,11 +334,8 @@ export function CommentLayer({
       if (!res.ok) return;
       if (res.threadDeleted && res.anchorId) {
         const el = editorRef.current;
-        const span = el?.querySelector<HTMLSpanElement>(
-          `span.${ANCHOR_CLASS}[data-comment-id="${cssEscape(res.anchorId)}"]`,
-        );
-        if (span) {
-          unwrapSpan(span);
+        if (el) {
+          unwrapAllAnchors(el, res.anchorId);
           saveEditorHtml();
         }
         setDraft({ kind: "idle" });
@@ -366,11 +356,8 @@ export function CommentLayer({
           anchorText={draft.anchorText}
           onCancel={() => {
             const el = editorRef.current;
-            const span = el?.querySelector<HTMLSpanElement>(
-              `span.${ANCHOR_CLASS}[data-comment-id="${cssEscape(draft.anchorId)}"]`,
-            );
-            if (span) {
-              unwrapSpan(span);
+            if (el) {
+              unwrapAllAnchors(el, draft.anchorId);
               saveEditorHtml();
             }
             closeDraft();
@@ -950,4 +937,75 @@ function unwrapSpan(span: HTMLSpanElement) {
   if (!parent) return;
   while (span.firstChild) parent.insertBefore(span.firstChild, span);
   parent.removeChild(span);
+}
+
+/**
+ * Emballe la sélection dans une (ou plusieurs) ancres
+ * `<span data-comment-id>`. `surroundContents` suffit quand la sélection tient
+ * dans un seul nœud texte, mais il jette dès que la sélection traverse une
+ * balise inline (<strong>, <a>, surlignage...). Or le contenu rédigé en est
+ * truffé : c'était la cause du bug « le bouton commenter ne fait rien ». Dans
+ * ce cas on emballe chaque nœud texte de la sélection dans sa propre ancre
+ * partageant le même data-comment-id : le thread reste unique et la mise en
+ * forme est préservée.
+ */
+function wrapRangeWithAnchor(range: Range, anchorId: string): HTMLSpanElement[] {
+  const makeSpan = () => {
+    const s = document.createElement("span");
+    s.className = ANCHOR_CLASS;
+    s.dataset.commentId = anchorId;
+    return s;
+  };
+  try {
+    const span = makeSpan();
+    range.surroundContents(span);
+    return [span];
+  } catch {
+    // Cale les bornes de la sélection sur des frontières de nœuds texte pour
+    // que chaque nœud soit soit entièrement dedans, soit entièrement dehors.
+    if (range.startContainer.nodeType === Node.TEXT_NODE && range.startOffset > 0) {
+      const after = (range.startContainer as Text).splitText(range.startOffset);
+      range.setStart(after, 0);
+    }
+    if (
+      range.endContainer.nodeType === Node.TEXT_NODE &&
+      range.endOffset < (range.endContainer as Text).length
+    ) {
+      (range.endContainer as Text).splitText(range.endOffset);
+    }
+    const ancestor = range.commonAncestorContainer;
+    const scope = ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentNode : ancestor;
+    if (!scope) return [];
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+    const targets: Text[] = [];
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      const t = node as Text;
+      if (!t.textContent) continue;
+      // Ne ré-emballe pas un texte déjà dans une ancre (sélection adjacente).
+      if (findAncestorAnchor(t, scope as HTMLElement)) continue;
+      const nr = document.createRange();
+      nr.selectNodeContents(t);
+      const inside =
+        range.compareBoundaryPoints(Range.START_TO_START, nr) <= 0 &&
+        range.compareBoundaryPoints(Range.END_TO_END, nr) >= 0;
+      if (inside) targets.push(t);
+    }
+    const spans: HTMLSpanElement[] = [];
+    for (const t of targets) {
+      const span = makeSpan();
+      t.parentNode?.insertBefore(span, t);
+      span.appendChild(t);
+      spans.push(span);
+    }
+    return spans;
+  }
+}
+
+function unwrapAllAnchors(root: HTMLElement, anchorId: string) {
+  root
+    .querySelectorAll<HTMLSpanElement>(
+      `span.${ANCHOR_CLASS}[data-comment-id="${cssEscape(anchorId)}"]`,
+    )
+    .forEach((span) => unwrapSpan(span));
 }
