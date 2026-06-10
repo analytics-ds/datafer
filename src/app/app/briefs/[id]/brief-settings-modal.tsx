@@ -349,7 +349,7 @@ export function BriefSettingsModal({
           <section>
             <h3 className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[var(--text-secondary)] mb-2">
               Termes NLP à ajouter
-              <InfoBubble text="Ajoute un terme que l'analyse automatique n'a pas remonté mais que tu veux voir apparaître dans les chips de l'éditeur et compter dans le scoring couverture NLP. Ajouté au tier 'Importants' (presence 70%), pas bloquant comme un Essentiel." />
+              <InfoBubble text="Ajoute un terme que l'analyse automatique n'a pas remonté mais que tu veux voir apparaître dans les chips de l'éditeur et compter dans le scoring couverture NLP. Ajouté au tier 'Essentiels' (presence 70%) : compté comme obligatoire dans la couverture NLP. Retire-le ici si tu ne veux plus qu'il soit exigé. Les mots-clés secondaires saisis à la création du brief arrivent aussi dans cette liste." />
             </h3>
             <div className="flex gap-2 mb-2">
               <input

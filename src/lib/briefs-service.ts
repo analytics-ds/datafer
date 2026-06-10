@@ -22,6 +22,7 @@ import {
   type NlpResult,
 } from "@/lib/analysis";
 import { computeDetailedScore, ensureCompetitorScores, type DetailedScore, type EditorData } from "@/lib/scoring";
+import { applyBriefOverrides, parseBriefOverrides } from "@/lib/brief-overrides";
 import { geoSignalsFromHtml } from "@/lib/geo-scoring";
 
 export type CompetitorStats = {
@@ -54,27 +55,73 @@ export type CreateBriefInput = {
 };
 
 export const MAX_SECONDARY_KEYWORDS = 10;
+// Garde-fou D1 : les mots-clés sont stockés en double (secondary_keywords +
+// overrides_json) et la row brief est capée à ~30KB (cf. caps serpJson).
+// 100 chars couvre largement tout mot-clé réel.
+export const MAX_SECONDARY_KEYWORD_CHARS = 100;
+
+/** lowercase + accents retirés, pour comparer des mots-clés FR entre eux. */
+function foldKeyword(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
 /**
- * Normalise la liste de mots-clés secondaires : trim, retire les vides, le
- * doublon du mot-clé principal et les doublons internes (case-insensitive),
- * cap à MAX_SECONDARY_KEYWORDS.
+ * Tokens significatifs d'un mot-clé (longueur > 1), avec variantes
+ * singulier/pluriel. Miroir de la construction kwTokens d'isJunkNlpTerm
+ * (brief-editor.tsx) : un terme dont tous les tokens sont déjà dans le
+ * mot-clé principal serait masqué par le filtre UI tout en restant compté
+ * dans le scoring, donc on le rejette dès la normalisation.
+ */
+function keywordTokenSet(keyword: string): Set<string> {
+  const tokens = new Set<string>();
+  foldKeyword(keyword)
+    .replace(/[^a-z0-9\s'-]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 1)
+    .forEach((w) => {
+      tokens.add(w);
+      if (w.endsWith("s")) tokens.add(w.slice(0, -1));
+      else tokens.add(w + "s");
+    });
+  return tokens;
+}
+
+/**
+ * Normalise la liste de mots-clés secondaires : trim, retire les vides, les
+ * trop longs, le doublon du mot-clé principal (exact ou sous-ensemble de ses
+ * tokens) et les doublons internes (case/accents-insensitive), cap à
+ * MAX_SECONDARY_KEYWORDS. Accepte aussi une string "kw1, kw2" (API v1).
  */
 export function normalizeSecondaryKeywords(
   raw: unknown,
   mainKeyword: string,
 ): string[] {
-  if (!Array.isArray(raw)) return [];
-  const main = mainKeyword.trim().toLowerCase();
+  const items = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(/[,\n;]/)
+      : [];
+  const mainTokens = keywordTokenSet(mainKeyword);
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const item of raw) {
+  for (const item of items) {
     if (typeof item !== "string") continue;
     const kw = item.trim().replace(/\s+/g, " ");
-    if (!kw) continue;
-    const lower = kw.toLowerCase();
-    if (lower === main || seen.has(lower)) continue;
-    seen.add(lower);
+    if (!kw || kw.length > MAX_SECONDARY_KEYWORD_CHARS) continue;
+    const folded = foldKeyword(kw);
+    if (seen.has(folded)) continue;
+    // Rejette les mots-clés entièrement contenus dans le principal
+    // ("whisky" ou "verre whisky" pour le principal "verre à whisky") :
+    // déjà trackés via le mot-clé exact, et invisibles dans la sidebar.
+    const kwTokens = folded
+      .replace(/[^a-z0-9\s'-]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 1);
+    if (kwTokens.length === 0 || kwTokens.every((t) => mainTokens.has(t))) continue;
+    seen.add(folded);
     out.push(kw);
     if (out.length >= MAX_SECONDARY_KEYWORDS) break;
   }
@@ -162,7 +209,13 @@ export type RescoreResult =
 export async function rescoreBrief(briefId: string, editorHtml: string): Promise<RescoreResult> {
   const db = getDb();
   const [row] = await db
-    .select({ id: brief.id, nlpJson: brief.nlpJson, serpJson: brief.serpJson, status: brief.status })
+    .select({
+      id: brief.id,
+      nlpJson: brief.nlpJson,
+      serpJson: brief.serpJson,
+      overridesJson: brief.overridesJson,
+      status: brief.status,
+    })
     .from(brief)
     .where(eq(brief.id, briefId))
     .limit(1);
@@ -180,8 +233,23 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
   // nlp.competitorScores (utilisé par computeCompetitorStats côté UI pour
   // afficher concurrence avg/best).
   ensureCompetitorScores(nlp, row.serpJson);
+  // Scoring sur le NLP overridé (mots-clés secondaires / termes custom,
+  // concurrents désactivés, wordCount), comme l'éditeur via page.tsx. Sans
+  // ça, le score persisté par POST /api/v1/briefs/{id}/content ignorait les
+  // overrides et divergeait du score affiché dans l'éditeur. ATTENTION : ne
+  // jamais persister le NLP overridé dans nlp_json (les termes custom y
+  // seraient bakés et impossibles à retirer via la modal Paramètres) ;
+  // applyBriefOverrides travaille sur une copie, le backfill ci-dessus reste
+  // sur le nlp brut.
+  const rawSerp = row.serpJson ? (JSON.parse(row.serpJson) as SerpResult[]) : [];
+  const overrides = parseBriefOverrides(row.overridesJson);
+  const overridden = applyBriefOverrides({ nlp, serp: rawSerp, position: null }, overrides);
+  const scoringNlp = overridden.nlp ?? nlp;
+  // Si des concurrents sont désactivés, applyBriefOverrides a invalidé
+  // competitorScores sur la copie : re-scoring sur le SERP filtré.
+  ensureCompetitorScores(scoringNlp, JSON.stringify(overridden.serp));
   const geoSignals = geoSignalsFromHtml(editorHtml);
-  const breakdown = computeDetailedScore(ed, nlp, geoSignals);
+  const breakdown = computeDetailedScore(ed, scoringNlp, geoSignals);
 
   const nlpJsonToWrite = nlp.competitorScores !== undefined ? JSON.stringify(nlp) : row.nlpJson;
 

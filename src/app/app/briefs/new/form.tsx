@@ -425,6 +425,7 @@ function SimpleSection({
         type="text"
         value={input.secondaryKeywords}
         onChange={(e) => patch({ secondaryKeywords: e.target.value })}
+        maxLength={1200}
         placeholder="Ex. running femme, chaussures trail (séparés par des virgules)"
         className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-[6px] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
@@ -607,6 +608,7 @@ function BulkRow({
           type="text"
           value={row.secondaryKeywords}
           onChange={(e) => patch({ secondaryKeywords: e.target.value })}
+          maxLength={1200}
           placeholder="Mots-clés secondaires (virgules)"
           className="px-3 py-[7px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[12px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
         />
