@@ -164,6 +164,10 @@ export const brief = sqliteTable("brief", {
   ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   clientId: text("client_id").references(() => client.id, { onDelete: "set null" }),
   keyword: text("keyword").notNull(),
+  // Mots-clés secondaires saisis à la création (JSON string[]). Injectés en
+  // tête des termes NLP via overrides_json.nlpTermsAdded (cf. createPendingBrief)
+  // pour entrer dans le suivi de couverture et le scoring.
+  secondaryKeywords: text("secondary_keywords"),
   country: text("country").notNull().default("fr"),
   shareToken: text("share_token").unique(),
   // JSON blobs for the analysis snapshots and editor content

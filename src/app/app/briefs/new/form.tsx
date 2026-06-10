@@ -38,7 +38,22 @@ function stepProgress(analysisStep: string | null): { done: number; total: numbe
 }
 
 type Mode = "simple" | "bulk";
-type BriefInput = { keyword: string; country: string; folderId: string; myUrl: string };
+type BriefInput = {
+  keyword: string;
+  // Saisie brute, séparée par des virgules. Parsée en string[] au submit.
+  secondaryKeywords: string;
+  country: string;
+  folderId: string;
+  myUrl: string;
+};
+
+/** Parse la saisie "kw1, kw2, kw3" en tableau propre (trim + vides retirés). */
+function parseSecondaryKeywords(raw: string): string[] {
+  return raw
+    .split(/[,\n;]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 function emptyRow(defaultFolderId?: string, isHead = false): BriefInput {
   // Le 1er row porte les valeurs par défaut explicites (FR + folder courant).
@@ -46,6 +61,7 @@ function emptyRow(defaultFolderId?: string, isHead = false): BriefInput {
   // du 1er row tant que l'utilisateur ne les surcharge pas.
   return {
     keyword: "",
+    secondaryKeywords: "",
     country: isHead ? "fr" : "",
     folderId: isHead ? defaultFolderId ?? "" : "",
     myUrl: "",
@@ -56,6 +72,9 @@ function emptyRow(defaultFolderId?: string, isHead = false): BriefInput {
 function resolveBulkRow(row: BriefInput, head: BriefInput): BriefInput {
   return {
     keyword: row.keyword,
+    // Pas d'héritage du head : des mots-clés secondaires sont spécifiques à
+    // leur mot-clé principal, les dupliquer sur les autres briefs n'a pas de sens.
+    secondaryKeywords: row.secondaryKeywords,
     country: row.country || head.country || "fr",
     folderId: row.folderId || head.folderId || "",
     myUrl: row.myUrl,
@@ -115,6 +134,7 @@ export function NewBriefForm({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         keyword: input.keyword.trim(),
+        secondaryKeywords: parseSecondaryKeywords(input.secondaryKeywords),
         country: input.country,
         folderId: input.folderId || null,
         myUrl: input.myUrl.trim() || null,
@@ -399,6 +419,20 @@ function SimpleSection({
       />
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+        Mots-clés secondaires (optionnel)
+      </label>
+      <input
+        type="text"
+        value={input.secondaryKeywords}
+        onChange={(e) => patch({ secondaryKeywords: e.target.value })}
+        placeholder="Ex. running femme, chaussures trail (séparés par des virgules)"
+        className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-[6px] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
+      />
+      <p className="text-[11px] text-[var(--text-muted)] mb-5">
+        Ajoutés au champ sémantique du brief (termes essentiels) : leur usage est suivi dans l&apos;éditeur et compté dans le score.
+      </p>
+
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
         Marché
       </label>
       <div className="grid grid-cols-3 gap-2 mb-5">
@@ -568,7 +602,14 @@ function BulkRow({
           </button>
         )}
       </div>
-      <div className="grid grid-cols-[1fr_110px_200px] gap-2 pl-[30px]">
+      <div className="grid grid-cols-[1fr_1fr_110px_200px] gap-2 pl-[30px]">
+        <input
+          type="text"
+          value={row.secondaryKeywords}
+          onChange={(e) => patch({ secondaryKeywords: e.target.value })}
+          placeholder="Mots-clés secondaires (virgules)"
+          className="px-3 py-[7px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[12px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
+        />
         <input
           type="url"
           value={row.myUrl}

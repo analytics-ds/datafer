@@ -159,8 +159,8 @@ export function renderHtmlDocument(keyword: string, bodyHtml: string): string {
   body { font-family: Georgia, "Times New Roman", serif; max-width: 760px; margin: 40px auto; padding: 0 24px; line-height: 1.7; color: #222; }
   h1 { font-size: 32px; margin-top: 32px; }
   h2 { font-size: 24px; margin-top: 28px; }
-  h3 { font-size: 18px; margin-top: 22px; }
-  p { margin: 12px 0; }
+  h3 { font-size: 19px; margin-top: 22px; }
+  p { font-size: 16px; margin: 12px 0; }
   ul, ol { padding-left: 24px; }
   li { margin-bottom: 4px; }
   a { color: #0e5132; }
@@ -192,9 +192,9 @@ export function renderPrintDocument(keyword: string, bodyHtml: string): string {
 <style>
   body { font-family: Georgia, "Times New Roman", serif; max-width: 760px; margin: 32px auto; padding: 0 24px; line-height: 1.7; color: #222; }
   h1 { font-size: 30px; margin-top: 26px; }
-  h2 { font-size: 22px; margin-top: 22px; }
-  h3 { font-size: 17px; margin-top: 18px; }
-  p { margin: 10px 0; }
+  h2 { font-size: 23px; margin-top: 22px; }
+  h3 { font-size: 18px; margin-top: 18px; }
+  p { font-size: 15px; margin: 10px 0; }
   ul, ol { padding-left: 24px; }
   table { border-collapse: collapse; width: 100%; margin: 14px 0; }
   th, td { border: 1px solid #bbb; padding: 8px 12px; text-align: left; }

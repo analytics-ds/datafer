@@ -113,6 +113,13 @@
       "when": 1779985756172,
       "tag": "0015_majestic_supreme_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1781096865966,
+      "tag": "0016_furry_expediter",
+      "breakpoints": true
     }
   ]
 }

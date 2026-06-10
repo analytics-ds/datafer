@@ -904,20 +904,24 @@ export function BriefEditor(props: BriefEditorProps) {
           padding-bottom: 8px;
           border-bottom: 2px solid var(--bg-olive-light);
         }
+        /* Hiérarchie typographique volontairement marquée : retours clients
+           RankShaker 2026-06 (« H2/H3 à la même taille que les paragraphes »).
+           Le paragraphe est fixé explicitement à 16px pour que l'écart reste
+           visible quel que soit le contexte d'embed (share, exports). */
         .rich-editor h2 {
-          font-size: 22px;
+          font-size: 24px;
           font-weight: 700;
           line-height: 1.3;
-          margin: 20px 0 8px;
+          margin: 22px 0 8px;
         }
         .rich-editor h3 {
-          font-size: 17px;
+          font-size: 19px;
           font-weight: 600;
           line-height: 1.4;
           margin: 16px 0 6px;
           color: var(--text-secondary);
         }
-        .rich-editor p { margin-bottom: 12px; }
+        .rich-editor p { font-size: 16px; margin-bottom: 12px; }
         .rich-editor ul, .rich-editor ol { margin: 8px 0 12px 24px; padding-left: 0; }
         .rich-editor ul { list-style: disc outside; }
         .rich-editor ol { list-style: decimal outside; }

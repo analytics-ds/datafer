@@ -22,6 +22,7 @@ export async function POST(req: Request) {
 
   const body = (await req.json().catch(() => null)) as {
     keyword?: string;
+    secondaryKeywords?: string[];
     country?: string;
     folderId?: string;
     myUrl?: string;
@@ -30,6 +31,7 @@ export async function POST(req: Request) {
 
   const input = {
     keyword: body.keyword,
+    secondaryKeywords: body.secondaryKeywords,
     country: body.country,
     folderId: body.folderId,
     myUrl: body.myUrl,

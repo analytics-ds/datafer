@@ -22,9 +22,10 @@ export type BriefOverrides = {
   // Termes NLP à retirer (par .term). Utile quand l'analyse remonte du bruit
   // ("cookie", "newsletter") qui n'a rien à voir avec le sujet du KW.
   nlpTermsRemoved?: string[];
-  // Termes NLP custom ajoutés manuellement par le consultant. Injectés avec
-  // presence=70 (tier Importants) pour entrer dans le scoring de couverture
-  // sans être bloquants comme les Essentiels. avgCount/minCount/maxCount à 1.
+  // Termes NLP custom : ajoutés manuellement par le consultant (modal
+  // Paramètres) ou seedés à la création depuis les mots-clés secondaires.
+  // Injectés avec presence=70 (tier Essentiels, seuil >= 70) pour entrer
+  // dans le scoring de couverture. avgCount/minCount/maxCount à 1.
   nlpTermsAdded?: string[];
 };
 
@@ -76,7 +77,7 @@ export function applyBriefOverrides(
 
     if (overrides.nlpTermsAdded && overrides.nlpTermsAdded.length > 0) {
       const existing = new Set(next.nlpTerms.map((t) => t.term.toLowerCase()));
-      // Termes ajoutés avec metadata par défaut : presence=70 (tier Importants),
+      // Termes ajoutés avec metadata par défaut : presence=70 (tier Essentiels),
       // avgCount/minCount/maxCount=1. Pas de dédoublonnage côté display si
       // l'utilisateur ré-ajoute un terme déjà présent (filtre côté lower).
       const customs = overrides.nlpTermsAdded
@@ -91,7 +92,12 @@ export function applyBriefOverrides(
           maxCount: 1,
           avgCount: 1,
         }));
-      next.nlpTerms = [...next.nlpTerms, ...customs];
+      // PREPEND, pas append : l'UI et le scoring ne regardent que les 40
+      // premiers termes (slice(0, 40)) alors que runNLP en retourne jusqu'à
+      // 60. Un terme custom appendé en fin de liste était invisible et non
+      // scoré dès que l'analyse remontait 40+ termes naturels. En tête, les
+      // termes voulus par l'utilisateur sont toujours affichés et comptés.
+      next.nlpTerms = [...customs, ...next.nlpTerms];
     }
 
     if (overrides.wordCount) {

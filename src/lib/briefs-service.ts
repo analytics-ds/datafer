@@ -44,10 +44,42 @@ export function computeCompetitorStats(serpJson: string | null): CompetitorStats
 
 export type CreateBriefInput = {
   keyword: string;
+  // Mots-clés secondaires optionnels saisis avant le lancement de l'analyse.
+  // Stockés sur le brief et seedés dans overrides.nlpTermsAdded pour entrer
+  // dans le suivi de couverture (tier Essentiels) et le scoring.
+  secondaryKeywords?: string[] | null;
   country?: string;
   folderId?: string | null;
   myUrl?: string | null;
 };
+
+export const MAX_SECONDARY_KEYWORDS = 10;
+
+/**
+ * Normalise la liste de mots-clés secondaires : trim, retire les vides, le
+ * doublon du mot-clé principal et les doublons internes (case-insensitive),
+ * cap à MAX_SECONDARY_KEYWORDS.
+ */
+export function normalizeSecondaryKeywords(
+  raw: unknown,
+  mainKeyword: string,
+): string[] {
+  if (!Array.isArray(raw)) return [];
+  const main = mainKeyword.trim().toLowerCase();
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const kw = item.trim().replace(/\s+/g, " ");
+    if (!kw) continue;
+    const lower = kw.toLowerCase();
+    if (lower === main || seen.has(lower)) continue;
+    seen.add(lower);
+    out.push(kw);
+    if (out.length >= MAX_SECONDARY_KEYWORDS) break;
+  }
+  return out;
+}
 
 export type CreateBriefResult =
   | { ok: true; id: string; crawled: number; total: number; score: number }
@@ -185,6 +217,7 @@ export async function createPendingBrief(
   const country = (input.country || "fr").toLowerCase();
   const folderId = input.folderId || null;
   if (!keyword) return { ok: false, status: 400, error: "keyword required" };
+  const secondaryKeywords = normalizeSecondaryKeywords(input.secondaryKeywords, keyword);
 
   const db = getDb();
   const folder = await resolveFolder(db, userId, folderId);
@@ -196,6 +229,15 @@ export async function createPendingBrief(
     ownerId: userId,
     clientId: folderId,
     keyword,
+    secondaryKeywords: secondaryKeywords.length ? JSON.stringify(secondaryKeywords) : null,
+    // Seed des mots-clés secondaires dans les overrides : ils passent par le
+    // même chemin que les termes custom du back-office (applyBriefOverrides
+    // les injecte en tête des termes NLP, tier Essentiels) → suivis dans
+    // l'éditeur et comptés dans le scoring sans toucher au pipeline
+    // d'analyse. completeBriefAnalysis n'écrase pas overridesJson.
+    overridesJson: secondaryKeywords.length
+      ? JSON.stringify({ nlpTermsAdded: secondaryKeywords })
+      : null,
     country,
     status: "pending",
     score: 0,

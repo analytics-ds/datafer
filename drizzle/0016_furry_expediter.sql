@@ -1,0 +1,1 @@
+ALTER TABLE `brief` ADD `secondary_keywords` text;
