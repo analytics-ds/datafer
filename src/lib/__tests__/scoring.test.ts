@@ -254,3 +254,19 @@ function makeNlp(): NlpResult {
     medianImages: 4,
   };
 }
+
+describe("isJunkNlpTerm + scoring nlpCoverage", () => {
+  it("identifie les termes junk (interrogatifs, articles, variantes du KW)", async () => {
+    const { isJunkNlpTerm } = await import("@/lib/scoring");
+    expect(isJunkNlpTerm("quelle", "laver un jean")).toBe(true);
+    expect(isJunkNlpTerm("faut-il", "laver un jean")).toBe(true);
+    expect(isJunkNlpTerm("deux", "laver un jean")).toBe(true);
+    expect(isJunkNlpTerm("jean", "laver un jean")).toBe(true);
+    expect(isJunkNlpTerm("jeans", "laver un jean")).toBe(true);
+    expect(isJunkNlpTerm("denim", "laver un jean")).toBe(false);
+    expect(isJunkNlpTerm("basse température", "laver un jean")).toBe(false);
+    // les formes accentuées doivent être junk aussi (normalize strip les accents)
+    expect(isJunkNlpTerm("où", "laver un jean")).toBe(true);
+    expect(isJunkNlpTerm("très", "laver un jean")).toBe(true);
+  });
+});

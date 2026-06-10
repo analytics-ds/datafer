@@ -13,7 +13,7 @@ import type {
   Section as NlpSection,
   Entity,
 } from "@/lib/analysis";
-import { buildKeywordRegex, computeDetailedScore, MIN_VALID_COMPETITOR_SCORE, normalize, type DetailedScore, type ParagraphSemanticScore } from "@/lib/scoring";
+import { buildKeywordRegex, computeDetailedScore, isJunkNlpTerm, MIN_VALID_COMPETITOR_SCORE, normalize, type DetailedScore, type ParagraphSemanticScore } from "@/lib/scoring";
 import {
   extractGeoSignals,
   EMPTY_GEO_SIGNALS,
@@ -1140,42 +1140,9 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-const NLP_JUNK_TOKENS = new Set([
-  "est", "ce", "qui", "que", "quoi", "qu", "où", "quand",
-  "comment", "pourquoi", "combien",
-  "quel", "quelle", "quels", "quelles",
-  "quelque", "quelques", "quelconque", "quelconques",
-  "lequel", "laquelle", "lesquels", "lesquelles",
-  "le", "la", "les", "un", "une", "des", "du", "de", "en", "et", "ou",
-  "à", "au", "aux", "pour", "par", "sur", "sous", "dans", "avec", "sans",
-  "plus", "moins", "très", "tout", "tous", "toute", "toutes",
-  "bien", "mieux", "aussi", "encore", "déjà", "même", "non", "oui",
-  "fait", "faire", "peut", "peuvent", "sont", "etre", "avoir",
-  "n", "s", "d", "l", "j", "t", "m", "c",
-]);
-
-function isJunkNlpTerm(term: string, targetKeyword?: string | null): boolean {
-  const tokens = normalize(term)
-    .replace(/[^a-z0-9\s'-]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-  if (tokens.length === 0) return true;
-
-  const kwTokens = new Set<string>();
-  if (targetKeyword) {
-    normalize(targetKeyword)
-      .replace(/[^a-z0-9\s'-]/g, " ")
-      .split(/\s+/)
-      .filter((w) => w.length > 1)
-      .forEach((w) => {
-        kwTokens.add(w);
-        if (w.endsWith("s")) kwTokens.add(w.slice(0, -1));
-        else kwTokens.add(w + "s");
-      });
-  }
-
-  return tokens.every((t) => NLP_JUNK_TOKENS.has(t) || kwTokens.has(t));
-}
+// isJunkNlpTerm vit désormais dans @/lib/scoring : partagé entre cette
+// sidebar et le scoring nlpCoverage pour que les termes comptés soient
+// exactement les chips affichées (fix 2026-06-10).
 
 function EditorSidebar({
   briefId,

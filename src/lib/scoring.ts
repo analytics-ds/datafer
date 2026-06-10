@@ -77,6 +77,62 @@ function escapeRegex(s: string): string {
 }
 
 /**
+ * Tokens FR sans valeur sémantique isolée (interrogatifs, articles,
+ * prépositions, auxiliaires). Un terme NLP composé uniquement de ces tokens
+ * (et/ou des tokens du mot-clé principal) est du bruit : masqué dans la
+ * sidebar ET exclu du scoring de couverture, pour que l'utilisateur ne soit
+ * jamais scoré sur un terme qu'il ne peut pas voir. Particulièrement visible
+ * sur la longue traîne interrogative ("comment laver un jean...") où "quelle",
+ * "faut-il", "deux" remontaient en tier Essentiels (constat 2026-06-10).
+ */
+export const NLP_JUNK_TOKENS = new Set([
+  "est", "ce", "qui", "que", "quoi", "qu", "où", "ou", "quand",
+  "comment", "pourquoi", "combien",
+  "quel", "quelle", "quels", "quelles",
+  "quelque", "quelques", "quelconque", "quelconques",
+  "lequel", "laquelle", "lesquels", "lesquelles",
+  "le", "la", "les", "un", "une", "des", "du", "de", "en", "et",
+  "à", "a", "au", "aux", "pour", "par", "sur", "sous", "dans", "avec", "sans",
+  "plus", "moins", "très", "tres", "tout", "tous", "toute", "toutes",
+  "bien", "mieux", "aussi", "encore", "déjà", "deja", "même", "meme", "non", "oui",
+  "fait", "faire", "faut", "peut", "peuvent", "sont", "etre", "avoir", "il", "ils", "on",
+  "deux", "trois",
+  "n", "s", "d", "l", "j", "t", "m", "c",
+]);
+
+/**
+ * Vrai si le terme NLP est du bruit : tous ses tokens sont soit des
+ * NLP_JUNK_TOKENS, soit des tokens du mot-clé principal (variantes
+ * singulier/pluriel incluses). Partagé entre la sidebar de l'éditeur et le
+ * scoring nlpCoverage pour garantir que ce qui est compté = ce qui est
+ * affiché.
+ */
+export function isJunkNlpTerm(term: string, targetKeyword?: string | null): boolean {
+  // Split aussi sur les tirets : "faut-il", "est-ce", "peut-on" doivent être
+  // décomposés pour matcher les tokens junk.
+  const tokens = normalize(term)
+    .replace(/[^a-z0-9\s']/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  const kwTokens = new Set<string>();
+  if (targetKeyword) {
+    normalize(targetKeyword)
+      .replace(/[^a-z0-9\s']/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 1)
+      .forEach((w) => {
+        kwTokens.add(w);
+        if (w.endsWith("s")) kwTokens.add(w.slice(0, -1));
+        else kwTokens.add(w + "s");
+      });
+  }
+
+  return tokens.every((t) => NLP_JUNK_TOKENS.has(t) || kwTokens.has(t));
+}
+
+/**
  * Stemmer FR léger : enlève les suffixes flexionnels les plus fréquents
  * (pluriel, féminin, conjugaisons régulières). On garde au moins 3 lettres
  * de racine pour éviter de tout tronquer sur les mots courts. Liste triée
@@ -440,7 +496,13 @@ export function computeDetailedScore(
   // 27 pts (8 pts redistribués vers le critère sémantique paragraphe).
   // Le NLP reste le critère discriminant principal entre un brouillon et
   // un contenu sérieux.
-  const top40 = nlp.nlpTerms.slice(0, 40);
+  // slice(0, 40) PUIS filtre junk : même ordre que la sidebar de l'éditeur
+  // (brief-editor.tsx) pour que les termes comptés soient exactement les
+  // chips affichées. Avant le 2026-06-10, les termes junk ("quelle",
+  // "faut-il"...) étaient masqués à l'écran mais comptés dans le scoring.
+  const top40 = nlp.nlpTerms
+    .slice(0, 40)
+    .filter((t) => !isJunkNlpTerm(t.term, nlp.exactKeyword.keyword));
   const essentials = top40.filter((t) => t.presence >= 70);
   const importants = top40.filter((t) => t.presence >= 40 && t.presence < 70);
   const matchTerm = (t: NlpTerm): boolean => {
