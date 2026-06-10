@@ -1330,7 +1330,7 @@ function EditorSidebar({
       <Section
         title="Score détaillé"
         dotColor="var(--bg-black)"
-        info="Décomposition du score SEO en 9 critères pondérés sur 100. Chaque barre indique ta progression sur le critère (vert ≥70%, orange 40-69%, rouge <40%). La somme pondérée donne le score affiché en haut."
+        info="Décomposition du score SEO en 8 critères pondérés, ramenés sur 100. Chaque barre indique ta progression sur le critère (vert ≥70%, orange 40-69%, rouge <40%). La somme pondérée donne le score affiché en haut."
       >
         {subItems.map((i) => {
           const pct = Math.round((i.s.score / i.s.max) * 100);
