@@ -297,6 +297,7 @@ export async function createPendingBrief(
     ownerId: userId,
     clientId: folderId,
     keyword,
+    myUrl: input.myUrl?.trim() || null,
     secondaryKeywords: secondaryKeywords.length ? JSON.stringify(secondaryKeywords) : null,
     // Seed des mots-clés secondaires dans les overrides : ils passent par le
     // même chemin que les termes custom du back-office (applyBriefOverrides

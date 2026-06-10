@@ -12,11 +12,20 @@ const HIGHLIGHT_COLORS = [
   { value: "#E0D4F5", label: "Violet", swatch: "#E0D4F5" },
 ];
 
-const HEADINGS: Array<{ tag: "h1" | "h2" | "h3" | "p"; label: string; className: string }> = [
-  { tag: "h1", label: "H1 · Titre principal", className: "text-[20px] font-bold" },
-  { tag: "h2", label: "H2 · Sous-titre", className: "text-[16px] font-semibold" },
-  { tag: "h3", label: "H3 · Section", className: "text-[14px] font-semibold" },
-  { tag: "p", label: "¶ Paragraphe", className: "text-[14px] text-[var(--text-secondary)]" },
+/** Tags de bloc applicables depuis la toolbar / les raccourcis clavier. */
+export type BlockTag = "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p";
+
+const IS_MAC = typeof navigator !== "undefined" && /Mac|iP(hone|ad|od)/.test(navigator.platform);
+const shortcutLabel = (n: number) => (IS_MAC ? `⌥⌘${n}` : `Ctrl+Alt+${n}`);
+
+const HEADINGS: Array<{ tag: BlockTag; label: string; className: string; shortcut: string }> = [
+  { tag: "h1", label: "H1 · Titre principal", className: "text-[20px] font-bold", shortcut: shortcutLabel(1) },
+  { tag: "h2", label: "H2 · Sous-titre", className: "text-[16px] font-semibold", shortcut: shortcutLabel(2) },
+  { tag: "h3", label: "H3 · Section", className: "text-[14px] font-semibold", shortcut: shortcutLabel(3) },
+  { tag: "h4", label: "H4 · Sous-section", className: "text-[13px] font-semibold", shortcut: shortcutLabel(4) },
+  { tag: "h5", label: "H5", className: "text-[12px] font-semibold", shortcut: shortcutLabel(5) },
+  { tag: "h6", label: "H6", className: "text-[11px] font-semibold", shortcut: shortcutLabel(6) },
+  { tag: "p", label: "¶ Paragraphe", className: "text-[14px] text-[var(--text-secondary)]", shortcut: shortcutLabel(0) },
 ];
 
 const TABLE_GRID_ROWS = 8;
@@ -24,9 +33,9 @@ const TABLE_GRID_COLS = 10;
 const MAX_IMAGE_BYTES = 1_500_000;
 
 type ToolbarProps = {
-  currentTag: "h1" | "h2" | "h3" | "p" | null;
+  currentTag: BlockTag | null;
   onExec: (cmd: string, value?: string) => void;
-  onApplyHeading: (tag: "h1" | "h2" | "h3" | "p") => void;
+  onApplyHeading: (tag: BlockTag) => void;
   onInsertImage: (src: string, alt: string) => void;
   onInsertTable: (rows: number, cols: number) => void;
   onInsertLink: () => void;
@@ -63,13 +72,7 @@ export function EditorToolbar(p: ToolbarProps) {
   }, []);
 
   const currentHeadingLabel =
-    p.currentTag === "h1"
-      ? "H1"
-      : p.currentTag === "h2"
-        ? "H2"
-        : p.currentTag === "h3"
-          ? "H3"
-          : "¶";
+    p.currentTag && p.currentTag !== "p" ? p.currentTag.toUpperCase() : "¶";
 
   return (
     <div
@@ -102,7 +105,12 @@ export function EditorToolbar(p: ToolbarProps) {
                   setHeadingOpen(false);
                 }}
               >
-                <span className={h.className}>{h.label}</span>
+                <span className="flex items-center justify-between gap-4 w-full">
+                  <span className={h.className}>{h.label}</span>
+                  <span className="text-[10px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] shrink-0">
+                    {h.shortcut}
+                  </span>
+                </span>
               </MenuItem>
             ))}
           </Menu>

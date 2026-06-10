@@ -1,0 +1,1 @@
+ALTER TABLE `brief` ADD `my_url` text;

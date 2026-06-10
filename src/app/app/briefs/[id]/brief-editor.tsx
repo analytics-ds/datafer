@@ -21,7 +21,7 @@ import {
   type GeoSignals,
 } from "@/lib/geo-scoring";
 import { faviconUrl } from "@/lib/favicon";
-import { EditorToolbar } from "./toolbar";
+import { EditorToolbar, type BlockTag } from "./toolbar";
 import { MaillageSection } from "./maillage-section";
 import { ShareBriefPanel } from "../share-brief-panel";
 import { CommentLayer } from "./comment-layer";
@@ -92,6 +92,8 @@ type BriefEditorProps = {
   printUrl?: string;
   /** Masquer le bouton "Nouvelle analyse" (ex. en mode partage). */
   hideNewAnalysis?: boolean;
+  /** URL du contenu utilisateur (saisie à la création ou importée ensuite). */
+  myUrl?: string | null;
   /** Token de partage déjà actif sur le brief (mode consultant uniquement). */
   shareToken?: string | null;
   /**
@@ -139,6 +141,10 @@ export function BriefEditor(props: BriefEditorProps) {
 
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus>(props.workflowStatus);
   const [tags, setTags] = useState<TagDTO[]>(props.initialTags);
+  // Import de contenu post-création : modal + URL importée (affichée dans
+  // Insights). Initialisée depuis la BDD (my_url), mise à jour après import.
+  const [importOpen, setImportOpen] = useState(false);
+  const [myUrl, setMyUrl] = useState<string | null>(props.myUrl ?? null);
   // Modal Paramètres back-office (icône ⚙️). Affichée uniquement quand le
   // brief est ouvert depuis la session authentifiée (pas en mode partage).
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -202,7 +208,7 @@ export function BriefEditor(props: BriefEditorProps) {
   const [tab, setTab] = useState<Tab>("editor");
   const [editorData, setEditorData] = useState({ text: "", h1s: [] as string[], h2s: [] as string[], h3s: [] as string[], imageCount: 0 });
   const [geoSignals, setGeoSignals] = useState<GeoSignals>(EMPTY_GEO_SIGNALS);
-  const [currentTag, setCurrentTag] = useState<"h1" | "h2" | "h3" | "p" | null>(null);
+  const [currentTag, setCurrentTag] = useState<BlockTag | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Cache des scores cosinus paragraphe (clé = hash du textContent), alimenté
@@ -247,13 +253,13 @@ export function BriefEditor(props: BriefEditorProps) {
     let tag: string | null = null;
     while (node && node !== editorRef.current) {
       const name = (node as Element).nodeName?.toLowerCase();
-      if (["h1", "h2", "h3", "p"].includes(name)) {
+      if (["h1", "h2", "h3", "h4", "h5", "h6", "p"].includes(name)) {
         tag = name;
         break;
       }
       node = node.parentNode;
     }
-    setCurrentTag(tag as "h1" | "h2" | "h3" | "p" | null);
+    setCurrentTag(tag as BlockTag | null);
   }, []);
 
   // Hash très court (200 caractères normalisés) pour identifier un paragraphe
@@ -474,10 +480,23 @@ export function BriefEditor(props: BriefEditorProps) {
     readEditor();
   };
 
-  const applyHeading = (tag: "h1" | "h2" | "h3" | "p") => {
+  const applyHeading = (tag: BlockTag) => {
     editorRef.current?.focus();
     document.execCommand("formatBlock", false, `<${tag}>`);
     readEditor();
+  };
+
+  // Raccourcis clavier de niveau de bloc, alignés sur Google Docs :
+  // Cmd/Ctrl+Alt+1..6 = titre Hn, Cmd/Ctrl+Alt+0 = paragraphe. On matche sur
+  // e.code (Digit1...) car sur macOS Alt+chiffre produit un caractère spécial
+  // dans e.key.
+  const handleEditorKeyDown = (e: React.KeyboardEvent) => {
+    if (!(e.metaKey || e.ctrlKey) || !e.altKey) return;
+    const m = /^Digit([0-6])$/.exec(e.code);
+    if (!m) return;
+    e.preventDefault();
+    const n = Number(m[1]);
+    applyHeading(n === 0 ? "p" : (`h${n}` as BlockTag));
   };
 
   const handleHighlight = (color: string) => {
@@ -662,6 +681,15 @@ export function BriefEditor(props: BriefEditorProps) {
               2026-05-28). Le save reste opérationnel via le debounce dans le
               useEffect plus bas, juste rien n'apparaît à l'écran. On pourra
               afficher un état "erreur" plus tard si besoin de signaler un fail. */}
+          {!hideNewAnalysis && (
+            <button
+              onClick={() => setImportOpen(true)}
+              className="px-4 py-[8px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[12px] font-semibold hover:bg-[var(--bg-warm)] transition-colors"
+              title="Récupérer le contenu d'une page existante et l'injecter dans l'éditeur"
+            >
+              Importer une URL
+            </button>
+          )}
           <ExportMenu exportEndpoint={exportEndpoint} printUrl={printUrl} />
           {!hideNewAnalysis && (
             <ShareBriefPanel briefId={id} initialToken={props.shareToken ?? null} />
@@ -762,6 +790,7 @@ export function BriefEditor(props: BriefEditorProps) {
                 spellCheck
                 lang={spellcheckLang(country)}
                 onInput={readEditor}
+                onKeyDown={handleEditorKeyDown}
                 onKeyUp={updateCurrentTag}
                 onMouseUp={updateCurrentTag}
                 className={
@@ -853,6 +882,7 @@ export function BriefEditor(props: BriefEditorProps) {
           userWordCount={wc}
           userH2Count={editorData.h2s.length}
           userH3Count={editorData.h3s.length}
+          myUrl={myUrl}
         />
       </div>
 
@@ -921,6 +951,27 @@ export function BriefEditor(props: BriefEditorProps) {
           margin: 16px 0 6px;
           color: var(--text-secondary);
         }
+        .rich-editor h4 {
+          font-size: 17px;
+          font-weight: 600;
+          line-height: 1.4;
+          margin: 14px 0 6px;
+        }
+        .rich-editor h5 {
+          font-size: 15px;
+          font-weight: 700;
+          line-height: 1.4;
+          margin: 12px 0 4px;
+        }
+        .rich-editor h6 {
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.4;
+          margin: 12px 0 4px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--text-secondary);
+        }
         .rich-editor p { font-size: 16px; margin-bottom: 12px; }
         .rich-editor ul, .rich-editor ol { margin: 8px 0 12px 24px; padding-left: 0; }
         .rich-editor ul { list-style: disc outside; }
@@ -953,6 +1004,23 @@ export function BriefEditor(props: BriefEditorProps) {
           font-weight: 600;
         }
       `}</style>
+      {importOpen && (
+        <ImportUrlModal
+          initialUrl={myUrl ?? ""}
+          hasContent={editorData.text.trim().length > 0}
+          endpoint={`/api/briefs/${id}/import-url`}
+          onClose={() => setImportOpen(false)}
+          onImported={(html, url) => {
+            if (editorRef.current) {
+              editorRef.current.innerHTML = html;
+            }
+            setMyUrl(url);
+            setImportOpen(false);
+            // Laisse React/DOM se poser avant de relire (déclenche autosave + rescore).
+            setTimeout(() => readEditor(), 0);
+          }}
+        />
+      )}
       {!hideNewAnalysis && (
         <BriefSettingsModal
           briefId={id}
@@ -1295,12 +1363,7 @@ function EditorSidebar({
       <CompetitorScoreRow scoreTotal={scoreTotal} serp={serp} />
 
       {/* Stats clés du mot-clé */}
-      <KeywordStatsRow
-        volume={haloscan?.search_volume ?? null}
-        kgr={haloscan?.kgr ?? null}
-        position={position}
-        folderWebsite={folderWebsite}
-      />
+      <KeywordStatsRow position={position} folderWebsite={folderWebsite} />
 
       {/* Sub-scores */}
       <Section
@@ -2552,6 +2615,7 @@ function InsightsPane({
   userWordCount,
   userH2Count,
   userH3Count,
+  myUrl,
 }: {
   nlp: NlpResult | null;
   halo: HaloscanOverview | null;
@@ -2562,6 +2626,7 @@ function InsightsPane({
   userWordCount: number;
   userH2Count: number;
   userH3Count: number;
+  myUrl?: string | null;
 }) {
   const vp = serp.filter((r) => (r.wordCount ?? 0) > 0);
   const aW = vp.length ? Math.round(vp.reduce((s, r) => s + (r.wordCount ?? 0), 0) / vp.length) : 0;
@@ -2644,6 +2709,22 @@ function InsightsPane({
         <InsightMetric label="Pages crawlées" value={`${vp.length}/${serp.length}`} />
         <InsightMetric label="Mots moyen" value={aW.toLocaleString("fr-FR")} />
       </InsightCard>
+
+      {myUrl && (
+        <InsightCard title="Ma page importée" dotColor="var(--orange)">
+          <a
+            href={myUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-[13px] text-[var(--accent-dark)] underline break-all leading-snug mb-2"
+          >
+            {myUrl}
+          </a>
+          <InsightMetric label="Mes mots" value={userWordCount.toLocaleString("fr-FR")} />
+          <InsightMetric label="Mes H2 / H3" value={`${userH2Count} / ${userH3Count}`} />
+          <InsightMetric label="Mon score" value={`${userScore}/100`} />
+        </InsightCard>
+      )}
 
       <div className="col-span-full">
         <SerpAnalyticsCharts
@@ -3099,14 +3180,13 @@ function CompareCell({
   );
 }
 
+// Volume et KGR retirés de la sidebar (retour utilisateur 2026-06-10) : ils
+// restent visibles dans l'onglet Insights (carte "Données mot-clé"). Seule
+// la position du client est conservée ici.
 function KeywordStatsRow({
-  volume,
-  kgr,
   position,
   folderWebsite,
 }: {
-  volume: number | null;
-  kgr: number | null;
   position: number | null;
   folderWebsite: string | null;
 }) {
@@ -3121,24 +3201,9 @@ function KeywordStatsRow({
           : position <= 30
             ? "warn"
             : "bad";
-  // KGR : vert quand opportunité (< 0.25), neutre sinon. Pas de rouge :
-  // un KGR élevé est un signal informatif, pas une erreur.
-  const kgrTone = kgr != null && kgr < 0.25 ? "good" : "muted";
 
   return (
-    <div className="grid grid-cols-3 gap-2 mb-5">
-      <KeyStat
-        label="Volume"
-        value={volume != null ? volume.toLocaleString("fr-FR") : "N/A"}
-        tooltip="Volume de recherche mensuel (Haloscan)"
-        tone={volume != null ? "info" : "muted"}
-      />
-      <KeyStat
-        label="KGR"
-        value={kgr != null ? kgr.toFixed(2) : "N/A"}
-        tooltip="Keyword Golden Ratio. < 0.25 excellent, < 1 correct, > 1 trop concurrentiel."
-        tone={kgrTone}
-      />
+    <div className="grid grid-cols-1 gap-2 mb-5">
       <KeyStat
         label="Position"
         value={position != null ? `#${position}` : "N/A"}
@@ -3563,5 +3628,136 @@ function SettingsGearIcon() {
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
+  );
+}
+
+/**
+ * Modal "Importer une URL" : crawle la page (cascade fetch direct → Bright
+ * Data) côté serveur et remplace le contenu de l'éditeur par le HTML
+ * structuré récupéré. Retour utilisateur 2026-06 : pouvoir reprendre un
+ * contenu existant APRÈS la création du brief (avant, seul le champ "Mon URL"
+ * du formulaire de création le permettait).
+ */
+function ImportUrlModal({
+  initialUrl,
+  hasContent,
+  endpoint,
+  onClose,
+  onImported,
+}: {
+  initialUrl: string;
+  hasContent: boolean;
+  endpoint: string;
+  onClose: () => void;
+  onImported: (html: string, url: string) => void;
+}) {
+  const [url, setUrl] = useState(initialUrl);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !loading) onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, loading]);
+
+  async function runImport() {
+    const target = url.trim();
+    if (!/^https?:\/\//i.test(target)) {
+      setError("Colle une URL complète en http(s)://");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: target }),
+      });
+      const data = (await r.json().catch(() => ({}))) as {
+        html?: string;
+        url?: string;
+        error?: string;
+      };
+      if (!r.ok || !data.html) {
+        setError(data.error ?? `Erreur ${r.status}`);
+        setLoading(false);
+        return;
+      }
+      onImported(data.html, data.url ?? target);
+    } catch {
+      setError("Erreur réseau, réessaie.");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      onClick={() => !loading && onClose()}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(0,0,0,0.45)] backdrop-blur-sm"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] shadow-[var(--shadow-lg)] w-[480px] max-w-full p-6"
+      >
+        <h3 className="font-[family-name:var(--font-display)] text-[18px] mb-1">
+          Importer le contenu d&apos;une URL
+        </h3>
+        <p className="text-[12px] text-[var(--text-muted)] mb-4">
+          On récupère la page (rendu JS inclus) et on injecte ses titres et
+          paragraphes dans l&apos;éditeur pour scorer ton contenu existant.
+        </p>
+        <input
+          type="url"
+          autoFocus
+          value={url}
+          disabled={loading}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void runImport();
+            }
+          }}
+          placeholder="https://exemple.fr/ma-page"
+          className="w-full px-3 py-[10px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[13px] font-[family-name:var(--font-mono)] mb-3 disabled:opacity-60"
+        />
+        {hasContent && !loading && (
+          <p className="text-[12px] text-[var(--orange)] bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] px-3 py-2 mb-3">
+            L&apos;éditeur contient déjà du texte : l&apos;import le remplacera
+            entièrement.
+          </p>
+        )}
+        {error && (
+          <p className="text-[12px] text-[var(--red)] bg-[var(--red-bg)] border border-[var(--red)]/20 rounded-[var(--radius-xs)] px-3 py-2 mb-3">
+            {error}
+          </p>
+        )}
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="px-4 py-[9px] rounded-[var(--radius-sm)] text-[13px] font-semibold border border-[var(--border)] hover:bg-[var(--bg-warm)] transition-colors disabled:opacity-50"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={() => void runImport()}
+            disabled={loading || !url.trim()}
+            className="px-4 py-[9px] rounded-[var(--radius-sm)] text-[13px] font-semibold bg-[var(--bg-black)] text-[var(--text-inverse)] hover:bg-[var(--bg-dark)] disabled:opacity-50 transition-colors inline-flex items-center gap-2"
+          >
+            {loading && (
+              <span className="w-[12px] h-[12px] border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            )}
+            {loading ? "Récupération en cours… (jusqu'à 1 min)" : "Importer →"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

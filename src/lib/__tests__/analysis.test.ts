@@ -125,3 +125,43 @@ describe("parseHTML — contenu dans un <form>", () => {
     expect(parsed.text).not.toContain("Texte de bouton");
   });
 });
+
+describe("parseHTML — titres dans les <button> (accordéons FAQ)", () => {
+  it("capture un H2 dans le bouton d'un accordéon (pattern Shopify/Freeman)", () => {
+    const html =
+      '<div class="accordion">' +
+      '<button class="accordion__header" type="button">' +
+      '<span class="accordion__title title-h5">' +
+      '<h2 class="text-l-med">Comment porter un jean large ?</h2>' +
+      "</span>" +
+      '<span class="accordion__icon">+</span>' +
+      "</button>" +
+      '<div class="accordion__content">' +
+      "<p>Avec des baskets ou des talons, le jean large se porte taille haute pour allonger la silhouette.</p>" +
+      "<h3>Quelles chaussures choisir ?</h3>" +
+      "<p>Des chaussures plates conviennent parfaitement au quotidien pour un style décontracté.</p>" +
+      "</div>" +
+      "</div>";
+    const parsed = parseHTML(html);
+    expect(parsed.h2).toContain("Comment porter un jean large ?");
+    expect(parsed.h3).toContain("Quelles chaussures choisir ?");
+    // L'icône UI du bouton ne doit pas polluer le texte ni le titre.
+    expect(parsed.text).not.toContain("+");
+    expect(parsed.outline.map((o) => o.text)).toContain("Comment porter un jean large ?");
+  });
+
+  it("continue d'ignorer le texte non-titre des boutons", () => {
+    const html =
+      "<p>Paragraphe editorial suffisamment long pour etre conserve par le parseur.</p>" +
+      "<button>Ajouter au panier maintenant</button>";
+    const parsed = parseHTML(html);
+    expect(parsed.text).not.toContain("Ajouter au panier");
+  });
+
+  it("garde le balisage inline d'un titre dans un bouton", () => {
+    const html =
+      "<button><h2>Question avec <strong>gras</strong> dedans ?</h2></button>";
+    const parsed = parseHTML(html);
+    expect(parsed.h2).toContain("Question avec gras dedans ?");
+  });
+});

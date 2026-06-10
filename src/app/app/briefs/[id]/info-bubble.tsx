@@ -18,7 +18,20 @@ export function InfoBubble({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // Côté d'ouverture du popover : à droite du "?" par défaut, mais à gauche
+  // quand le "?" est trop près du bord droit du viewport (cas sidebar de
+  // l'éditeur : la bulle dépassait de l'écran, retour utilisateur 2026-06).
+  const [side, setSide] = useState<"right" | "left">("right");
   const wrapperRef = useRef<HTMLSpanElement>(null);
+
+  const BUBBLE_WIDTH = 260;
+  function toggle() {
+    if (!open && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      setSide(rect.right + BUBBLE_WIDTH + 30 > window.innerWidth ? "left" : "right");
+    }
+    setOpen((v) => !v);
+  }
 
   // Click outside pour fermer.
   useEffect(() => {
@@ -45,7 +58,7 @@ export function InfoBubble({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((v) => !v);
+          toggle();
         }}
         aria-label="Plus d'infos"
         aria-expanded={open}
@@ -60,7 +73,7 @@ export function InfoBubble({
       {open && (
         <span
           role="tooltip"
-          className="absolute left-[22px] top-1/2 -translate-y-1/2 z-50 w-[260px] max-w-[260px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-[11px] font-normal normal-case tracking-normal leading-snug text-[var(--text)] shadow-lg whitespace-normal"
+          className={`absolute ${side === "right" ? "left-[22px]" : "right-[22px]"} top-1/2 -translate-y-1/2 z-50 w-[260px] max-w-[260px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-[11px] font-normal normal-case tracking-normal leading-snug text-[var(--text)] shadow-lg whitespace-normal`}
           onClick={(e) => e.stopPropagation()}
         >
           {text}

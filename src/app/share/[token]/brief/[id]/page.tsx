@@ -75,9 +75,6 @@ export default async function SharedBriefPage({
             </>
           )}
         </div>
-        <span className="inline-flex items-center gap-[5px] px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[11px] font-semibold tracking-[0.4px]">
-          Vue client
-        </span>
       </header>
 
       <div className="flex-1 flex flex-col">

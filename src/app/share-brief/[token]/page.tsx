@@ -43,9 +43,6 @@ export default async function SharedSingleBriefPage({
     <div className="min-h-screen bg-[var(--bg)] flex flex-col">
       <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 h-14 flex items-center justify-between shrink-0">
         <LogoRankShaker height={20} className="text-[var(--text)]" />
-        <span className="inline-flex items-center gap-[5px] px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[11px] font-semibold tracking-[0.4px]">
-          Vue client
-        </span>
       </header>
 
       <div className="flex-1 flex flex-col">

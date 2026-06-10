@@ -168,6 +168,9 @@ export const brief = sqliteTable("brief", {
   // tête des termes NLP via overrides_json.nlpTermsAdded (cf. createPendingBrief)
   // pour entrer dans le suivi de couverture et le scoring.
   secondaryKeywords: text("secondary_keywords"),
+  // URL du contenu utilisateur : renseignée à la création ("Mon URL existante")
+  // ou via l'import post-création dans l'éditeur. Affichée dans Insights.
+  myUrl: text("my_url"),
   country: text("country").notNull().default("fr"),
   shareToken: text("share_token").unique(),
   // JSON blobs for the analysis snapshots and editor content

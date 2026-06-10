@@ -85,6 +85,7 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
       haloscan={haloscan}
       position={overridden.position}
       shareToken={b.shareToken ?? null}
+      myUrl={b.myUrl ?? null}
       overrides={overrides}
       rawSerp={rawSerp}
       rawNlpTerms={rawNlp?.nlpTerms ?? []}

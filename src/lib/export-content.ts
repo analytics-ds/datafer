@@ -160,6 +160,9 @@ export function renderHtmlDocument(keyword: string, bodyHtml: string): string {
   h1 { font-size: 32px; margin-top: 32px; }
   h2 { font-size: 24px; margin-top: 28px; }
   h3 { font-size: 19px; margin-top: 22px; }
+  h4 { font-size: 17px; margin-top: 18px; }
+  h5 { font-size: 15px; margin-top: 16px; }
+  h6 { font-size: 13px; margin-top: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
   p { font-size: 16px; margin: 12px 0; }
   ul, ol { padding-left: 24px; }
   li { margin-bottom: 4px; }
@@ -194,6 +197,9 @@ export function renderPrintDocument(keyword: string, bodyHtml: string): string {
   h1 { font-size: 30px; margin-top: 26px; }
   h2 { font-size: 23px; margin-top: 22px; }
   h3 { font-size: 18px; margin-top: 18px; }
+  h4 { font-size: 16px; margin-top: 15px; }
+  h5 { font-size: 14px; margin-top: 13px; }
+  h6 { font-size: 12px; margin-top: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
   p { font-size: 15px; margin: 10px 0; }
   ul, ol { padding-left: 24px; }
   table { border-collapse: collapse; width: 100%; margin: 14px 0; }

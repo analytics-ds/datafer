@@ -1329,7 +1329,9 @@ const NOISE_TAGS = new Set([
   "noscript",
   "svg",
   "iframe",
-  "button",
+  // "button" n'est PAS ici : traité en noise "soft" dans le parser (son
+  // contenu est jeté sauf les titres h1-h6, cf. buttonStack). Les FAQ en
+  // accordéon mettent leurs questions H2 dans le <button> d'ouverture.
   "input",
   "select",
   "textarea",
@@ -1498,6 +1500,13 @@ export function parseHTML(html: string): PageContent {
   // qu'on referme la balise correspondante.
   const noiseStack: number[] = [];
   const isInNoise = () => noiseStack.length > 0;
+  // <button> est du noise "soft" : son contenu UI est jeté SAUF les titres
+  // h1-h6 qu'il contient. Pattern accordéon FAQ très répandu (Shopify & co) :
+  // <button class="accordion__header"><h2>Question ?</h2></button>. Avant ce
+  // fix, les H2 de FAQ disparaissaient du contenu importé et du NLP alors que
+  // les H3 du panneau passaient (bug Freeman T. Porter, 2026-06-10).
+  const buttonStack: number[] = [];
+  const isInButton = () => buttonStack.length > 0;
 
   let depth = 0;
   const collecting = true;
@@ -1606,6 +1615,11 @@ export function parseHTML(html: string): PageContent {
         depth++;
         const lower = name.toLowerCase();
 
+        if (lower === "button") {
+          buttonStack.push(depth);
+          return;
+        }
+
         if (NOISE_TAGS.has(lower)) {
           noiseStack.push(depth);
           return;
@@ -1629,6 +1643,10 @@ export function parseHTML(html: string): PageContent {
         }
 
         if (!collecting || isInNoise()) return;
+        // Dans un <button>, on ne laisse passer que l'ouverture d'un titre
+        // h1-h6 et les inline tags d'un titre déjà ouvert. Tout le reste
+        // (texte UI, img, p...) reste jeté.
+        if (isInButton() && !currentHeading && !/^h[1-6]$/.test(lower)) return;
 
         // Inline tags : on les préserve dans le HTML reconstitué sans
         // toucher au texte plat (NLP corpus inchangé).
@@ -1711,6 +1729,8 @@ export function parseHTML(html: string): PageContent {
 
       ontext(text) {
         if (!collecting || isInNoise()) return;
+        // Dans un <button>, seul le texte d'un titre en cours est conservé.
+        if (isInButton() && !currentHeading) return;
         appendText(text);
       },
 
@@ -1719,6 +1739,12 @@ export function parseHTML(html: string): PageContent {
 
         if (noiseStack.length > 0 && noiseStack[noiseStack.length - 1] === depth) {
           noiseStack.pop();
+          depth--;
+          return;
+        }
+
+        if (buttonStack.length > 0 && buttonStack[buttonStack.length - 1] === depth) {
+          buttonStack.pop();
           depth--;
           return;
         }

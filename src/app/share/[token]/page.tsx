@@ -78,9 +78,6 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
     <main className="min-h-screen bg-[var(--bg)]">
       <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 py-5 flex items-center justify-between">
         <LogoRankShaker height={20} className="text-[var(--text)]" />
-        <span className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
-          Vue client
-        </span>
       </header>
 
       <div className="max-w-[1000px] mx-auto px-8 py-12">
