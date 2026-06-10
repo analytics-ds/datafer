@@ -1075,7 +1075,7 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
     { name: "Longueur de contenu", pts: 7, hint: "wc dans la fourchette concurrents, ±20 % de la moyenne, au-dessus de la moyenne" },
     { name: "Structure", pts: 6, hint: "Ratio paragraphes, longueur des paragraphes, contenu ≥ 500 mots" },
     { name: "Qualité rédactionnelle", pts: 5, hint: "Longueur moyenne des phrases, densité du KW, diversité lexicale ≥ 0,55" },
-    { name: "Images", pts: 4, hint: "Nombre d'images aligné sur la médiane des concurrents" },
+    // Images retiré du scoring (itération 9, 2026-06-10).
   ];
   const maxPts = Math.max(...criteres.map((c) => c.pts));
 
@@ -1208,14 +1208,8 @@ function EditorSidebar({
       tip: score.structure.score < 6 ? "↑ Découpez en paragraphes plus courts" : "✓ Bonne structure" },
     { label: "Qualité rédac.", s: score.quality, color: "var(--text-secondary)",
       tip: score.quality.score < 4 ? "↑ Variez le vocabulaire et la longueur des phrases" : "✓ Bonne qualité rédactionnelle" },
-    { label: "Images", s: score.images, color: "var(--blue)",
-      tip: (() => {
-        const target = Number(score.images.details.target ?? 0);
-        const count = Number(score.images.details.count ?? 0);
-        if (target === 0) return "Aucune image attendue (concurrents sans visuels)";
-        if (count >= target) return `✓ ${count} image${count > 1 ? "s" : ""} dans le contenu (cible : ${target})`;
-        return `↑ Ajoutez ${target - count} image${(target - count) > 1 ? "s" : ""} (cible médiane concurrents : ${target})`;
-      })() },
+    // Jauge Images retirée (itération 9, 2026-06-10) : le critère est
+    // neutralisé dans le scoring (max=0), plus rien à afficher.
     { label: "GEO (LLMs)", s: { score: score.geo.total, max: 100, details: {} }, color: "var(--purple)",
       tip: score.geo.total < 60
         ? "↑ Ajoutez tableau / FAQ / liste / résumé / chiffre pour citation IA"

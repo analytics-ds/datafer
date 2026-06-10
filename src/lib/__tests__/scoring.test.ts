@@ -270,3 +270,19 @@ describe("isJunkNlpTerm + scoring nlpCoverage", () => {
     expect(isJunkNlpTerm("très", "laver un jean")).toBe(true);
   });
 });
+
+describe("critère images neutralisé (itération 9)", () => {
+  it("images vaut toujours 0/0 et n'influence pas le total", async () => {
+    const { computeDetailedScore } = await import("@/lib/scoring");
+    const ed = {
+      text: "Contenu de test avec assez de mots pour un scoring minimal. ".repeat(20),
+      h1s: ["Titre"],
+      h2s: ["Sous-titre"],
+      h3s: [],
+      imageCount: 12,
+    };
+    const s = computeDetailedScore(ed, null);
+    expect(s.images.max).toBe(0);
+    expect(s.images.score).toBe(0);
+  });
+});

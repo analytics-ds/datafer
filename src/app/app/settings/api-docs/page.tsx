@@ -230,7 +230,7 @@ export default function ApiDocsPage() {
     "placement":    { "score": 11, "max": 13, "details": { "distribution": "3/4 exact, 1/4 soft" } },
     "structure":    { "score":  4, "max":  6, "details": { "paragraphs": 12, "ratio": 0.85 } },
     "quality":      { "score":  4, "max":  5, "details": { "diversity": 52 } },
-    "images":       { "score":  3, "max":  4, "details": { "count": 4, "target": 5 } },
+    "images":       { "score":  0, "max":  0, "details": { "count": 4, "target": 5 } },
     "semantic":     { "score":  7, "max": 10, "details": { "paragraphsScored": 12, "avgCosine": 0.74 } },
     "geo": { "total": 80, "table": {...}, "bulletList": {...}, "quickSummary": {...}, "faq": {...}, "statistics": {...} }
   },
@@ -248,7 +248,7 @@ export default function ApiDocsPage() {
           <li><Code>rawTotal</Code> : score absolu sur 100 (sans relativisation), pour debug ou comparaison cross-KW.</li>
           <li><Code>competitorMedian</Code> : médiane des scores bruts du top 10, sert de référence pour la relativisation.</li>
           <li>Compare <Code>score</Code> à <Code>competitors.avg</Code> : si tu es au-dessus, tu fais mieux que la moyenne SERP.</li>
-          <li>Pondération SEO sur 100 : keyword 15 + nlpCoverage 27 + contentLength 7 + headings 13 + placement 13 + structure 6 + quality 5 + images 4 + semantic 10 = 100. SEO_WEIGHT 0.92, GEO_WEIGHT 0.08.</li>
+          <li>Pondération SEO : keyword 15 + nlpCoverage 27 + contentLength 7 + headings 13 + placement 13 + structure 6 + quality 5 + semantic 10 = 96, renormalisé sur 100. Le critère images est neutralisé (max 0) depuis l'itération 9 mais reste présent dans le breakdown pour compatibilité. SEO_WEIGHT 0.92, GEO_WEIGHT 0.08.</li>
           <li><Code>breakdown.semantic</Code> : critère sémantique paragraphe (cosinus moyen vs centroïde top 10 via bge-m3). Calculé côté éditeur via l&apos;endpoint <Code>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</Code>. Neutralisé (max=0) si pas de paragraphes scorés.</li>
           <li>Regarde <Code>breakdown</Code> pour identifier les axes faibles (mot-clé, couverture NLP, structure…) et itérer.</li>
         </ul>
@@ -491,7 +491,7 @@ GET /api/v2/briefs/{id}/competitors/3/download?format=docx
     "placement":    { "score": 11, "max": 13, "details": { ... } },
     "structure":    { "score":  4, "max":  6, "details": { ... } },
     "quality":      { "score":  4, "max":  5, "details": { ... } },
-    "images":       { "score":  3, "max":  4, "details": { "count": 4, "target": 5 } },
+    "images":       { "score":  0, "max":  0, "details": { "count": 4, "target": 5 } },
     "geo":          { "total": 70, ... }
   },
   "competitors": { "avg": 71, "best": 85, "bestUrl": "...", "count": 9 },

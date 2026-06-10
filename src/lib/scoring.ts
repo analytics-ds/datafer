@@ -254,7 +254,7 @@ const EMPTY: DetailedScore = {
   placement: { score: 0, max: 13, details: {} },
   structure: { score: 0, max: 6, details: {} },
   quality: { score: 0, max: 5, details: {} },
-  images: { score: 0, max: 4, details: {} },
+  images: { score: 0, max: 0, details: {} },
   semantic: { score: 0, max: 10, details: {} },
   geo: computeGeoScore(EMPTY_GEO_SIGNALS),
 };
@@ -390,9 +390,12 @@ export function computeDetailedScore(
   paragraphSemanticScores?: ParagraphSemanticScore[],
 ): DetailedScore {
   const geo = computeGeoScore(geoSignals);
-  // Pondération SEO sur 100 (itération 8, 2026-05-08) :
+  // Pondération SEO (itération 9, 2026-06-10) :
   //   keyword 15 + nlpCoverage 27 + contentLength 7 + headings 13 +
-  //   placement 13 + structure 6 + quality 5 + images 4 + semantic 10 = 100.
+  //   placement 13 + structure 6 + quality 5 + semantic 10 = 96,
+  //   renormalisé sur 100 (images retiré du scoring, décision Pierre
+  //   2026-06-10 suite retours utilisateurs ; le critère reste à max=0
+  //   dans le breakdown pour compat API).
   // SEO_WEIGHT 0.92 + GEO_WEIGHT 0.08.
   //
   // Itération 7 : rebalance complet (Pierre : "le score monte trop vite à
@@ -423,7 +426,7 @@ export function computeDetailedScore(
     placement: { score: 0, max: 13, details: {} },
     structure: { score: 0, max: 6, details: {} },
     quality: { score: 0, max: 5, details: {} },
-    images: { score: 0, max: 4, details: {} },
+    images: { score: 0, max: 0, details: {} },
     semantic: { score: 0, max: 10, details: {} },
     geo,
   };
@@ -733,26 +736,18 @@ export function computeDetailedScore(
     r.semantic.details = { paragraphsScored: 0 };
   }
 
-  // 8. IMAGES /4 (durci itération 7, 2026-05-08)
-  // Avant : si médiane = 0 → 3/3 free pass. Maintenant le critère est
-  // neutralisé en passant à 0/0 (pas dans le total) plutôt que d'offrir 3
-  // pts gratos. Sinon linéaire vers la médiane des concurrents, max 4.
+  // 8. IMAGES — RETIRÉ DU SCORING (itération 9, décision Pierre 2026-06-10,
+  // retour utilisateurs : "pas utile d'avoir un score sur les images").
+  // Le critère reste dans la structure DetailedScore (compat API : les
+  // consommateurs du breakdown lisent r.images) mais est neutralisé en
+  // permanence : max=0, renormalisation sur 100 comme pour le critère
+  // sémantique absent. Le détail count/target est conservé à titre
+  // informatif (médiane concurrents), il n'influence plus le total.
   {
     const userImg = ed.imageCount ?? 0;
     const target = nlp.medianImages ?? 0;
-    let s: number;
-    if (target <= 0) {
-      // Pas de cible : on neutralise le critère (0 sur 0 effectif).
-      // On retire aussi 4 pts du max pour ne pas pénaliser ; rééquilibrage
-      // proportionnel sur le seoTotal final via re-normalisation.
-      s = 0;
-      r.images.max = 0;
-    } else if (userImg >= target) {
-      s = 4;
-    } else {
-      s = Math.max(0, Math.round((userImg / target) * 4));
-    }
-    r.images.score = s;
+    r.images.score = 0;
+    r.images.max = 0;
     r.images.details = {
       count: userImg,
       target,
