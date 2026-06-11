@@ -231,6 +231,19 @@ export function BriefEditor(props: BriefEditorProps) {
   // ré-injecte la textarea dans l'éditeur (rendu HTML normal).
   const [htmlMode, setHtmlMode] = useState(false);
   const [htmlSource, setHtmlSource] = useState("");
+  // Panneau d'analyse (colonne de droite) masquable, préférence persistée en
+  // localStorage. Partagé entre la vue consultant et la vue client partagée
+  // (les deux rendent BriefEditor). Ouvert par défaut ; lecture du localStorage
+  // en effect (pas dans l'initializer) pour éviter un mismatch d'hydratation.
+  const [panelOpen, setPanelOpen] = useState(true);
+  useEffect(() => {
+    if (localStorage.getItem("rs-editor-panel") === "closed") setPanelOpen(false);
+  }, []);
+  const togglePanel = () =>
+    setPanelOpen((open) => {
+      localStorage.setItem("rs-editor-panel", open ? "closed" : "open");
+      return !open;
+    });
 
   useEffect(() => {
     if (editorRef.current && !editorRef.current.innerHTML && initialHtml) {
@@ -743,7 +756,13 @@ export function BriefEditor(props: BriefEditorProps) {
         </TabButton>
       </div>
 
-      <div className={tab === "editor" ? "flex-1 grid grid-cols-[1fr_380px] overflow-hidden" : "hidden"}>
+      <div
+        className={
+          tab === "editor"
+            ? `flex-1 grid ${panelOpen ? "grid-cols-[1fr_380px]" : "grid-cols-[1fr]"} overflow-hidden`
+            : "hidden"
+        }
+      >
           {/* Editor main */}
           <div className="flex flex-col border-r border-[var(--border)] overflow-hidden">
             {/* Word count bar */}
@@ -760,6 +779,22 @@ export function BriefEditor(props: BriefEditorProps) {
               <span className="font-[family-name:var(--font-mono)] text-[12px] text-[var(--text-muted)]">
                 / {wcTarget}
               </span>
+              {/* Toggle du panneau d'analyse. Panneau masqué : on garde le score
+                  visible dans le bouton pour ne pas perdre l'info clé. */}
+              <button
+                onClick={togglePanel}
+                title={panelOpen ? "Masquer le panneau d'analyse" : "Afficher le panneau d'analyse"}
+                aria-label={panelOpen ? "Masquer le panneau d'analyse" : "Afficher le panneau d'analyse"}
+                aria-expanded={panelOpen}
+                className="ml-2 inline-flex items-center gap-2 px-2 h-[28px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] transition-colors"
+              >
+                {!panelOpen && (
+                  <span className="font-[family-name:var(--font-mono)] text-[11px] font-semibold text-[var(--text)]">
+                    Score {score.total}
+                  </span>
+                )}
+                <PanelRightIcon open={panelOpen} />
+              </button>
             </div>
 
             {/* Rich toolbar */}
@@ -841,7 +876,10 @@ export function BriefEditor(props: BriefEditorProps) {
             )}
           </div>
 
-          {/* Sidebar */}
+          {/* Sidebar — wrapper display:contents pour rester enfant direct du
+              grid quand ouvert, et garder le composant monté quand masqué
+              (préserve ses fetches/états internes). */}
+          <div className={panelOpen ? "contents" : "hidden"}>
           <EditorSidebar
             briefId={id}
             scoreTotal={score.total}
@@ -877,6 +915,7 @@ export function BriefEditor(props: BriefEditorProps) {
             insertTermAtCursor={insertTermAtCursor}
             insertPaaAsH2={insertPaaAsH2}
           />
+          </div>
       </div>
 
       <div className={tab === "serp" ? "flex-1 overflow-y-auto px-7 py-6" : "hidden"}>
@@ -3672,6 +3711,28 @@ function SettingsGearIcon() {
     >
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
       <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+// Icône "panneau latéral droit" : le volet droit est rempli quand le panneau
+// est ouvert, vide quand il est masqué.
+function PanelRightIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M15 4v16" />
+      {open && <path d="M15 4h6v16h-6z" fill="currentColor" stroke="none" opacity="0.35" />}
     </svg>
   );
 }

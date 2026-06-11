@@ -29,7 +29,8 @@ export default function ApiDocsPage() {
         </p>
         <H4>API V1 (création + scoring)</H4>
         <ul className="list-disc pl-5 text-[var(--text-muted)] mb-3">
-          <li><Code>POST /api/v1/briefs</Code>, crée un brief et lance l&apos;analyse</li>
+          <li><Code>POST /api/v1/briefs</Code>, crée un brief et lance l&apos;analyse (anti-doublon intégré)</li>
+          <li><Code>GET /api/v1/briefs</Code>, liste tes briefs, filtrable par <Code>keyword</Code> / <Code>folderId</Code> / <Code>status</Code></li>
           <li><Code>GET /api/v1/briefs/&#123;id&#125;</Code>, lit le brief, renvoie <Code>pending</Code> / <Code>ready</Code> / <Code>failed</Code></li>
           <li><Code>POST /api/v1/briefs/&#123;id&#125;/content</Code>, soumet du contenu HTML et reçoit le score détaillé</li>
         </ul>
@@ -129,9 +130,91 @@ export default function ApiDocsPage() {
         <p className="text-[var(--text-muted)]">
           Stocke l'<Code>id</Code> et passe à l'étape suivante pour poller le résultat.
         </p>
+
+        <H4>Anti-doublon (réponse avec duplicate: true)</H4>
+        <p className="mb-3">
+          Si un brief identique (même <Code>keyword</Code> + <Code>country</Code> + <Code>folderId</Code>,
+          insensible à la casse) est déjà en <Code>pending</Code>, ou en <Code>ready</Code> depuis moins de
+          10 minutes, le POST ne relance PAS d&apos;analyse : il renvoie l&apos;id du brief existant avec
+          <Code>duplicate: true</Code>.
+        </p>
+        <Pre>{`{
+  "id": "a3c1b7e8-…",
+  "status": "pending",
+  "duplicate": true,
+  "keyword": "chaussure pas cher",
+  "country": "fr",
+  "folderId": null,
+  "message": "un brief identique est déjà en cours d'analyse, interroger GET /api/v1/briefs/{id}"
+}`}</Pre>
+        <p className="text-[var(--text-muted)]">
+          Important pour les clients automatisés (scripts, agents IA) : un POST qui timeout ou renvoie une
+          erreur 5xx a probablement quand même créé le brief. Ne re-POST jamais à l&apos;aveugle, l&apos;anti-doublon
+          te renverra l&apos;existant, ou vérifie d&apos;abord via <Code>GET /api/v1/briefs?keyword=…</Code> (section 2).
+          Seul un brief <Code>failed</Code> justifie un nouveau POST.
+        </p>
       </Section>
 
-      <Section title="2. Lire un brief (GET avec polling)" dot="var(--accent)">
+      <Section title="2. Lister / retrouver ses briefs (GET)" dot="var(--accent)">
+        <p className="mb-3">
+          Liste les briefs de ton compte, du plus récent au plus ancien. Sert à vérifier qu&apos;un brief
+          n&apos;existe pas déjà avant d&apos;en créer un, ou à retrouver l&apos;id d&apos;un brief dont la réponse
+          du POST s&apos;est perdue.
+        </p>
+        <H4>Query params (tous optionnels)</H4>
+        <table className="w-full text-[12px] mb-4 border-collapse">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-[0.8px] text-[var(--text-muted)]">
+              <th className="pb-2 pr-4 font-semibold">Param</th>
+              <th className="pb-2 pr-4 font-semibold">Type</th>
+              <th className="pb-2 font-semibold">Description</th>
+            </tr>
+          </thead>
+          <tbody className="text-[var(--text-muted)]">
+            <tr className="border-t border-[var(--border)]">
+              <td className="py-2 pr-4 font-mono text-[var(--text)]">keyword</td>
+              <td className="py-2 pr-4">string</td>
+              <td className="py-2">Filtre exact (insensible à la casse) sur le mot-clé</td>
+            </tr>
+            <tr className="border-t border-[var(--border)]">
+              <td className="py-2 pr-4 font-mono text-[var(--text)]">folderId</td>
+              <td className="py-2 pr-4">uuid</td>
+              <td className="py-2">Filtre par dossier</td>
+            </tr>
+            <tr className="border-t border-[var(--border)]">
+              <td className="py-2 pr-4 font-mono text-[var(--text)]">status</td>
+              <td className="py-2 pr-4">string</td>
+              <td className="py-2"><Code>pending</Code>, <Code>ready</Code> ou <Code>failed</Code></td>
+            </tr>
+            <tr className="border-t border-[var(--border)]">
+              <td className="py-2 pr-4 font-mono text-[var(--text)]">limit</td>
+              <td className="py-2 pr-4">int</td>
+              <td className="py-2">Nombre max de résultats, défaut 20, max 100</td>
+            </tr>
+          </tbody>
+        </table>
+        <H4>Exemple (curl)</H4>
+        <Pre>{`curl "${BASE}/api/v1/briefs?keyword=chaussure%20pas%20cher&status=ready" \\
+  -H "Authorization: Bearer dfk_xxxxxxxx"`}</Pre>
+        <H4>Réponse (200)</H4>
+        <Pre>{`{
+  "briefs": [
+    {
+      "id": "a3c1b7e8-…",
+      "keyword": "chaussure pas cher",
+      "country": "fr",
+      "status": "ready",
+      "workflowStatus": "in_progress",
+      "score": 26,
+      "folderId": null,
+      "createdAt": "2026-06-11T09:12:00.000Z",
+      "updatedAt": "2026-06-11T09:13:21.000Z"
+    }
+  ]
+}`}</Pre>
+      </Section>
+
+      <Section title="3. Lire un brief (GET avec polling)" dot="var(--accent)">
         <p className="mb-3">
           Appelle cet endpoint toutes les 3 à 5 secondes jusqu'à obtenir <Code>status: &quot;ready&quot;</Code> ou
           <Code>status: &quot;failed&quot;</Code>. Timeout conseillé côté client : 90 secondes.
@@ -200,7 +283,7 @@ export default function ApiDocsPage() {
 }`}</Pre>
       </Section>
 
-      <Section title="3. Soumettre du contenu et récupérer le score" dot="var(--accent)">
+      <Section title="4. Soumettre du contenu et récupérer le score" dot="var(--accent)">
         <p className="mb-3">
           Envoie ton contenu en HTML léger (balises <Code>&lt;h1&gt;</Code>, <Code>&lt;h2&gt;</Code>, <Code>&lt;h3&gt;</Code>, <Code>&lt;p&gt;</Code>).
           Le texte est stocké sur le brief et le score est recalculé côté serveur, avec comparaison directe
@@ -582,6 +665,7 @@ Content-Type: application/json
       <Section title="Limites et bonnes pratiques" dot="var(--text-muted)">
         <ul className="list-disc pl-5 text-[var(--text-muted)]">
           <li>Chaque brief consomme un appel SerpAPI + un appel Haloscan + 10 crawls HTTP. Évite de relancer le même mot-clé plusieurs fois.</li>
+          <li>Sur erreur ou timeout d&apos;un POST, ne re-POST pas en boucle : le brief a souvent été créé quand même. Vérifie via <Code>GET /api/v1/briefs?keyword=…</Code>, l&apos;anti-doublon (section 1) sert de filet de sécurité.</li>
           <li>Le scoring est déterministe : même contenu, même brief → même score.</li>
           <li>Les appels sont rattachés à ton user ; tous tes collègues voient le brief dans l'interface (workspace partagé).</li>
           <li>Pas de rate limit pour l'instant (usage interne). Sois raisonnable.</li>

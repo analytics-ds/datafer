@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth-client";
@@ -19,6 +20,23 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
+  // Sidebar masquable, préférence persistée en localStorage. Ouverte par
+  // défaut ; lecture du localStorage en effect (pas dans l'initializer) pour
+  // éviter un mismatch d'hydratation SSR.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    // Resynchronise l'état avec le localStorage (système externe) au mount :
+    // on ne peut pas le lire dans l'initializer du useState sans provoquer un
+    // mismatch d'hydratation (le serveur rend toujours "ouverte").
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (localStorage.getItem("rs-sidebar") === "closed") setCollapsed(true);
+  }, []);
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      localStorage.setItem("rs-sidebar", c ? "open" : "closed");
+      return !c;
+    });
+
   async function onLogout() {
     await signOut();
     router.push("/login");
@@ -27,10 +45,35 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
 
   const initials = (user.name || user.email).slice(0, 2).toUpperCase();
 
+  // Repliée : fine bande cliquable sur le bord gauche pour rouvrir. Elle garde
+  // sa place dans le flex layout, donc aucun chevauchement avec le contenu.
+  if (collapsed) {
+    return (
+      <aside className="w-[20px] shrink-0 h-screen sticky top-0 bg-[var(--bg-card)] border-r border-[var(--border)]">
+        <button
+          onClick={toggleCollapsed}
+          title="Afficher le menu"
+          aria-label="Afficher le menu"
+          className="w-full h-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
+        >
+          <ChevronRightIcon />
+        </button>
+      </aside>
+    );
+  }
+
   return (
     <aside className="w-[260px] shrink-0 h-screen sticky top-0 bg-[var(--bg-card)] border-r border-[var(--border)] flex flex-col">
-      <div className="px-5 h-[68px] flex items-center border-b border-[var(--border)]">
+      <div className="pl-5 pr-3 h-[68px] flex items-center justify-between border-b border-[var(--border)]">
         <LogoRankShaker height={24} />
+        <button
+          onClick={toggleCollapsed}
+          title="Masquer le menu"
+          aria-label="Masquer le menu"
+          className="w-8 h-8 flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
+        >
+          <PanelLeftIcon />
+        </button>
       </div>
 
       <div className="px-4 pt-5 pb-3">
@@ -219,6 +262,24 @@ function FolderItem({
       )}
       <span className="truncate">{children}</span>
     </Link>
+  );
+}
+
+function PanelLeftIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+      <path d="M3 4h6v16H3z" fill="currentColor" stroke="none" opacity="0.35" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden>
+      <path d="M7 4l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

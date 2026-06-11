@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb, getDbFromEnv, type Db } from "@/db";
 import { brief, client } from "@/db/schema";
@@ -278,10 +278,22 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
  *   2) completeBriefAnalysis : tourne en background (ctx.waitUntil) et update
  *      la ligne avec les résultats ou status='failed' en cas d'erreur.
  */
+// Fenêtre de dédup API : un POST v1 identique (même owner + keyword + pays +
+// dossier) à un brief pending, ou ready créé il y a moins de 10 min, renvoie
+// le brief existant au lieu d'en créer un. Cible le pattern client LLM qui
+// retry après un timeout/500 ou qui "vérifie" en relançant (incident
+// 2026-06-11 : 5 briefs sur le même mot-clé). Les briefs failed sont exclus
+// pour qu'un retry après vrai échec reparte normalement.
+const DEDUPE_WINDOW_MS = 10 * 60 * 1000;
+
 export async function createPendingBrief(
   userId: string,
   input: CreateBriefInput,
-): Promise<{ ok: true; id: string } | { ok: false; status: number; error: string }> {
+  opts?: { dedupe?: boolean },
+): Promise<
+  | { ok: true; id: string; duplicate?: boolean; duplicateStatus?: "pending" | "ready" }
+  | { ok: false; status: number; error: string }
+> {
   const keyword = input.keyword.trim();
   const country = (input.country || "fr").toLowerCase();
   const folderId = input.folderId || null;
@@ -291,6 +303,35 @@ export async function createPendingBrief(
   const db = getDb();
   const folder = await resolveFolder(db, userId, folderId);
   if (!folder.ok) return folder;
+
+  if (opts?.dedupe) {
+    const windowStart = new Date(Date.now() - DEDUPE_WINDOW_MS);
+    const [existing] = await db
+      .select({ id: brief.id, status: brief.status })
+      .from(brief)
+      .where(
+        and(
+          eq(brief.ownerId, userId),
+          sql`lower(${brief.keyword}) = ${keyword.toLowerCase()}`,
+          eq(brief.country, country),
+          folderId ? eq(brief.clientId, folderId) : isNull(brief.clientId),
+          or(
+            eq(brief.status, "pending"),
+            and(eq(brief.status, "ready"), gt(brief.createdAt, windowStart)),
+          ),
+        ),
+      )
+      .orderBy(sql`${brief.createdAt} desc`)
+      .limit(1);
+    if (existing) {
+      return {
+        ok: true,
+        id: existing.id,
+        duplicate: true,
+        duplicateStatus: existing.status as "pending" | "ready",
+      };
+    }
+  }
 
   const id = randomUUID();
   await db.insert(brief).values({
