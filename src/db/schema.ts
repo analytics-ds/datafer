@@ -199,6 +199,9 @@ export const brief = sqliteTable("brief", {
   allintitleCount: integer("allintitle_count"),
   // Position du domaine du dossier dans le top 10. null = non positionné.
   position: integer("position"),
+  // URL du dossier qui ranke à cette position (1re URL du domaine trouvée
+  // dans la SERP). Affichée sous la position et préchargeable dans l'éditeur.
+  positionUrl: text("position_url"),
   // 'pending' = analyse en cours (créé via API v1, analyse async)
   // 'ready'   = analyse terminée, score dispo
   // 'failed'  = l'analyse SERP/crawl a planté

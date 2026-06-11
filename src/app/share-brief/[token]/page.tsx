@@ -61,6 +61,7 @@ export default async function SharedSingleBriefPage({
           paa={paa}
           haloscan={haloscan}
           position={b.position ?? null}
+          positionUrl={b.positionUrl ?? null}
           workflowStatus={b.workflowStatus as WorkflowStatus}
           initialTags={initialTags}
           availableTags={availableTags}

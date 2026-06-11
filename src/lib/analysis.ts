@@ -460,7 +460,7 @@ async function fetchSerpFromCrazyserp(
 
 /**
  * Top 100 CrazySerp via `page=10` (cumulatif, 10 crédits).
- * À n'utiliser que quand `findDomainPosition` a renvoyé null sur le top 10/17
+ * À n'utiliser que quand `findDomainHit` a renvoyé null sur le top 10/17
  * et qu'on a un site client à matcher : sinon on paie 10 crédits pour rien.
  * Bascule sur la clé fallback en cas d'échec primaire.
  */
@@ -729,21 +729,46 @@ export async function fetchAllintitleCount(
   }
 }
 
+// ─── Filtre langue des PAA ───────────────────────────────────────────────────
+
+// Question qui commence par un interrogatif/auxiliaire anglais. Suffisant pour
+// détecter les PAA EN : Google formule quasi toujours les PAA en question
+// directe ("What is...", "How to...").
+const EN_QUESTION_RE =
+  /^(what|how|why|when|which|where|who|whose|whom|is|are|was|were|can|could|do|does|did|should|shall|will|would|has|have|may|might)\b/i;
+
+/**
+ * Retire les questions PAA qui ne sont pas dans la langue attendue du pays
+ * de la SERP. Cas réel : SERP FR où Google (ou le complément Haloscan) sert
+ * des questions en anglais sur des keywords anglophones — inutilisables pour
+ * une rédaction FR. No-op si la langue attendue est l'anglais.
+ */
+export function filterPaaByLanguage(paa: Paa[], country: string): Paa[] {
+  const lang = COUNTRY_TO_LANG[country.toLowerCase()] ?? "fr";
+  if (lang === "en") return paa;
+  return paa.filter((q) => !EN_QUESTION_RE.test(q.question.trim()));
+}
+
 // ─── Position du domaine client dans la SERP ─────────────────────────────────
 
 /**
- * Cherche la 1re position d'un domaine dans une liste de résultats SERP.
- * Retourne null si le domaine n'apparaît pas dans la liste fournie (typiquement
- * le top 100, au-delà on considère que la page n'est pas positionnée).
+ * Cherche la 1re occurrence d'un domaine dans une liste de résultats SERP.
+ * Retourne la position ET l'URL qui ranke (pour affichage + préchargement
+ * dans l'éditeur). Retourne null si le domaine n'apparaît pas dans la liste
+ * fournie (typiquement le top 100, au-delà on considère que la page n'est
+ * pas positionnée).
  */
-export function findDomainPosition(results: SerpResult[], website: string | null): number | null {
+export function findDomainHit(
+  results: SerpResult[],
+  website: string | null,
+): { position: number; url: string } | null {
   if (!website) return null;
   const target = normalizeDomain(website);
   if (!target) return null;
   for (const r of results) {
     const d = normalizeDomain(r.link);
     if (d && (d === target || d.endsWith("." + target) || target.endsWith("." + d))) {
-      return r.position;
+      return { position: r.position, url: r.link };
     }
   }
   return null;

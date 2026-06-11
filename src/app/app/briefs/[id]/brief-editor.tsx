@@ -57,6 +57,11 @@ type BriefEditorProps = {
   // Position du domaine du dossier dans la SERP (top 100), null si hors top 100
   // ou si pas de site rattaché.
   position: number | null;
+  /**
+   * URL du dossier qui ranke à cette position. null sur les briefs créés
+   * avant l'ajout de la colonne (fallback : matching domaine sur le serpJson).
+   */
+  positionUrl?: string | null;
   /** Statut éditorial initial. */
   workflowStatus: WorkflowStatus;
   /** Tags initialement attachés. */
@@ -144,6 +149,9 @@ export function BriefEditor(props: BriefEditorProps) {
   // Import de contenu post-création : modal + URL importée (affichée dans
   // Insights). Initialisée depuis la BDD (my_url), mise à jour après import.
   const [importOpen, setImportOpen] = useState(false);
+  // URL pré-remplie dans la modal d'import quand on arrive par le bouton
+  // "Charger cette page" de la stat Position (URL du dossier qui ranke).
+  const [importPrefill, setImportPrefill] = useState<string | null>(null);
   const [myUrl, setMyUrl] = useState<string | null>(props.myUrl ?? null);
   // Modal Paramètres back-office (icône ⚙️). Affichée uniquement quand le
   // brief est ouvert depuis la session authentifiée (pas en mode partage).
@@ -844,6 +852,15 @@ export function BriefEditor(props: BriefEditorProps) {
             paa={paa}
             haloscan={haloscan}
             position={position}
+            positionUrl={props.positionUrl ?? null}
+            onPreloadUrl={
+              isShareMode
+                ? null
+                : (url: string) => {
+                    setImportPrefill(url);
+                    setImportOpen(true);
+                  }
+            }
             folderWebsite={folder?.website ?? null}
             editorText={editorData.text}
             editorH1Count={editorData.h1s.length}
@@ -1006,16 +1023,20 @@ export function BriefEditor(props: BriefEditorProps) {
       `}</style>
       {importOpen && (
         <ImportUrlModal
-          initialUrl={myUrl ?? ""}
+          initialUrl={importPrefill ?? myUrl ?? ""}
           hasContent={editorData.text.trim().length > 0}
           endpoint={`/api/briefs/${id}/import-url`}
-          onClose={() => setImportOpen(false)}
+          onClose={() => {
+            setImportOpen(false);
+            setImportPrefill(null);
+          }}
           onImported={(html, url) => {
             if (editorRef.current) {
               editorRef.current.innerHTML = html;
             }
             setMyUrl(url);
             setImportOpen(false);
+            setImportPrefill(null);
             // Laisse React/DOM se poser avant de relire (déclenche autosave + rescore).
             setTimeout(() => readEditor(), 0);
           }}
@@ -1154,6 +1175,8 @@ function EditorSidebar({
   paa,
   haloscan,
   position,
+  positionUrl,
+  onPreloadUrl,
   folderWebsite,
   editorText,
   editorH1Count,
@@ -1173,6 +1196,9 @@ function EditorSidebar({
   paa: Paa[];
   haloscan: HaloscanOverview | null;
   position: number | null;
+  positionUrl: string | null;
+  // null = pas de préchargement possible (mode partage lecture seule).
+  onPreloadUrl: ((url: string) => void) | null;
   folderWebsite: string | null;
   editorText: string;
   editorH1Count: number;
@@ -1324,7 +1350,12 @@ function EditorSidebar({
       <CompetitorScoreRow scoreTotal={scoreTotal} serp={serp} />
 
       {/* Stats clés du mot-clé */}
-      <KeywordStatsRow position={position} folderWebsite={folderWebsite} />
+      <KeywordStatsRow
+        position={position}
+        rankingUrl={position != null ? (positionUrl ?? serpUrlForDomain(serp, folderWebsite)) : null}
+        onPreload={onPreloadUrl}
+        folderWebsite={folderWebsite}
+      />
 
       {/* Sub-scores */}
       <Section
@@ -3144,11 +3175,39 @@ function CompareCell({
 // Volume et KGR retirés de la sidebar (retour utilisateur 2026-06-10) : ils
 // restent visibles dans l'onglet Insights (carte "Données mot-clé"). Seule
 // la position du client est conservée ici.
+// Miroir local de normalizeDomain + findDomainHit (analysis.ts, côté worker) :
+// retrouve l'URL du dossier dans le top 10 stocké, pour les briefs créés
+// avant la colonne position_url.
+function serpUrlForDomain(serp: SerpResult[], website: string | null): string | null {
+  if (!website) return null;
+  const norm = (input: string): string | null => {
+    try {
+      const u = new URL(input.startsWith("http") ? input : `https://${input}`);
+      return u.hostname.replace(/^www\./i, "").toLowerCase();
+    } catch {
+      return null;
+    }
+  };
+  const target = norm(website);
+  if (!target) return null;
+  for (const r of serp) {
+    const d = norm(r.link);
+    if (d && (d === target || d.endsWith("." + target) || target.endsWith("." + d))) {
+      return r.link;
+    }
+  }
+  return null;
+}
+
 function KeywordStatsRow({
   position,
+  rankingUrl,
+  onPreload,
   folderWebsite,
 }: {
   position: number | null;
+  rankingUrl: string | null;
+  onPreload: ((url: string) => void) | null;
   folderWebsite: string | null;
 }) {
   // Échelle position : top 3 vert foncé, top 10 vert, top 30 orange, au-delà rouge.
@@ -3175,6 +3234,31 @@ function KeywordStatsRow({
         }
         tone={positionTone}
       />
+      {position != null && rankingUrl && (
+        <div className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[2px]">
+            Page qui ranke
+          </div>
+          <a
+            href={rankingUrl}
+            target="_blank"
+            rel="noreferrer"
+            title={rankingUrl}
+            className="block truncate text-[11px] text-[var(--accent-dark)] underline"
+          >
+            {rankingUrl.replace(/^https?:\/\//i, "")}
+          </a>
+          {onPreload && (
+            <button
+              type="button"
+              onClick={() => onPreload(rankingUrl)}
+              className="mt-2 w-full rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
+            >
+              Charger cette page dans l&apos;éditeur
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

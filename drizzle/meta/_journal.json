@@ -127,6 +127,13 @@
       "when": 1781115047305,
       "tag": "0017_chemical_spiral",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1781172542207,
+      "tag": "0018_furry_miracleman",
+      "breakpoints": true
     }
   ]
 }

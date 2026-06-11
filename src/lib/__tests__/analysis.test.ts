@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   extractParagraphsFromHtml,
+  filterPaaByLanguage,
+  findDomainHit,
   extractJsonPayloadText,
   parseHTML,
 } from "@/lib/analysis";
@@ -163,5 +165,64 @@ describe("parseHTML — titres dans les <button> (accordéons FAQ)", () => {
       "<button><h2>Question avec <strong>gras</strong> dedans ?</h2></button>";
     const parsed = parseHTML(html);
     expect(parsed.h2).toContain("Question avec gras dedans ?");
+  });
+});
+
+describe("filterPaaByLanguage", () => {
+  const q = (question: string) => ({ question, snippet: "", link: "" });
+
+  it("retire les questions anglaises sur une SERP FR", () => {
+    const paa = [
+      q("Comment choisir un brasero ?"),
+      q("What is the best fire pit?"),
+      q("Quel est le meilleur brasero ?"),
+      q("How to light a fire pit"),
+    ];
+    expect(filterPaaByLanguage(paa, "fr").map((p) => p.question)).toEqual([
+      "Comment choisir un brasero ?",
+      "Quel est le meilleur brasero ?",
+    ]);
+  });
+
+  it("ne filtre rien sur une SERP EN", () => {
+    const paa = [q("What is the best fire pit?"), q("How to light a fire pit")];
+    expect(filterPaaByLanguage(paa, "us")).toHaveLength(2);
+    expect(filterPaaByLanguage(paa, "uk")).toHaveLength(2);
+  });
+
+  it("garde une question FR commençant par un mot non interrogatif", () => {
+    const paa = [q("Brasero ou barbecue : que choisir ?"), q("Doit-on couvrir un brasero ?")];
+    expect(filterPaaByLanguage(paa, "fr")).toHaveLength(2);
+  });
+
+  it("ne matche pas un mot FR qui contient un interrogatif EN en préfixe", () => {
+    // "Où" ne commence pas par un mot EN ; "Whisky" commence par "Whi" mais
+    // pas par un mot entier de la liste (limite \b).
+    const paa = [q("Où acheter un brasero ?"), q("Whisky tourbé ou fruité ?")];
+    expect(filterPaaByLanguage(paa, "fr")).toHaveLength(2);
+  });
+});
+
+describe("findDomainHit", () => {
+  const serp = [
+    { position: 1, title: "", link: "https://www.amazon.fr/brasero", snippet: "", displayed_link: "" },
+    { position: 2, title: "", link: "https://blog.coeo.fr/guide-brasero", snippet: "", displayed_link: "" },
+    { position: 3, title: "", link: "https://coeo.fr/braseros", snippet: "", displayed_link: "" },
+  ];
+
+  it("retourne position ET url de la 1re occurrence du domaine", () => {
+    expect(findDomainHit(serp, "https://coeo.fr")).toEqual({
+      position: 2,
+      url: "https://blog.coeo.fr/guide-brasero",
+    });
+  });
+
+  it("matche en ignorant www et le protocole", () => {
+    expect(findDomainHit(serp, "www.amazon.fr")?.url).toBe("https://www.amazon.fr/brasero");
+  });
+
+  it("retourne null si le domaine est absent ou non fourni", () => {
+    expect(findDomainHit(serp, "https://celio.com")).toBeNull();
+    expect(findDomainHit(serp, null)).toBeNull();
   });
 });

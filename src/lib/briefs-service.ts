@@ -10,7 +10,8 @@ import {
   fetchHaloscan,
   fetchHaloscanQuestions,
   fetchAllintitleCount,
-  findDomainPosition,
+  findDomainHit,
+  filterPaaByLanguage,
   crawlPage,
   runNLP,
   detectIntent,
@@ -406,6 +407,7 @@ export async function completeBriefAnalysis(
         kgr: res.kgr,
         allintitleCount: res.allintitleCount,
         position: res.position,
+        positionUrl: res.positionUrl,
         errorMessage: null,
         updatedAt: new Date(),
       })
@@ -436,6 +438,7 @@ type AnalysisPayload =
       kgr: number | null;
       allintitleCount: number | null;
       position: number | null;
+      positionUrl: string | null;
     }
   | { ok: false; status: number; error: string };
 
@@ -643,14 +646,14 @@ async function createBriefAnalysisPayload(
       if (volume && volume > 0) kgr = Math.round((fallbackAllintitle / volume) * 1000) / 1000;
     }
   }
-  let position = findDomainPosition(allResults, folderWebsite);
+  let domainHit = findDomainHit(allResults, folderWebsite);
   // Si le client a un site mais qu'on ne le trouve pas dans le top 10/17 servi
   // par CrazySerp page=1+2, on déclenche un appel page=10 (top 100, 10 crédits
   // FR) pour chercher la position au-delà. Pas fait pour SerpAPI : son fetch
   // par défaut renvoie déjà le top 100.
   if (
     folderWebsite &&
-    position == null &&
+    domainHit == null &&
     provider === "crazyserp" &&
     env.CRAZYSERP_KEY
   ) {
@@ -665,17 +668,25 @@ async function createBriefAnalysisPayload(
       env.CRAZYSERP_KEY_FALLBACK,
     );
     if (extended.length > allResults.length) {
-      position = findDomainPosition(extended, folderWebsite);
+      domainHit = findDomainHit(extended, folderWebsite);
       console.log("[brief] résultat top 100", {
-        position,
+        position: domainHit?.position ?? null,
         scannedResults: extended.length,
       });
     }
   }
+  const position = domainHit?.position ?? null;
+  const positionUrl = domainHit?.url ?? null;
 
-  const finalPaa = paa;
+  // Filtre langue : sur une SERP non-EN, Google (keywords anglophones) ou le
+  // complément Haloscan peuvent servir des PAA en anglais — inutilisables
+  // pour la rédaction. Remonté par le DG le 2026-06-11.
+  const finalPaa = filterPaaByLanguage(paa, country);
   if (haloscanKey && finalPaa.length < 5) {
-    const extra = await fetchHaloscanQuestions(keyword, country, haloscanKey, 10);
+    const extra = filterPaaByLanguage(
+      await fetchHaloscanQuestions(keyword, country, haloscanKey, 10),
+      country,
+    );
     const seen = new Set(finalPaa.map((q) => q.question.toLowerCase()));
     for (const q of extra) {
       const k = q.question.toLowerCase();
@@ -747,5 +758,6 @@ async function createBriefAnalysisPayload(
     kgr,
     allintitleCount,
     position,
+    positionUrl,
   };
 }
