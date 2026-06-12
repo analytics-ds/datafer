@@ -57,3 +57,4 @@ cloudflare-env.d.ts
 # .json ni les snapshots de runs (baseline-v1.txt, iter7-v2.txt, etc.).
 scripts/bench-data/*.json
 scripts/bench-data/*.txt
+.playwright-cli/

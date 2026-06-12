@@ -45,20 +45,31 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
 
   const initials = (user.name || user.email).slice(0, 2).toUpperCase();
 
-  // Repliée : fine bande cliquable sur le bord gauche pour rouvrir. Elle garde
-  // sa place dans le flex layout, donc aucun chevauchement avec le contenu.
+  // Repliée : fine bande cliquable sur le bord gauche pour rouvrir, doublée
+  // d'un bouton flottant en haut à gauche. La bande seule était trop discrète
+  // pour être retrouvée (retour Pierre 2026-06-13).
   if (collapsed) {
     return (
-      <aside className="w-[20px] shrink-0 h-screen sticky top-0 bg-[var(--bg-card)] border-r border-[var(--border)]">
+      <>
+        <aside className="w-[20px] shrink-0 h-screen sticky top-0 bg-[var(--bg-card)] border-r border-[var(--border)]">
+          <button
+            onClick={toggleCollapsed}
+            title="Afficher le menu"
+            aria-label="Afficher le menu"
+            className="w-full h-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
+          >
+            <ChevronRightIcon />
+          </button>
+        </aside>
         <button
           onClick={toggleCollapsed}
           title="Afficher le menu"
           aria-label="Afficher le menu"
-          className="w-full h-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
+          className="fixed left-[32px] top-[16px] z-40 w-9 h-9 flex items-center justify-center rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] shadow-[var(--shadow-sm)] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
         >
-          <ChevronRightIcon />
+          <PanelLeftIcon />
         </button>
-      </aside>
+      </>
     );
   }
 
