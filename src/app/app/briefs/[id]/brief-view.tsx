@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { NlpResult, SerpResult, Paa } from "@/lib/analysis";
 
@@ -32,6 +33,10 @@ export function BriefView({
   paa: Paa[];
   haloscan: HaloscanData | null;
 }) {
+  // Toggle "Tout / Headings" du champ sémantique : termes que les concurrents
+  // emploient dans leurs titres (Hn), via le flag inHeadings calculé à l'analyse.
+  const [termsView, setTermsView] = useState<"all" | "headings">("all");
+
   const halo = haloscan;
   const volume = halo?.search_volume ?? null;
   const cpc = halo?.cpc ?? null;
@@ -50,6 +55,18 @@ export function BriefView({
     else if (k.presence >= 40) important.push(k);
     else opportunity.push(k);
   });
+
+  const showHeadings = termsView === "headings";
+  const fHn = (arr: NlpResult["nlpTerms"]) =>
+    showHeadings ? arr.filter((t) => t.inHeadings) : arr;
+  const essentialView = fHn(essential);
+  const importantView = fHn(important);
+  const opportunityView = fHn(opportunity);
+  const allTermsCount = essential.length + important.length + opportunity.length;
+  const headingsTermsCount =
+    essential.filter((t) => t.inHeadings).length +
+    important.filter((t) => t.inHeadings).length +
+    opportunity.filter((t) => t.inHeadings).length;
 
   return (
     <div className="px-10 py-10 max-w-[1200px]">
@@ -215,14 +232,38 @@ export function BriefView({
       {nlp && (
         <section className="mb-10">
           <SectionTitle>Champ sémantique NLP</SectionTitle>
-          {essential.length > 0 && (
-            <KwTier color="var(--red)" label="Essentiels" bg="#FFF0F0" terms={essential} />
+          <div className="flex items-center gap-[3px] mb-4 p-[3px] bg-[var(--bg-warm)] rounded-[var(--radius-pill)] w-fit">
+            <button
+              type="button"
+              onClick={() => setTermsView("all")}
+              className={`px-[12px] py-[5px] rounded-[var(--radius-pill)] text-[12px] font-semibold transition-colors ${termsView === "all" ? "bg-[var(--bg-card)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
+            >
+              Tout{" "}
+              <span className="font-[family-name:var(--font-mono)] opacity-70">{allTermsCount}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTermsView("headings")}
+              title="Termes que les concurrents emploient dans leurs titres (Hn)"
+              className={`px-[12px] py-[5px] rounded-[var(--radius-pill)] text-[12px] font-semibold transition-colors ${termsView === "headings" ? "bg-[var(--bg-card)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
+            >
+              Headings{" "}
+              <span className="font-[family-name:var(--font-mono)] opacity-70">{headingsTermsCount}</span>
+            </button>
+          </div>
+          {essentialView.length > 0 && (
+            <KwTier color="var(--red)" label="Essentiels" bg="#FFF0F0" terms={essentialView} />
           )}
-          {important.length > 0 && (
-            <KwTier color="var(--orange)" label="Importants" bg="var(--orange-bg)" terms={important} />
+          {importantView.length > 0 && (
+            <KwTier color="var(--orange)" label="Importants" bg="var(--orange-bg)" terms={importantView} />
           )}
-          {opportunity.length > 0 && (
-            <KwTier color="var(--blue)" label="Opportunité" bg="var(--blue-bg)" terms={opportunity} />
+          {opportunityView.length > 0 && (
+            <KwTier color="var(--blue)" label="Opportunité" bg="var(--blue-bg)" terms={opportunityView} />
+          )}
+          {showHeadings && headingsTermsCount === 0 && (
+            <p className="text-[13px] text-[var(--text-muted)]">
+              Aucun terme attendu dans les titres pour ce mot-clé.
+            </p>
           )}
           {essential.length + important.length + opportunity.length === 0 && (
             <p className="text-[13px] text-[var(--text-muted)]">

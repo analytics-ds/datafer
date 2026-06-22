@@ -911,7 +911,6 @@ export function BriefEditor(props: BriefEditorProps) {
             }
             editorH2s={editorData.h2s}
             editorH3s={editorData.h3s}
-            editorImageCount={editorData.imageCount}
             insertTermAtCursor={insertTermAtCursor}
             insertPaaAsH2={insertPaaAsH2}
           />
@@ -1222,7 +1221,6 @@ function EditorSidebar({
   editorH1HasKw,
   editorH2s,
   editorH3s,
-  editorImageCount,
   insertTermAtCursor,
   insertPaaAsH2,
 }: {
@@ -1244,13 +1242,17 @@ function EditorSidebar({
   editorH1HasKw: boolean;
   editorH2s: string[];
   editorH3s: string[];
-  editorImageCount: number;
   insertTermAtCursor: (t: string) => void;
   insertPaaAsH2: (q: string) => void;
 }) {
   // normalize() = lowercase + strip accents + flatten ligatures. Indispensable
   // côté chips NLP : "première" et "premiere" doivent matcher pareil.
   const lower = normalize(editorText);
+
+  // Toggle "Tout / Headings" du champ sémantique : filtre les termes sur ceux
+  // que les concurrents emploient dans leurs titres (Hn). `inHeadings` est déjà
+  // calculé à l'analyse (terme présent dans un H1/H2 d'un concurrent top 10).
+  const [termsView, setTermsView] = useState<"all" | "headings">("all");
 
   const subItems = [
     { label: "Mot-clé exact", s: score.keyword, color: "var(--accent)",
@@ -1306,6 +1308,17 @@ function EditorSidebar({
       else if (k.presence >= 40) important.push(k);
       else opportunity.push(k);
     });
+
+  const showHeadings = termsView === "headings";
+  const filterHn = (arr: NlpTerm[]) => (showHeadings ? arr.filter((t) => t.inHeadings) : arr);
+  const essentialView = filterHn(essential);
+  const importantView = filterHn(important);
+  const opportunityView = filterHn(opportunity);
+  const allTermsCount = essential.length + important.length + opportunity.length;
+  const headingsTermsCount =
+    essential.filter((t) => t.inHeadings).length +
+    important.filter((t) => t.inHeadings).length +
+    opportunity.filter((t) => t.inHeadings).length;
 
   const ek = nlp?.exactKeyword;
   let kwCount = 0;
@@ -1459,11 +1472,35 @@ function EditorSidebar({
             />
           }
         >
+          <div className="flex items-center gap-[3px] mb-3 p-[3px] bg-[var(--bg-warm)] rounded-[var(--radius-pill)] w-fit">
+            <button
+              type="button"
+              onClick={() => setTermsView("all")}
+              className={`px-[11px] py-[4px] rounded-[var(--radius-pill)] text-[11px] font-semibold transition-colors ${termsView === "all" ? "bg-[var(--bg-card)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
+            >
+              Tout{" "}
+              <span className="font-[family-name:var(--font-mono)] opacity-70">{allTermsCount}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTermsView("headings")}
+              title="Termes que les concurrents emploient dans leurs titres (Hn)"
+              className={`px-[11px] py-[4px] rounded-[var(--radius-pill)] text-[11px] font-semibold transition-colors ${termsView === "headings" ? "bg-[var(--bg-card)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
+            >
+              Headings{" "}
+              <span className="font-[family-name:var(--font-mono)] opacity-70">{headingsTermsCount}</span>
+            </button>
+          </div>
+          {showHeadings && headingsTermsCount === 0 && (
+            <p className="text-[12px] text-[var(--text-muted)] mb-2">
+              Aucun terme attendu dans les titres pour ce mot-clé.
+            </p>
+          )}
           <TierTags
             label="Essentiels"
             color="var(--red)" bg="#FFF0F0" border="#E8BCBC"
-            terms={essential}
-            kwTerms={(nlp.keywordTerms ?? []).filter((k) => k.kind === "exact")}
+            terms={essentialView}
+            kwTerms={showHeadings ? undefined : (nlp.keywordTerms ?? []).filter((k) => k.kind === "exact")}
             lower={lower}
             onInsert={insertTermAtCursor}
             info="Le mot-clé principal du brief + les termes présents chez ≥70% des concurrents top 10. Considérés comme obligatoires : tu dois tous les couvrir pour avoir le score NLP max (17/27 pts)."
@@ -1471,13 +1508,13 @@ function EditorSidebar({
           <TierTags
             label="Importants"
             color="var(--orange)" bg="var(--orange-bg)" border="#E8D6A0"
-            terms={important} lower={lower} onInsert={insertTermAtCursor}
+            terms={importantView} lower={lower} onInsert={insertTermAtCursor}
             info="Termes présents chez 40-69% des concurrents. Pas obligatoires mais fortement attendus. Couvrir le maximum donne jusqu'à 10/27 pts de NLP."
           />
           <TierTags
             label="Opportunité"
             color="var(--blue)" bg="var(--blue-bg)" border="#B8D0E8"
-            terms={opportunity} lower={lower} onInsert={insertTermAtCursor}
+            terms={opportunityView} lower={lower} onInsert={insertTermAtCursor}
             info="Termes présents chez moins de 40% des concurrents. Ignorés du scoring (zéro pénalité). À ajouter en bonus si pertinent pour différencier ton contenu."
           />
         </Section>
@@ -1569,12 +1606,7 @@ function EditorSidebar({
           <BenchRow label="Plage de mots" value={`${nlp.minWordCount} à ${nlp.maxWordCount}`} />
           <BenchRow label="Moyenne" value={String(nlp.avgWordCount)} />
           <BenchRow label="Titres" value={String(nlp.avgHeadings)} />
-          <BenchRow label="Paragraphes" value={String(nlp.avgParagraphs)} />
-          <BenchRow
-            label="Images recommandées"
-            value={`${editorImageCount}/${nlp.medianImages ?? 0}`}
-            last
-          />
+          <BenchRow label="Paragraphes" value={String(nlp.avgParagraphs)} last />
           {serp.length > 0 && (
             <div className="mt-[10px] pt-[10px] border-t border-[var(--border)]">
               <div className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[6px]">
@@ -3588,14 +3620,6 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             </div>
             <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
               titres
-            </div>
-          </div>
-          <div title="Nombre d'images dans le contenu éditorial (cap à 30 par page)">
-            <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
-              {r.imageCount ?? "N/A"}
-            </div>
-            <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
-              images
             </div>
           </div>
           <button

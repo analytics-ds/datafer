@@ -2133,12 +2133,32 @@ const FINGERPRINT_FILLERS = new Set([
  *
  * Renvoie chaîne vide si aucun mot significatif (ne déduplique pas dans ce cas).
  */
+/**
+ * Féminins irréguliers que frenchStem ne ramène pas à la forme masculine.
+ * Les réguliers (bleu/bleue, noir/noire, gris/grise, sing./pluriel) sont déjà
+ * gérés par le stem ; ici on traite les irréguliers (blanc/blanche,
+ * long/longue, beau/belle...). Map = stem du féminin → stem canonique masculin.
+ * Appliqué UNIQUEMENT au fingerprint de déduplication : "basket bleue" et
+ * "basket bleu", "robe blanche" et "robe blanc" comptent comme un seul terme.
+ * N'impacte pas le BM25 ni l'affichage des chips (surface-forms inchangées).
+ */
+const FEM_ADJ_CANON: Record<string, string> = {
+  longu: "long", blanch: "blanc", franch: "franc", bell: "beau",
+  nouvell: "nouveau", jumell: "jumeau", vieill: "vieux", neuv: "neuf",
+  rouss: "roux", fauss: "faux", douc: "doux", fraich: "frais", "fraîch": "frais",
+  sech: "sec", "sèch": "sec", publiqu: "public", favorit: "favori",
+  "épaiss": "épais", epaiss: "épais",
+};
+
 function semanticFingerprint(term: string): string {
   const tokens = term
     .toLowerCase()
     .split(/\s+/)
     .filter((w) => w.length >= 3 && !FINGERPRINT_FILLERS.has(w))
-    .map((w) => frenchStem(w));
+    .map((w) => {
+      const s = frenchStem(w);
+      return FEM_ADJ_CANON[s] ?? s;
+    });
   if (tokens.length === 0) return "";
   return Array.from(new Set(tokens)).sort().join(" ");
 }
