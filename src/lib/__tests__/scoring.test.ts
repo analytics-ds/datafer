@@ -322,3 +322,49 @@ describe("critère saillance (entité en gras, US9251473B2)", () => {
     expect(sYes.rawTotal).toBeGreaterThan(sNo.rawTotal);
   });
 });
+
+describe("critère différenciation / apport (information gain, itération 11)", () => {
+  const nlp = makeNlp();
+  // Opportunités du fixture (présence < 40) : budget, tendance, saison.
+  const baseText = (extra: string) =>
+    `costume homme beige : guide complet pour bien choisir. ${extra} ` +
+    Array.from({ length: 120 }, () => "information").join(" ");
+  const h1s = ["costume homme beige : le guide"];
+
+  it("vaut 0/4 quand aucune opportunité n'est couverte", () => {
+    const ed: EditorData = { text: baseText(""), h1s, h2s: [], h3s: [] };
+    const s = computeDetailedScore(ed, nlp);
+    expect(s.differentiation.max).toBe(4);
+    expect(s.differentiation.score).toBe(0);
+  });
+
+  it("vaut 4/4 quand toutes les opportunités sont couvertes", () => {
+    const ed: EditorData = {
+      text: baseText("Le budget, la tendance et la saison sont déterminants."),
+      h1s, h2s: [], h3s: [],
+    };
+    const s = computeDetailedScore(ed, nlp);
+    expect(s.differentiation.score).toBe(4);
+  });
+
+  it("améliore le total quand le contenu se différencie du top 10", () => {
+    const parity: EditorData = { text: baseText(""), h1s, h2s: [], h3s: [] };
+    const diff: EditorData = {
+      text: baseText("budget, tendance et saison."),
+      h1s, h2s: [], h3s: [],
+    };
+    expect(computeDetailedScore(diff, nlp).rawTotal).toBeGreaterThan(
+      computeDetailedScore(parity, nlp).rawTotal,
+    );
+  });
+
+  it("est neutralisé (max=0) quand le KW n'a aucune opportunité", () => {
+    const nlpNoOpp: NlpResult = {
+      ...nlp,
+      nlpTerms: nlp.nlpTerms.filter((t) => t.presence >= 40),
+    };
+    const ed: EditorData = { text: baseText(""), h1s, h2s: [], h3s: [] };
+    const s = computeDetailedScore(ed, nlpNoOpp);
+    expect(s.differentiation.max).toBe(0);
+  });
+});

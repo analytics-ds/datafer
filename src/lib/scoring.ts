@@ -229,6 +229,12 @@ export type DetailedScore = {
   geoTotal: number;    // /100, juste GEO (brut)
   keyword: ScoreCriterion;
   nlpCoverage: ScoreCriterion;
+  // Différenciation / apport (information gain) : couverture des angles
+  // pertinents que le top 10 sous-traite (termes "Opportunités", présence < 40
+  // chez les concurrents). Sur 4 pts. Récompense le fait d'aller au-delà du
+  // minimum commun du top 10 plutôt que de seulement le recopier. max=0 si le
+  // KW n'a aucun terme d'opportunité (rien à différencier).
+  differentiation: ScoreCriterion;
   contentLength: ScoreCriterion;
   headings: ScoreCriterion;
   placement: ScoreCriterion;
@@ -259,6 +265,7 @@ const EMPTY: DetailedScore = {
   geoTotal: 0,
   keyword: { score: 0, max: 15, details: {} },
   nlpCoverage: { score: 0, max: 27, details: {} },
+  differentiation: { score: 0, max: 0, details: {} },
   contentLength: { score: 0, max: 7, details: {} },
   headings: { score: 0, max: 13, details: {} },
   placement: { score: 0, max: 13, details: {} },
@@ -432,6 +439,7 @@ export function computeDetailedScore(
     geoTotal: geo.total,
     keyword: { score: 0, max: 15, details: {} },
     nlpCoverage: { score: 0, max: 27, details: {} },
+    differentiation: { score: 0, max: 0, details: {} },
     contentLength: { score: 0, max: 7, details: {} },
     headings: { score: 0, max: 13, details: {} },
     placement: { score: 0, max: 13, details: {} },
@@ -551,6 +559,30 @@ export function computeDetailedScore(
     total: essentials.length + importants.length,
     coverage: Math.round(((essCov * 17 + impCov * 10) / 27) * 100),
   };
+
+  // 2 bis. DIFFÉRENCIATION / APPORT (information gain) /4 — itération 11,
+  // 2026-06-22. Les "Opportunités" (top40, présence < 40 chez les top 10) sont
+  // les angles pertinents que la majorité des concurrents sous-traitent. Les
+  // couvrir = aller au-delà du minimum commun du top 10 plutôt que de seulement
+  // le recopier. Répond au biais "suiveur" du scoring : un contenu qui ne fait
+  // que la parité avec le top 10 ne peut plus taper le max. Plein régime dès
+  // 50 % des opportunités couvertes (signal d'apport, pas une checklist
+  // exhaustive : inutile de toutes les caser). Neutralisé (max=0) si le KW n'a
+  // aucune opportunité.
+  {
+    const opportunities = top40.filter((t) => t.presence < 40);
+    if (opportunities.length > 0) {
+      const oppUsed = opportunities.filter(matchTerm).length;
+      const oppCov = oppUsed / opportunities.length;
+      r.differentiation.max = 4;
+      r.differentiation.score = Math.min(4, Math.round(oppCov * 8));
+      r.differentiation.details = {
+        opportunitiesUsed: oppUsed,
+        opportunitiesTotal: opportunities.length,
+        coverage: Math.round(oppCov * 100),
+      };
+    }
+  }
 
   // 3. LENGTH /7 (durci itération 7, recalibré itération 8 2026-05-08)
   // Itération 8 : passe de 8 à 7 pour faire de la place au sémantique.
@@ -786,6 +818,7 @@ export function computeDetailedScore(
   const sumScore =
     r.keyword.score +
     r.nlpCoverage.score +
+    r.differentiation.score +
     r.contentLength.score +
     r.headings.score +
     r.placement.score +
@@ -797,6 +830,7 @@ export function computeDetailedScore(
   const sumMax =
     r.keyword.max +
     r.nlpCoverage.max +
+    r.differentiation.max +
     r.contentLength.max +
     r.headings.max +
     r.placement.max +

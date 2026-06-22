@@ -136,12 +136,13 @@ Doc API CrazySerp : skill projet `.claude/skills/crazyserp-api/SKILL.md`.
 
 ## Scoring SEO
 
-Pondération (depuis 2026-06-22, itération 10 ; somme 100, renormalisée sur 100) :
+Pondération (depuis 2026-06-22, itération 11 ; somme 104, renormalisée sur 100) :
 
 | Critère | Max | Notes |
 |---|---|---|
 | keyword | 15 | softScore (couverture tokens) max 7 + bonus exact max 8 |
 | **nlpCoverage** | **27** | Essentiels 17 + Importants 10 (split par tier) |
+| **differentiation** | **4** | Information gain : couverture des "Opportunités" (présence < 40 chez le top 10), plein régime à 50%. Récompense l'apport au-delà de la parité. max=0 si le KW n'a aucune opportunité |
 | contentLength | 7 | wc dans `[min,max]` (3) + ±20% avg (2) + ≥avg (2) |
 | headings | 13 | H1 unique (4) + KW H1 (3) + H2 count (3) + KW H2 (2) + ≥2 H3 (1) |
 | placement | 13 | KW exact first 100 (4) + 1ère phrase (2) + last 100 (2) + distribution (5) |
@@ -180,6 +181,7 @@ Pris sur top40 termes pour aligner avec `slice(0, 40)` côté UI.
 - **iter 7 (2026-05-08)** : rebalance complet + scoring relatif vs concu. nlpCoverage 25→35, contentLength 12→8, headings 15→13, placement 15→14, structure 9→6, quality 6→5, images 3→4. SEO 0.95 → 0.92, GEO 0.05 → 0.08. Floor médiane à 60.
 - **iter 8 (2026-05-08)** : ajout critère sémantique paragraphe /10. nlpCoverage 35→27, placement 14→13, contentLength 8→7 pour libérer les 10 pts.
 - **iter 9 (2026-06-10)** : critère images neutralisé en permanence (max=0, renormalisation), retours utilisateurs relayés par Pierre. Au même moment : isJunkNlpTerm partagé UI + scoring (les termes junk ne sont plus comptés dans nlpCoverage).
+- **iter 11 (2026-06-22)** : ajout critère **differentiation** /4 (information gain). Les "Opportunités" (top40, présence < 40), jusque-là ignorées du scoring, deviennent un signal positif : couvrir les angles pertinents que le top 10 sous-traite. Répond au biais "suiveur" du scoring sémantique (récompensait la ressemblance au top 10, pas l'apport). Calculé partout (éditeur + serveur), aucune extraction supplémentaire. Plein régime à 50% des opportunités couvertes. Conséquence : un contenu qui ne fait que la parité avec le top 10 ne tape plus le max.
 - **iter 10 (2026-06-22)** : ajout critère **saillance** /4 (brevet US9251473B2, idée reprise d'un Gem de veille SEO). KW exact en gras à sa 1ère mention dans le corps (hors titres, déjà couverts par headings). Détecté côté éditeur via DOM walk (`detectKwEmphasized`, texte normalisé), passé à `computeDetailedScore` via `EditorData.kwEmphasized`. Neutralisé (max=0) quand l'info de formatage n'est pas fournie (scoring serveur, page crawlée). La "pureté thématique" du même Gem n'a pas été ajoutée : déjà couverte par le critère sémantique (cosinus paragraphe vs centroïde + coloration rouge des paragraphes qui divergent).
 
 ## Briefs Pierre cite régulièrement pour tester

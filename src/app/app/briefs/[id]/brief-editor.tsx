@@ -1131,6 +1131,7 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
 
   const criteres = [
     { name: "Couverture sémantique (NLP)", pts: 27, hint: "Présence des termes essentiels et importants vus chez les top 10 concurrents" },
+    { name: "Différenciation / apport", pts: 4, hint: "Couverture des angles « Opportunité » que le top 10 sous-traite : récompense le contenu qui apporte plus que la simple parité avec les concurrents (information gain)" },
     { name: "Mot-clé principal", pts: 15, hint: "Couverture des tokens + bonus correspondance exacte" },
     { name: "Titres (H1/H2/H3)", pts: 13, hint: "H1 unique, KW dans H1, nombre de H2, KW dans H2, au moins 2 H3" },
     { name: "Placement du mot-clé", pts: 13, hint: "KW dans les 100 premiers mots, 1re phrase, 100 derniers mots, distribution" },
@@ -1310,6 +1311,16 @@ function EditorSidebar({
       tip: Number(score.nlpCoverage.details.coverage ?? 0) < 50
         ? `↑ Utilisez les termes sémantiques (${score.nlpCoverage.details.used}/${score.nlpCoverage.details.total} couverts)`
         : "✓ Bon champ sémantique" },
+    // Différenciation / apport (information gain, itération 11). Neutralisé
+    // (max=0) si le KW n'a aucun terme d'opportunité.
+    ...(score.differentiation.max > 0
+      ? [{
+          label: "Différenciation", s: score.differentiation, color: "var(--blue)",
+          tip: score.differentiation.score >= 3
+            ? "✓ Tu couvres des angles que le top 10 sous-traite (apport)"
+            : "↑ Couvre des termes « Opportunité » que les concurrents oublient pour te différencier du top 10",
+        }]
+      : []),
     { label: "Longueur", s: score.contentLength, color: "var(--green)",
       tip: wc < (nlp?.minWordCount ?? 500) ? `↑ Visez au moins ${nlp?.minWordCount} mots` : "✓ Longueur dans la cible" },
     { label: "Titres H1/H2/H3", s: score.headings, color: "#E85D3A",
