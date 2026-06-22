@@ -164,19 +164,19 @@ describe("computeDetailedScore", () => {
       computeDetailedScore(ed, nlp, undefined, undefined, [{ score: avg }])
         .semantic.score;
 
-    it("plafonne à 10 dès 0.78 de cosinus moyen", () => {
-      expect(semScoreFor(0.78)).toBe(10);
-      expect(semScoreFor(0.85)).toBe(10);
+    it("plafonne à 15 dès 0.78 de cosinus moyen (rescale /15, iter 12)", () => {
+      expect(semScoreFor(0.78)).toBe(15);
+      expect(semScoreFor(0.85)).toBe(15);
     });
 
-    it("donne 7/10 à 0.68 et 5/10 à 0.60 (zone réaliste relevée)", () => {
-      expect(semScoreFor(0.68)).toBe(7);
-      expect(semScoreFor(0.6)).toBe(5);
+    it("donne 11/15 à 0.68 et 8/15 à 0.60 (zone réaliste relevée, ×1.5)", () => {
+      expect(semScoreFor(0.68)).toBe(11);
+      expect(semScoreFor(0.6)).toBe(8);
     });
 
-    it("donne 3/10 à 0.50 et 1/10 à 0.40", () => {
-      expect(semScoreFor(0.5)).toBe(3);
-      expect(semScoreFor(0.4)).toBe(1);
+    it("donne 5/15 à 0.50 et 2/15 à 0.40", () => {
+      expect(semScoreFor(0.5)).toBe(5);
+      expect(semScoreFor(0.4)).toBe(2);
     });
 
     it("tombe à 0 sous 0.32", () => {
@@ -184,9 +184,9 @@ describe("computeDetailedScore", () => {
       expect(semScoreFor(0.1)).toBe(0);
     });
 
-    it("active le critère (max=10) quand des scores paragraphe sont fournis", () => {
+    it("active le critère (max=15) quand des scores paragraphe sont fournis", () => {
       const s = computeDetailedScore(ed, nlp, undefined, undefined, [{ score: 0.7 }]);
-      expect(s.semantic.max).toBe(10);
+      expect(s.semantic.max).toBe(15);
       expect(s.semantic.details.avgCosine).toBe(0.7);
     });
   });

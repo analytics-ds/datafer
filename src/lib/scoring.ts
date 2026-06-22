@@ -264,7 +264,7 @@ const EMPTY: DetailedScore = {
   seoTotal: 0,
   geoTotal: 0,
   keyword: { score: 0, max: 15, details: {} },
-  nlpCoverage: { score: 0, max: 27, details: {} },
+  nlpCoverage: { score: 0, max: 22, details: {} },
   differentiation: { score: 0, max: 0, details: {} },
   contentLength: { score: 0, max: 7, details: {} },
   headings: { score: 0, max: 13, details: {} },
@@ -272,7 +272,7 @@ const EMPTY: DetailedScore = {
   structure: { score: 0, max: 6, details: {} },
   quality: { score: 0, max: 5, details: {} },
   images: { score: 0, max: 0, details: {} },
-  semantic: { score: 0, max: 10, details: {} },
+  semantic: { score: 0, max: 15, details: {} },
   salience: { score: 0, max: 0, details: {} },
   geo: computeGeoScore(EMPTY_GEO_SIGNALS),
 };
@@ -408,12 +408,13 @@ export function computeDetailedScore(
   paragraphSemanticScores?: ParagraphSemanticScore[],
 ): DetailedScore {
   const geo = computeGeoScore(geoSignals);
-  // Pondération SEO (itération 9, 2026-06-10) :
-  //   keyword 15 + nlpCoverage 27 + contentLength 7 + headings 13 +
-  //   placement 13 + structure 6 + quality 5 + semantic 10 = 96,
-  //   renormalisé sur 100 (images retiré du scoring, décision Pierre
-  //   2026-06-10 suite retours utilisateurs ; le critère reste à max=0
-  //   dans le breakdown pour compat API).
+  // Pondération SEO (itération 12, 2026-06-22) :
+  //   keyword 15 + nlpCoverage 22 + differentiation 4 + contentLength 7 +
+  //   headings 13 + placement 13 + structure 6 + quality 5 + salience 4 +
+  //   semantic 15 = 104, renormalisé sur 100. Critères neutralisables (max=0,
+  //   sortis de la renormalisation) : images (retiré iter 9), salience (info
+  //   formatage absente), semantic (pas de centroïde / paragraphes), et
+  //   differentiation (KW sans opportunité).
   // SEO_WEIGHT 0.92 + GEO_WEIGHT 0.08.
   //
   // Itération 7 : rebalance complet (Pierre : "le score monte trop vite à
@@ -438,7 +439,7 @@ export function computeDetailedScore(
     seoTotal: 0,
     geoTotal: geo.total,
     keyword: { score: 0, max: 15, details: {} },
-    nlpCoverage: { score: 0, max: 27, details: {} },
+    nlpCoverage: { score: 0, max: 22, details: {} },
     differentiation: { score: 0, max: 0, details: {} },
     contentLength: { score: 0, max: 7, details: {} },
     headings: { score: 0, max: 13, details: {} },
@@ -446,7 +447,7 @@ export function computeDetailedScore(
     structure: { score: 0, max: 6, details: {} },
     quality: { score: 0, max: 5, details: {} },
     images: { score: 0, max: 0, details: {} },
-    semantic: { score: 0, max: 10, details: {} },
+    semantic: { score: 0, max: 15, details: {} },
     salience: { score: 0, max: 0, details: {} },
     geo,
   };
@@ -539,11 +540,14 @@ export function computeDetailedScore(
   // Si pas de termes dans le tier, coverage = 1 (rien à plomber).
   const essCov = essentials.length > 0 ? essUsed / essentials.length : 1;
   const impCov = importants.length > 0 ? impUsed / importants.length : 1;
-  // Itération 8 (2026-05-08) : nlpCoverage 35→27 pour libérer 8 pts au
-  // profit du critère sémantique paragraphe (validé Pierre option A).
-  // Essentiels 17 + Importants 10. Ratio préservé.
-  const essScore = Math.min(17, Math.round(essCov * 17));
-  const impScore = Math.min(10, Math.round(impCov * 10));
+  // Itération 8 (2026-05-08) : nlpCoverage 35→27 (8 pts → sémantique paragraphe).
+  // Itération 12 (2026-06-22) : nlpCoverage 27→22, les 5 pts basculent vers le
+  // critère sémantique embeddings (10→15). Objectif : réduire le poids du BM25
+  // fréquentiel au profit du sens (cosinus embeddings), plus proche de la
+  // façon dont Google comprend la pertinence. Essentiels 14 + Importants 8,
+  // ratio ~1,75 préservé.
+  const essScore = Math.min(14, Math.round(essCov * 14));
+  const impScore = Math.min(8, Math.round(impCov * 8));
   r.nlpCoverage.score = essScore + impScore;
   r.nlpCoverage.details = {
     essentialsUsed: essUsed,
@@ -557,7 +561,7 @@ export function computeDetailedScore(
     // Champs legacy conservés pour rétro-compat (UI/API consommateurs).
     used: essUsed + impUsed,
     total: essentials.length + importants.length,
-    coverage: Math.round(((essCov * 17 + impCov * 10) / 27) * 100),
+    coverage: Math.round(((essCov * 14 + impCov * 8) / 22) * 100),
   };
 
   // 2 bis. DIFFÉRENCIATION / APPORT (information gain) /4 — itération 11,
@@ -774,15 +778,20 @@ export function computeDetailedScore(
     const avg =
       paragraphSemanticScores.reduce((acc, p) => acc + p.score, 0) /
       paragraphSemanticScores.length;
-    let s: number;
-    if (avg >= 0.78) s = 10;
-    else if (avg >= 0.68) s = Math.round(7 + ((avg - 0.68) / 0.1) * 3);
-    else if (avg >= 0.6) s = Math.round(5 + ((avg - 0.6) / 0.08) * 2);
-    else if (avg >= 0.5) s = Math.round(3 + ((avg - 0.5) / 0.1) * 2);
-    else if (avg >= 0.4) s = Math.round(1 + ((avg - 0.4) / 0.1) * 2);
-    else if (avg > 0.32) s = Math.round(((avg - 0.32) / 0.08) * 1);
-    else s = 0;
-    r.semantic.score = Math.max(0, Math.min(10, s));
+    // Mapping calibré sur l'échelle historique /10 (recalibrage 2026-05-20),
+    // calculé en float puis rescale ×1.5 vers /15 (itération 12, 2026-06-22 :
+    // bascule de 5 pts du BM25 nlpCoverage vers les embeddings). Les seuils de
+    // cosinus (la calibration) sont inchangés, seule l'amplitude est mise à
+    // l'échelle.
+    let s10: number;
+    if (avg >= 0.78) s10 = 10;
+    else if (avg >= 0.68) s10 = 7 + ((avg - 0.68) / 0.1) * 3;
+    else if (avg >= 0.6) s10 = 5 + ((avg - 0.6) / 0.08) * 2;
+    else if (avg >= 0.5) s10 = 3 + ((avg - 0.5) / 0.1) * 2;
+    else if (avg >= 0.4) s10 = 1 + ((avg - 0.4) / 0.1) * 2;
+    else if (avg > 0.32) s10 = ((avg - 0.32) / 0.08) * 1;
+    else s10 = 0;
+    r.semantic.score = Math.max(0, Math.min(15, Math.round(s10 * 1.5)));
     r.semantic.details = {
       paragraphsScored: paragraphSemanticScores.length,
       avgCosine: Math.round(avg * 1000) / 1000,

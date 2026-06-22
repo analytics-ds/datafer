@@ -1130,12 +1130,12 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   const criteres = [
-    { name: "Couverture sémantique (NLP)", pts: 27, hint: "Présence des termes essentiels et importants vus chez les top 10 concurrents" },
+    { name: "Couverture sémantique (NLP)", pts: 22, hint: "Présence des termes essentiels et importants vus chez les top 10 concurrents (BM25)" },
     { name: "Différenciation / apport", pts: 4, hint: "Couverture des angles « Opportunité » que le top 10 sous-traite : récompense le contenu qui apporte plus que la simple parité avec les concurrents (information gain)" },
     { name: "Mot-clé principal", pts: 15, hint: "Couverture des tokens + bonus correspondance exacte" },
     { name: "Titres (H1/H2/H3)", pts: 13, hint: "H1 unique, KW dans H1, nombre de H2, KW dans H2, au moins 2 H3" },
     { name: "Placement du mot-clé", pts: 13, hint: "KW dans les 100 premiers mots, 1re phrase, 100 derniers mots, distribution" },
-    { name: "Sémantique paragraphe (IA)", pts: 10, hint: "Cosinus moyen de tes paragraphes vs centroïde sémantique top 10 (embeddings bge-m3)" },
+    { name: "Sémantique paragraphe (IA)", pts: 15, hint: "Cosinus moyen de tes paragraphes vs centroïde sémantique top 10 (embeddings bge-m3). Poids renforcé itération 12 au détriment du BM25" },
     { name: "Longueur de contenu", pts: 7, hint: "wc dans la fourchette concurrents, ±20 % de la moyenne, au-dessus de la moyenne" },
     { name: "Structure", pts: 6, hint: "Ratio paragraphes, longueur des paragraphes, contenu ≥ 500 mots" },
     { name: "Qualité rédactionnelle", pts: 5, hint: "Longueur moyenne des phrases, densité du KW, diversité lexicale ≥ 0,55" },
