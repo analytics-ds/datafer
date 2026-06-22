@@ -199,6 +199,12 @@ export type EditorData = {
   // count des `<img>` dans l'éditeur). 0 par défaut si non fourni — le
   // critère images vaudra alors 0/3.
   imageCount?: number;
+  // Saillance de l'entité (brevet US9251473B2) : true si la PREMIÈRE mention
+  // du mot-clé exact dans le contenu est en gras/emphase (<strong>/<b>/<em>/<i>).
+  // Détecté côté éditeur (DOM walk). Si `undefined` (scoring serveur / page
+  // crawlée sans info de formatage), le critère saillance est neutralisé (max=0,
+  // renormalisation), comme images/semantic.
+  kwEmphasized?: boolean;
 };
 
 export type ScoreCriterion = {
@@ -235,6 +241,10 @@ export type DetailedScore = {
   // input à computeDetailedScore. max=0 si aucun score fourni (brief sans
   // semanticCentroid ou éditeur n'ayant pas encore appelé l'endpoint).
   semantic: ScoreCriterion;
+  // Saillance de l'entité : mot-clé exact mis en avant (gras/emphase) à sa
+  // première mention. Sur 4 pts. max=0 (neutralisé) si l'info de formatage
+  // n'est pas fournie (scoring serveur / page crawlée).
+  salience: ScoreCriterion;
   geo: GeoScore;
 };
 
@@ -256,6 +266,7 @@ const EMPTY: DetailedScore = {
   quality: { score: 0, max: 5, details: {} },
   images: { score: 0, max: 0, details: {} },
   semantic: { score: 0, max: 10, details: {} },
+  salience: { score: 0, max: 0, details: {} },
   geo: computeGeoScore(EMPTY_GEO_SIGNALS),
 };
 
@@ -428,6 +439,7 @@ export function computeDetailedScore(
     quality: { score: 0, max: 5, details: {} },
     images: { score: 0, max: 0, details: {} },
     semantic: { score: 0, max: 10, details: {} },
+    salience: { score: 0, max: 0, details: {} },
     geo,
   };
   if (!nlp?.nlpTerms) {
@@ -593,6 +605,19 @@ export function computeDetailedScore(
       h3: ed.h3s.length,
       h1HasKw: h1sNorm.some(matchesKw),
     };
+  }
+
+  // 4 bis. SAILLANCE DE L'ENTITÉ /4 (brevet US9251473B2, ajout 2026-06-22)
+  // Google identifie l'entité saillante d'un document via des signaux
+  // structurels, dont la mise en avant typographique. On récompense le fait
+  // que la PREMIÈRE mention du mot-clé exact soit en gras/emphase
+  // (<strong>/<b>/<em>/<i>). Détecté côté éditeur (DOM walk) et passé via
+  // ed.kwEmphasized. Si l'info n'est pas fournie (scoring serveur / page
+  // crawlée), critère neutralisé (max=0) comme images/semantic.
+  if (ed.kwEmphasized !== undefined) {
+    r.salience.max = 4;
+    r.salience.score = ed.kwEmphasized ? 4 : 0;
+    r.salience.details = { emphasized: ed.kwEmphasized };
   }
 
   // 5. PLACEMENT /13 (durci itération 7, recalibré /14→/13 itération 8)
@@ -767,7 +792,8 @@ export function computeDetailedScore(
     r.structure.score +
     r.quality.score +
     r.images.score +
-    r.semantic.score;
+    r.semantic.score +
+    r.salience.score;
   const sumMax =
     r.keyword.max +
     r.nlpCoverage.max +
@@ -777,7 +803,8 @@ export function computeDetailedScore(
     r.structure.max +
     r.quality.max +
     r.images.max +
-    r.semantic.max;
+    r.semantic.max +
+    r.salience.max;
   r.seoTotal = sumMax > 0 ? Math.min(100, Math.round((sumScore / sumMax) * 100)) : 0;
   r.rawTotal = Math.min(
     100,

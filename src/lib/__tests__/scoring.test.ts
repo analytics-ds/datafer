@@ -286,3 +286,39 @@ describe("critère images neutralisé (itération 9)", () => {
     expect(s.images.score).toBe(0);
   });
 });
+
+describe("critère saillance (entité en gras, US9251473B2)", () => {
+  const nlp = makeNlp();
+  const base: EditorData = {
+    text:
+      "costume homme beige : guide pour bien choisir son costume. " +
+      Array.from({ length: 120 }, () => "information").join(" "),
+    h1s: ["costume homme beige : le guide"],
+    h2s: ["Comment choisir", "Pourquoi le beige"],
+    h3s: [],
+  };
+
+  it("est neutralisé (max=0) quand kwEmphasized n'est pas fourni", () => {
+    const s = computeDetailedScore(base, nlp);
+    expect(s.salience.max).toBe(0);
+    expect(s.salience.score).toBe(0);
+  });
+
+  it("vaut 4/4 quand l'entité est mise en avant à sa 1ère mention", () => {
+    const s = computeDetailedScore({ ...base, kwEmphasized: true }, nlp);
+    expect(s.salience.max).toBe(4);
+    expect(s.salience.score).toBe(4);
+  });
+
+  it("vaut 0/4 quand l'entité n'est pas mise en avant", () => {
+    const s = computeDetailedScore({ ...base, kwEmphasized: false }, nlp);
+    expect(s.salience.max).toBe(4);
+    expect(s.salience.score).toBe(0);
+  });
+
+  it("améliore le total quand l'entité est en gras", () => {
+    const sNo = computeDetailedScore({ ...base, kwEmphasized: false }, nlp);
+    const sYes = computeDetailedScore({ ...base, kwEmphasized: true }, nlp);
+    expect(sYes.rawTotal).toBeGreaterThan(sNo.rawTotal);
+  });
+});

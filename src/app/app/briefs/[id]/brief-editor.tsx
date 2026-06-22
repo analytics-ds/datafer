@@ -403,14 +403,18 @@ export function BriefEditor(props: BriefEditorProps) {
     // concurrents (décision 2026-05-16). Le score affiché user est désormais
     // sur la même échelle que le score brut affiché côté SERP concurrents.
     // semanticParagraphScores est alimenté par le debounce ci-dessus.
-    () =>
-      computeDetailedScore(
-        editorData,
+    () => {
+      const kwEmphasized = editorRef.current
+        ? detectKwEmphasized(editorRef.current, nlp?.exactKeyword?.keyword ?? "")
+        : undefined;
+      return computeDetailedScore(
+        { ...editorData, kwEmphasized },
         nlp,
         geoSignals,
         undefined,
         semanticParagraphScores.length > 0 ? semanticParagraphScores : undefined,
-      ),
+      );
+    },
     [editorData, nlp, geoSignals, semanticParagraphScores],
   );
 
@@ -1134,6 +1138,7 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
     { name: "Longueur de contenu", pts: 7, hint: "wc dans la fourchette concurrents, ±20 % de la moyenne, au-dessus de la moyenne" },
     { name: "Structure", pts: 6, hint: "Ratio paragraphes, longueur des paragraphes, contenu ≥ 500 mots" },
     { name: "Qualité rédactionnelle", pts: 5, hint: "Longueur moyenne des phrases, densité du KW, diversité lexicale ≥ 0,55" },
+    { name: "Saillance de l'entité", pts: 4, hint: "Mot-clé exact mis en avant (gras) à sa première mention dans le texte (brevet Google US9251473B2)" },
     // Images retiré du scoring (itération 9, 2026-06-10).
   ];
   const maxPts = Math.max(...criteres.map((c) => c.pts));
@@ -1202,6 +1207,50 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
 // isJunkNlpTerm vit désormais dans @/lib/scoring : partagé entre cette
 // sidebar et le scoring nlpCoverage pour que les termes comptés soient
 // exactement les chips affichées (fix 2026-06-10).
+
+/**
+ * Saillance de l'entité (brevet US9251473B2) : la PREMIÈRE mention du mot-clé
+ * exact dans le CORPS (hors titres, qui sont déjà scorés par le critère
+ * headings) est-elle en gras/emphase (<strong>/<b>/<em>/<i>) ?
+ * Renvoie undefined si pas de mot-clé ou corps vide → le critère saillance est
+ * alors neutralisé (max=0). Détection sur texte normalisé (même logique
+ * accent-insensible que le scoring).
+ */
+function detectKwEmphasized(root: HTMLElement, keyword: string): boolean | undefined {
+  if (!keyword) return undefined;
+  const inHeading = (el: Element | null) => {
+    while (el && el !== root) {
+      if (/^h[1-6]$/i.test(el.tagName)) return true;
+      el = el.parentElement;
+    }
+    return false;
+  };
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      inHeading(node.parentElement) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+  });
+  const segs: { node: Text; start: number; end: number }[] = [];
+  let full = "";
+  let n: Node | null;
+  while ((n = walker.nextNode())) {
+    const norm = normalize((n as Text).data);
+    segs.push({ node: n as Text, start: full.length, end: full.length + norm.length });
+    full += norm;
+  }
+  if (!full.trim()) return undefined; // corps vide → on ne score pas encore
+  const re = buildKeywordRegex(keyword);
+  re.lastIndex = 0;
+  const m = re.exec(full);
+  if (!m) return false; // KW absent du corps → pas mis en avant
+  const seg = segs.find((s) => m.index >= s.start && m.index < s.end);
+  if (!seg) return false;
+  let el: Element | null = seg.node.parentElement;
+  while (el && el !== root) {
+    if (/^(strong|b|em|i)$/i.test(el.tagName)) return true;
+    el = el.parentElement;
+  }
+  return false;
+}
 
 function EditorSidebar({
   briefId,
@@ -1293,6 +1342,16 @@ function EditorSidebar({
             if (avg >= 0.55) return `↑ Bonne proximité (${avg.toFixed(2)}). Renforcez les paragraphes en jaune/rouge`;
             return `↑ Proximité sémantique faible (${avg.toFixed(2)}). Recentrez le contenu sur le sujet du KW`;
           })(),
+        }]
+      : []),
+    // Saillance de l'entité (brevet US9251473B2) : KW exact en gras à sa 1ère
+    // mention. Neutralisé (max=0) tant que le corps n'a pas de texte.
+    ...(score.salience.max > 0
+      ? [{
+          label: "Saillance entité", s: score.salience, color: "#E85D3A",
+          tip: score.salience.score > 0
+            ? "✓ Mot-clé mis en avant (gras) à sa première mention"
+            : "↑ Mets ton mot-clé exact en gras à sa première mention dans le texte",
         }]
       : []),
   ];

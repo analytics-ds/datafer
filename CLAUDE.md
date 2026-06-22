@@ -136,7 +136,7 @@ Doc API CrazySerp : skill projet `.claude/skills/crazyserp-api/SKILL.md`.
 
 ## Scoring SEO
 
-Pondération (depuis 2026-06-10, itération 9 ; somme 96 renormalisée sur 100) :
+Pondération (depuis 2026-06-22, itération 10 ; somme 100, renormalisée sur 100) :
 
 | Critère | Max | Notes |
 |---|---|---|
@@ -147,6 +147,7 @@ Pondération (depuis 2026-06-10, itération 9 ; somme 96 renormalisée sur 100) 
 | placement | 13 | KW exact first 100 (4) + 1ère phrase (2) + last 100 (2) + distribution (5) |
 | structure | 6 | Ratio paragraphes (3) + longueur paragraphes (2) + wc≥500 (1) |
 | quality | 5 | Phrases moy (2) + density (1) + diversité ≥0.55 (2) |
+| **salience** | **4** | KW exact en gras/emphase à sa 1ère mention dans le corps (brevet US9251473B2). Neutralisé (max=0) côté serveur/page crawlée (info de formatage absente) |
 | images | 0 | RETIRÉ du scoring (iter 9, décision Pierre). Reste dans le breakdown (max=0) pour compat API |
 | **semantic** | **10** | Cosinus moyen paragraphe vs centroïde top 10 (mapping non linéaire) |
 
@@ -179,6 +180,7 @@ Pris sur top40 termes pour aligner avec `slice(0, 40)` côté UI.
 - **iter 7 (2026-05-08)** : rebalance complet + scoring relatif vs concu. nlpCoverage 25→35, contentLength 12→8, headings 15→13, placement 15→14, structure 9→6, quality 6→5, images 3→4. SEO 0.95 → 0.92, GEO 0.05 → 0.08. Floor médiane à 60.
 - **iter 8 (2026-05-08)** : ajout critère sémantique paragraphe /10. nlpCoverage 35→27, placement 14→13, contentLength 8→7 pour libérer les 10 pts.
 - **iter 9 (2026-06-10)** : critère images neutralisé en permanence (max=0, renormalisation), retours utilisateurs relayés par Pierre. Au même moment : isJunkNlpTerm partagé UI + scoring (les termes junk ne sont plus comptés dans nlpCoverage).
+- **iter 10 (2026-06-22)** : ajout critère **saillance** /4 (brevet US9251473B2, idée reprise d'un Gem de veille SEO). KW exact en gras à sa 1ère mention dans le corps (hors titres, déjà couverts par headings). Détecté côté éditeur via DOM walk (`detectKwEmphasized`, texte normalisé), passé à `computeDetailedScore` via `EditorData.kwEmphasized`. Neutralisé (max=0) quand l'info de formatage n'est pas fournie (scoring serveur, page crawlée). La "pureté thématique" du même Gem n'a pas été ajoutée : déjà couverte par le critère sémantique (cosinus paragraphe vs centroïde + coloration rouge des paragraphes qui divergent).
 
 ## Briefs Pierre cite régulièrement pour tester
 
