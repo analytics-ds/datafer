@@ -250,7 +250,7 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
             ))}
             <div className="flex-1" />
             <a
-              href={`mailto:${feedback.userEmail}?subject=Re%3A%20Ton%20feedback%20RankShaker`}
+              href={`mailto:${feedback.userEmail}?subject=Re%3A%20Ton%20feedback`}
               className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text)] font-semibold"
             >
               Répondre par mail

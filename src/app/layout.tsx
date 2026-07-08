@@ -39,7 +39,7 @@ const monoPlex = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RankShaker · Content Optimizer",
+  title: "Content Optimizer · datashake",
   description: "Outil d'optimisation sémantique SEO par datashake.",
 };
 

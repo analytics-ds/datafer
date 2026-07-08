@@ -75,7 +75,7 @@ export function FirstLoginForm() {
         disabled={loading}
         className="w-full bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] py-[13px] text-[14px] font-semibold hover:bg-[var(--bg-dark)] disabled:opacity-50 transition-colors"
       >
-        {loading ? "Mise à jour…" : "Valider et accéder à RankShaker →"}
+        {loading ? "Mise à jour…" : "Valider et accéder à l'outil →"}
       </button>
     </form>
   );

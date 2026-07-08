@@ -994,7 +994,7 @@ export function BriefEditor(props: BriefEditorProps) {
           border-bottom: 2px solid var(--bg-olive-light);
         }
         /* Hiérarchie typographique volontairement marquée : retours clients
-           RankShaker 2026-06 (« H2/H3 à la même taille que les paragraphes »).
+           Content Optimizer 2026-06 (« H2/H3 à la même taille que les paragraphes »).
            Le paragraphe est fixé explicitement à 16px pour que l'écart reste
            visible quel que soit le contexte d'embed (share, exports). */
         .rich-editor h2 {
@@ -1165,7 +1165,7 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
         </button>
         <h3 className="font-[family-name:var(--font-display)] text-[20px] mb-3">Comment est calculé le score ?</h3>
         <p className="text-[13px] leading-[1.55] text-[var(--text-secondary)] mb-5">
-          Le score RankShaker est <strong>calibré sur tes concurrents</strong> du top 10 Google.
+          Le score Content Optimizer est <strong>calibré sur tes concurrents</strong> du top 10 Google.
           La médiane des scores bruts concurrents = 50, médiane × 1,5 = 100. Sur les requêtes
           à concurrence faible, on remonte la médiane à 60 pour rester ambitieux. Ce n&apos;est
           pas une note absolue : un score de 70 signifie que ton contenu fait ~40 % de mieux

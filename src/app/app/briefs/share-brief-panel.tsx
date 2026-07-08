@@ -86,7 +86,7 @@ export function ShareBriefPanel({
           <p className="text-[12px] text-[var(--text-secondary)] leading-[1.5] mb-4">
             Génère un lien que tu peux envoyer à ton client. Il accède au même éditeur
             que toi : contenu, scoring en temps réel, suggestions NLP. Pas besoin de
-            compte RankShaker.
+            compte.
           </p>
 
           {token ? (

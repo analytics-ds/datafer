@@ -35,7 +35,7 @@ export function LoginForm() {
       <div className="flex items-center gap-3 mb-10 md:hidden text-[var(--text)]">
         <LogoDatashake height={20} />
         <div className="w-px h-6 bg-[var(--border)]" />
-        <span className="font-semibold text-[14px]">RankShaker</span>
+        <span className="font-semibold text-[14px]">Content Optimizer</span>
       </div>
 
       <span className="inline-flex items-center px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.6px] uppercase mb-5">
@@ -46,7 +46,7 @@ export function LoginForm() {
         Bon retour<em className="df-accent">.</em>
       </h1>
       <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-10">
-        Connecte-toi à ton espace RankShaker pour générer tes briefs et accéder à tes clients.
+        Connecte-toi à ton espace Content Optimizer pour générer tes briefs et accéder à tes clients.
       </p>
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">

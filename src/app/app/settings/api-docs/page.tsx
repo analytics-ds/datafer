@@ -17,12 +17,12 @@ export default function ApiDocsPage() {
 
       <PageHeader
         title={<>Documentation API<span className="df-accent">.</span></>}
-        subtitle="Intègre RankShaker dans tes outils pour créer un brief, récupérer le score et envoyer du contenu à scorer."
+        subtitle="Intègre Content Optimizer dans tes outils pour créer un brief, récupérer le score et envoyer du contenu à scorer."
       />
 
       <Section title="Vue d'ensemble" dot="var(--accent)">
         <p className="mb-3">
-          L&apos;API RankShaker expose deux familles d&apos;endpoints pour piloter les briefs depuis l&apos;extérieur
+          L&apos;API Content Optimizer expose deux familles d&apos;endpoints pour piloter les briefs depuis l&apos;extérieur
           (script, N8N, Make, Postman, Zapier, etc.). Le modèle est asynchrone : tu crées un brief,
           tu interroges son statut jusqu&apos;à ce qu&apos;il soit prêt, puis tu peux soumettre ton contenu
           pour récupérer un score comparé à celui de la concurrence SERP.
@@ -100,7 +100,7 @@ export default function ApiDocsPage() {
               <td className="py-2 pr-4 font-mono text-[var(--text)]">folderId</td>
               <td className="py-2 pr-4">uuid</td>
               <td className="py-2 pr-4">non</td>
-              <td className="py-2">Rattachement à un dossier RankShaker (doit appartenir au user ou être de scope <Code>agency</Code>)</td>
+              <td className="py-2">Rattachement à un dossier Content Optimizer (doit appartenir au user ou être de scope <Code>agency</Code>)</td>
             </tr>
             <tr className="border-t border-[var(--border)]">
               <td className="py-2 pr-4 font-mono text-[var(--text)]">myUrl</td>
@@ -376,7 +376,7 @@ async function run(keyword: string, editorHtml: string) {
 
       <Section title="API V2, lecture granulaire" dot="var(--accent-dark)">
         <p className="mb-3">
-          La V2 est en lecture seule. Elle expose toute la richesse de l&apos;analyse RankShaker
+          La V2 est en lecture seule. Elle expose toute la richesse de l&apos;analyse Content Optimizer
           (SERP, concurrents, NLP, scoring détaillé, Haloscan) sur des endpoints séparés
           pour ne charger que ce dont tu as besoin. Auth identique à la V1, même clé.
         </p>
@@ -594,7 +594,7 @@ GET /api/v2/briefs/{id}/competitors/3/download?format=docx
         <p className="mb-2 text-[var(--text-muted)]">
           Embed un paragraphe via Workers AI bge-m3 et retourne le cosinus vs le centroïde
           sémantique top 10 du brief. Sert à scorer chaque paragraphe individuellement et
-          identifier ceux qui dévient du sujet. Utilisé en live par l&apos;éditeur RankShaker
+          identifier ceux qui dévient du sujet. Utilisé en live par l&apos;éditeur Content Optimizer
           (debounce 2s par paragraphe modifié).
         </p>
         <Pre>{`POST /api/v2/briefs/{id}/semantic-paragraph

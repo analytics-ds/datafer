@@ -56,7 +56,7 @@ export function LogoDatashake({ height = 22, className }: LogoDatashakeProps) {
   );
 }
 
-/** Combo "symbole + RankShaker" utilisé dans la sidebar et les chrome interne. */
+/** Combo "symbole + Content Optimizer" utilisé dans la sidebar et les chrome interne. */
 export function LogoRankShaker({ height = 22, className }: LogoDatashakeProps) {
   return (
     <span
@@ -68,7 +68,7 @@ export function LogoRankShaker({ height = 22, className }: LogoDatashakeProps) {
         className="font-[family-name:var(--font-body)] font-semibold tracking-[-0.02em]"
         style={{ fontSize: height * 0.85, lineHeight: 1 }}
       >
-        RankShaker
+        Content Optimizer
       </span>
     </span>
   );

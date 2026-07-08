@@ -119,7 +119,7 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
         )}
 
         <footer className="mt-14 text-center text-[11px] text-[var(--text-muted)]">
-          Propulsé par <strong>RankShaker</strong> · datashake
+          Propulsé par <strong>datashake</strong>
         </footer>
       </div>
     </main>
