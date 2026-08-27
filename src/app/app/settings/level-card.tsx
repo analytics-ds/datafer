@@ -65,7 +65,7 @@ export function LevelCard({
           </div>
           <div className="h-2 bg-[var(--bg-warm)] rounded-full overflow-hidden">
             <div
-              className="h-full bg-[var(--accent-dark)] transition-all duration-500"
+              className="h-full bg-[var(--bg-black)] transition-all duration-500"
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -189,10 +189,9 @@ function RuleCard({
         <span className="text-[20px] df-title leading-none">
           {count}
         </span>
-        <span
-          className="text-[11px] font-mono font-semibold"
-          style={{ color }}
-        >
+        {/* Charte : le compteur reste en noir, la puce du titre porte deja
+            la couleur du palier. */}
+        <span className="text-[11px] font-mono font-semibold text-[var(--text)]">
           {totalXp > 0 ? `+${totalXp}` : "—"} XP
         </span>
       </div>

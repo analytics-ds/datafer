@@ -72,12 +72,12 @@ export function ApiKeysForm({ keys }: { keys: ApiKeyRow[] }) {
       )}
 
       {fresh && (
-        <div className="border-2 border-[var(--accent)] bg-[var(--accent)]/5 rounded-[var(--radius-sm)] p-4 mb-6">
+        <div className="border-2 border-[var(--bg-black)] bg-[var(--bg-warm)] rounded-[var(--radius-sm)] p-4 mb-6">
           <div className="text-[12px] font-semibold mb-2">
             Clé générée pour « {fresh.name} » — copie-la maintenant, elle ne sera plus affichée
           </div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 block font-mono text-[12px] bg-[var(--bg-black)] text-[var(--text-inverse)] px-3 py-2 rounded-[var(--radius-xs)] break-all">
+            <code className="flex-1 block font-code text-[12px] bg-[var(--bg-black)] text-[var(--text-inverse)] px-3 py-2 rounded-[var(--radius-xs)] break-all">
               {fresh.key}
             </code>
             <button

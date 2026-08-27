@@ -344,7 +344,9 @@ function Leaderboard({
                       className="h-full rounded-full transition-all"
                       style={{
                         width: `${pct}%`,
-                        background: u.isMe ? "var(--accent-dark)" : "var(--accent)",
+                        // Graphique sur fond clair : noir pour ta barre, gris
+                        // pour celles de l'équipe, comme l'impose la charte.
+                        background: u.isMe ? "var(--bg-black)" : "var(--border-strong)",
                       }}
                     />
                   </div>

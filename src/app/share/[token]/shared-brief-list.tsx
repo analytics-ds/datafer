@@ -294,13 +294,15 @@ function ScoreGauge({ score }: { score: number }) {
   const r = 24;
   const length = Math.PI * r;
   const offset = length - (Math.max(0, Math.min(100, score)) / 100) * length;
+  /* Jauge = visualisation de données : la charte la veut sur fond noir, seul
+     contexte où les couleurs secondaires sont autorisées dans un graphique. */
   return (
-    <div className="relative w-[56px] h-[38px]">
-      <svg viewBox="0 0 56 38" className="w-full h-full">
+    <div className="relative w-[56px] h-[48px] bg-[var(--bg-black)] rounded-[var(--radius-sm)] flex items-center">
+      <svg viewBox="0 0 56 38" className="w-full h-[34px]">
         <path
           d={`M 4 34 A ${r} ${r} 0 0 1 52 34`}
           fill="none"
-          stroke="var(--border)"
+          stroke="var(--score-track)"
           strokeWidth="4.5"
           strokeLinecap="round"
         />
@@ -314,10 +316,7 @@ function ScoreGauge({ score }: { score: number }) {
           strokeDashoffset={offset}
         />
       </svg>
-      <div
-        className="absolute inset-0 flex items-end justify-center pb-[1px] font-mono font-semibold text-[13px]"
-        style={{ color }}
-      >
+      <div className="absolute inset-0 flex items-end justify-center pb-[9px] font-mono font-semibold text-[13px] text-[var(--text-inverse)]">
         {score}
       </div>
     </div>

@@ -548,7 +548,7 @@ function ProgressBar({ step }: { step: string | null }) {
     <div className="flex items-center gap-3">
       <div className="flex-1 h-[6px] bg-[var(--bg-warm)] rounded-full overflow-hidden">
         <div
-          className="h-full bg-[var(--brand-kaki)] rounded-full"
+          className="h-full bg-[var(--bg-black)] rounded-full"
           style={{ width: `${pct}%`, transition: "width .4s ease" }}
         />
       </div>

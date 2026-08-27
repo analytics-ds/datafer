@@ -68,7 +68,9 @@
      graphe). Il ne porte jamais de texte et ne remplit jamais un fond de
      page ou de bouton. --- */
   --accent: var(--brand-kaki);
-  --accent-dark: #8a8a26;
+  /* Alias historique. Il pointe sur le kaki exact de la charte : aucune
+     nuance de kaki assombrie n'existe dans le brandbook. */
+  --accent-dark: var(--brand-kaki);
 
   /* --- Sémantique d'état, remappée sur la palette de la charte ---
      ok / positif      → kaki

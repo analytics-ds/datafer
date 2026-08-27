@@ -93,7 +93,8 @@ export function BriefView({
               · {folder.name}
             </Link>
           )}
-          <span className="px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase bg-[var(--green-bg)] text-[var(--text)]">
+          <span className="inline-flex items-center gap-[5px] px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase bg-[var(--state-ok-bg)] text-[var(--text)]">
+            <span className="w-[5px] h-[5px] rounded-full bg-[var(--brand-kaki)]" />
             {crawledCount}/{serp.length} pages crawlées
           </span>
         </div>

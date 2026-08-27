@@ -20,8 +20,8 @@ const HIGHLIGHT_COLORS = [
   // pour garder un texte noir lisible par-dessus. Les surlignages deja
   // enregistres dans d'anciens briefs gardent leur couleur d'origine.
   { value: "#FFFF7D", label: "Jaune", swatch: "#FFFF7D" },
-  { value: "#D6E7FA", label: "Bleu", swatch: "#D6E7FA" },
-  { value: "#E8E8C4", label: "Kaki", swatch: "#E8E8C4" },
+  { value: "rgba(119,176,237,0.35)", label: "Bleu", swatch: "rgba(119,176,237,0.35)" },
+  { value: "rgba(173,172,47,0.3)", label: "Kaki", swatch: "rgba(173,172,47,0.3)" },
   { value: "#E8E8E8", label: "Gris", swatch: "#E8E8E8" },
 ];
 

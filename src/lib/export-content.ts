@@ -203,11 +203,11 @@ export function renderPrintDocument(keyword: string, bodyHtml: string): string {
   p { font-size: 15px; margin: 10px 0; }
   ul, ol { padding-left: 24px; }
   table { border-collapse: collapse; width: 100%; margin: 14px 0; }
-  th, td { border: 1px solid #bbb; padding: 8px 12px; text-align: left; }
+  th, td { border: 1px solid #E8E8E8; padding: 8px 12px; text-align: left; }
   img { max-width: 100%; height: auto; }
-  .print-bar { position: sticky; top: 0; background: #fff; border-bottom: 1px solid #eee; padding: 10px 0; margin-bottom: 24px; display: flex; gap: 12px; align-items: center; }
-  .print-bar button { font: inherit; padding: 6px 12px; border: 1px solid #222; background: #222; color: #fff; cursor: pointer; border-radius: 4px; }
-  .print-bar .hint { color: #666; font-size: 13px; }
+  .print-bar { position: sticky; top: 0; background: #FFFFFF; border-bottom: 1px solid #E8E8E8; padding: 10px 0; margin-bottom: 24px; display: flex; gap: 12px; align-items: center; }
+  .print-bar button { font: inherit; padding: 6px 12px; border: 1px solid #101010; background: #101010; color: #FFFFFF; cursor: pointer; border-radius: 4px; }
+  .print-bar .hint { color: rgba(16,16,16,0.7); font-size: 13px; }
   @media print {
     .print-bar { display: none; }
     body { margin: 0; padding: 0; }

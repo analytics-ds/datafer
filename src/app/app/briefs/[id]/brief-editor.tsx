@@ -3036,13 +3036,13 @@ function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-5">
+    <div className="bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius)] p-5">
       <div className="flex items-center gap-[7px] text-[13px] font-semibold mb-1">
         <span className="w-[7px] h-[7px] rounded-full" style={{ background: dotColor }} />
         {title}
       </div>
       {subtitle && (
-        <div className="text-[11px] text-[var(--text-muted)] mb-4">{subtitle}</div>
+        <div className="text-[11px] text-[var(--text-inverse-muted)] mb-4">{subtitle}</div>
       )}
       <div className="mt-2">{children}</div>
     </div>
@@ -3079,22 +3079,22 @@ function BarChartHorizontal<T extends BarPoint>({
         const pct = (p.value / localMax) * 100;
         const isMe = p.position === -1;
         const color = isMe
-          ? "var(--accent)"
+          ? "var(--brand-white)"
           : colorMode === "higher"
             ? colorByScoreDeviation(p.value, mean)
             : colorByVolumeDeviation(p.value, mean);
         return (
           <div key={i} className="flex items-center gap-2 text-[11px]">
-            <div className={`w-[100px] truncate ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-secondary)]"}`} title={p.label}>
+            <div className={`w-[100px] truncate ${isMe ? "font-bold text-[var(--text-inverse)]" : "text-[var(--text-inverse-secondary)]"}`} title={p.label}>
               {isMe ? "★ Toi" : p.label}
             </div>
-            <div className="flex-1 h-[14px] bg-[var(--bg)] rounded-[var(--radius-xs)] overflow-hidden relative">
+            <div className="flex-1 h-[14px] bg-[var(--score-track)] rounded-[var(--radius-xs)] overflow-hidden relative">
               <div
                 className="h-full rounded-[var(--radius-xs)] transition-all"
                 style={{ width: `${Math.max(pct, 2)}%`, background: color, opacity: isMe ? 1 : 0.85 }}
               />
             </div>
-            <div className={`font-mono text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
+            <div className={`font-mono text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text-inverse)]" : "text-[var(--text-inverse-muted)]"}`}>
               {p.value.toLocaleString("fr-FR")}{suffix}
             </div>
           </div>
@@ -3121,25 +3121,25 @@ function BarChartHorizontalStacked({
         const isMe = p.position === -1;
         const h2Pct = (p.h2 / localMax) * 100;
         const h3Pct = (p.h3 / localMax) * 100;
-        const baseColor = isMe ? "var(--accent)" : colorByVolumeDeviation(p.value, mean);
+        const baseColor = isMe ? "var(--brand-white)" : colorByVolumeDeviation(p.value, mean);
         return (
           <div key={i} className="flex items-center gap-2 text-[11px]">
-            <div className={`w-[100px] truncate ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-secondary)]"}`} title={p.label}>
+            <div className={`w-[100px] truncate ${isMe ? "font-bold text-[var(--text-inverse)]" : "text-[var(--text-inverse-secondary)]"}`} title={p.label}>
               {isMe ? "★ Toi" : p.label}
             </div>
-            <div className="flex-1 h-[14px] bg-[var(--bg)] rounded-[var(--radius-xs)] overflow-hidden flex">
+            <div className="flex-1 h-[14px] bg-[var(--score-track)] rounded-[var(--radius-xs)] overflow-hidden flex">
               <div className="h-full" style={{ width: `${h2Pct}%`, background: baseColor, opacity: isMe ? 1 : 0.9 }} />
               <div className="h-full" style={{ width: `${h3Pct}%`, background: baseColor, opacity: isMe ? 0.55 : 0.45 }} />
             </div>
-            <div className={`font-mono text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
+            <div className={`font-mono text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text-inverse)]" : "text-[var(--text-inverse-muted)]"}`}>
               {p.h2}H2 · {p.h3}H3
             </div>
           </div>
         );
       })}
-      <div className="flex gap-3 mt-2 text-[10px] text-[var(--text-muted)]">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--text-muted)]" /> H2 (couleur pleine)</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--text-muted)] opacity-50" /> H3 (couleur tamisée)</span>
+      <div className="flex gap-3 mt-2 text-[10px] text-[var(--text-inverse-muted)]">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--brand-blue)]" /> H2 (couleur pleine)</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--brand-blue)] opacity-50" /> H3 (couleur tamisée)</span>
       </div>
     </div>
   );
@@ -3156,14 +3156,14 @@ function ScatterChart({
   const PAD = 30;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-      <line x1={PAD} y1={H - PAD} x2={W - 5} y2={H - PAD} stroke="var(--border)" strokeWidth="1" />
-      <line x1={PAD} y1={5} x2={PAD} y2={H - PAD} stroke="var(--border)" strokeWidth="1" />
+      <line x1={PAD} y1={H - PAD} x2={W - 5} y2={H - PAD} stroke="var(--score-track)" strokeWidth="1" />
+      <line x1={PAD} y1={5} x2={PAD} y2={H - PAD} stroke="var(--score-track)" strokeWidth="1" />
       {[25, 50, 75].map((y) => {
         const yPx = H - PAD - ((y / 100) * (H - PAD - 5));
         return (
           <g key={y}>
-            <line x1={PAD} y1={yPx} x2={W - 5} y2={yPx} stroke="var(--border)" strokeWidth="0.5" strokeDasharray="2 3" />
-            <text x={2} y={yPx + 3} fontSize="9" fill="var(--text-muted)">{y}</text>
+            <line x1={PAD} y1={yPx} x2={W - 5} y2={yPx} stroke="var(--score-track)" strokeWidth="0.5" strokeDasharray="2 3" />
+            <text x={2} y={yPx + 3} fontSize="9" fill="var(--text-inverse-muted)">{y}</text>
           </g>
         );
       })}
@@ -3178,19 +3178,19 @@ function ScatterChart({
               r={p.isMe ? 7 : 5}
               fill={p.isMe ? "var(--brand-kaki)" : "var(--brand-blue)"}
               opacity={p.isMe ? 1 : 0.7}
-              stroke={p.isMe ? "var(--text)" : "none"}
+              stroke={p.isMe ? "var(--brand-white)" : "none"}
               strokeWidth={p.isMe ? 1.5 : 0}
             >
               <title>{`${p.label} : ${p.x.toLocaleString("fr-FR")} mots, ${p.y}/100`}</title>
             </circle>
             {p.isMe && (
-              <text x={cx + 9} y={cy + 4} fontSize="10" fontWeight="bold" fill="var(--text)">★</text>
+              <text x={cx + 9} y={cy + 4} fontSize="10" fontWeight="bold" fill="var(--text-inverse)">★</text>
             )}
           </g>
         );
       })}
-      <text x={W / 2} y={H - 4} fontSize="9" fill="var(--text-muted)" textAnchor="middle">Mots</text>
-      <text x={3} y={12} fontSize="9" fill="var(--text-muted)">Score</text>
+      <text x={W / 2} y={H - 4} fontSize="9" fill="var(--text-inverse-muted)" textAnchor="middle">Mots</text>
+      <text x={3} y={12} fontSize="9" fill="var(--text-inverse-muted)">Score</text>
     </svg>
   );
 }
@@ -3206,27 +3206,38 @@ function PositioningGauge({
   const min = Math.min(...all);
   const max = Math.max(...all);
   const range = max - min || 1;
+  /* Trois bandes empilées : le badge « Toi » en haut, la règle au milieu, les
+     bornes en bas. Le badge vivait auparavant hors du cadre et recouvrait le
+     sous-titre de la carte. */
+  const userLeft = `${((userScore - min) / range) * 100}%`;
   return (
-    <div className="relative h-[40px]">
-      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[6px] bg-gradient-to-r from-[var(--score-low)] via-[var(--score-mid)] to-[var(--score-high)] rounded-full opacity-70" />
-      {competitors.map((c, i) => (
-        <div
-          key={i}
-          className="absolute top-1/2 -translate-y-1/2 w-[8px] h-[8px] rounded-full bg-[var(--purple)] border border-white"
-          style={{ left: `calc(${((c - min) / range) * 100}% - 4px)`, opacity: 0.7 }}
-          title={`Concurrent : ${c}/100`}
-        />
-      ))}
+    <div className="relative h-[74px]">
+      {/* Badge du score utilisateur */}
       <div
-        className="absolute top-0 bottom-0 flex flex-col items-center -translate-x-1/2"
-        style={{ left: `${((userScore - min) / range) * 100}%` }}
+        className="absolute top-0 -translate-x-1/2 px-2 py-1 bg-[var(--brand-white)] text-[var(--text)] text-[10px] font-bold rounded whitespace-nowrap"
+        style={{ left: userLeft }}
       >
-        <div className="w-[2px] flex-1 bg-[var(--accent)]" />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full mb-1 px-2 py-1 bg-[var(--accent)] text-white text-[10px] font-bold rounded whitespace-nowrap">
-          ★ Toi : {userScore}
-        </div>
+        ★ Toi : {userScore}
       </div>
-      <div className="absolute inset-x-0 bottom-0 flex justify-between text-[9px] text-[var(--text-muted)] font-mono">
+
+      {/* Règle : dégradé de l'échelle de score, repères concurrents, jalon utilisateur */}
+      <div className="absolute inset-x-0 top-[26px] bottom-[16px]">
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[6px] bg-gradient-to-r from-[var(--score-low)] via-[var(--score-mid)] to-[var(--score-high)] rounded-full opacity-70" />
+        {competitors.map((c, i) => (
+          <div
+            key={i}
+            className="absolute top-1/2 -translate-y-1/2 w-[8px] h-[8px] rounded-full bg-[var(--brand-blue)] border border-[var(--bg-black)]"
+            style={{ left: `calc(${((c - min) / range) * 100}% - 4px)`, opacity: 0.7 }}
+            title={`Concurrent : ${c}/100`}
+          />
+        ))}
+        <div
+          className="absolute top-0 bottom-0 w-[2px] -translate-x-1/2 bg-[var(--brand-white)]"
+          style={{ left: userLeft }}
+        />
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 flex justify-between text-[9px] text-[var(--text-inverse-muted)] font-mono">
         <span>{min}</span>
         <span>{max}</span>
       </div>
@@ -3286,8 +3297,8 @@ function CompetitorScoreRow({ scoreTotal, serp }: { scoreTotal: number; serp: Se
   }
 
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] p-3 mb-5">
-      <div className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-2">
+    <div className="bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] p-3 mb-5">
+      <div className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-inverse-muted)] mb-2">
         Concurrence SERP
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -3333,10 +3344,10 @@ function CompareCell({
   const sign = gap > 0 ? "+" : "";
   return (
     <div title={tooltip}>
-      <div className="text-[10px] uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[2px]">{label}</div>
+      <div className="text-[10px] uppercase tracking-[0.5px] text-[var(--text-inverse-muted)] mb-[2px]">{label}</div>
       <div className="flex items-baseline gap-2">
         <span className="font-mono font-semibold text-[15px]">{value}</span>
-        <span className="inline-flex items-center gap-[4px] text-[11px] font-semibold font-mono text-[var(--text)]">
+        <span className="inline-flex items-center gap-[4px] text-[11px] font-semibold font-mono text-[var(--text-inverse)]">
           <span
             className="w-[5px] h-[5px] rounded-full shrink-0 self-center"
             style={{ background: dot[tone] }}
@@ -3560,14 +3571,14 @@ function SerpScoreChart({
 
   return (
     <div
-      className={`bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-5 ${className}`}
+      className={`bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius)] p-5 ${className}`}
     >
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
+          <div className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-inverse-muted)]">
             Score SEO concurrents
           </div>
-          <div className="text-[12px] text-[var(--text-secondary)] mt-[2px]">
+          <div className="text-[12px] text-[var(--text-inverse-secondary)] mt-[2px]">
             Moyenne SERP <strong>{avg}/100</strong> · ton score <strong>{myScore}/100</strong>
           </div>
         </div>
@@ -3576,20 +3587,20 @@ function SerpScoreChart({
       <div className="relative">
         {/* Ligne moyenne en pointillés */}
         <div
-          className="absolute left-0 right-0 border-t border-dashed border-[var(--text-muted)] z-10"
+          className="absolute left-0 right-0 border-t border-dashed border-[rgba(255,255,255,0.35)] z-10"
           style={{ bottom: `${(avg / maxValue) * 180}px` }}
           title={`Moyenne SERP : ${avg}/100`}
         >
-          <span className="absolute -top-[6px] right-0 text-[9px] font-mono text-[var(--text-muted)] bg-[var(--bg-card)] px-1">
+          <span className="absolute -top-[6px] right-0 text-[9px] font-mono text-[var(--text-inverse-muted)] bg-[var(--bg-black)] px-1">
             moy {avg}
           </span>
         </div>
 
-        <div className="flex items-end gap-[6px] h-[200px] border-b border-[var(--border)]">
+        <div className="flex items-end gap-[6px] h-[200px] border-b border-[rgba(255,255,255,0.16)]">
           {bars.map((b) => {
             const h = Math.max(2, (b.score / maxValue) * 180);
             const color = b.isMe
-              ? "var(--bg-black)"
+              ? "var(--brand-white)"
               : b.score >= 70
                 ? "var(--score-high)"
                 : b.score >= 40
@@ -3616,7 +3627,7 @@ function SerpScoreChart({
           {bars.map((b) => (
             <div
               key={`l-${b.key}`}
-              className="flex-1 text-[9px] text-center text-[var(--text-muted)] font-mono truncate"
+              className="flex-1 text-[9px] text-center text-[var(--text-inverse-muted)] font-mono truncate"
               title={b.label}
             >
               {b.isMe ? "Toi" : `#${b.position}`}
@@ -3697,13 +3708,17 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
               </div>
             ) : (
               <div title="Score SEO du concurrent (même algorithme que la rédaction)">
-                <div
-                  className="font-mono text-[13px] font-semibold"
-                  style={{
-                    color:
-                      r.score >= 70 ? "var(--score-high)" : r.score >= 40 ? "var(--score-mid)" : "var(--score-low)",
-                  }}
-                >
+                {/* Charte : le chiffre reste en noir, la puce porte le niveau. */}
+                <div className="font-mono text-[13px] font-semibold text-[var(--text)] inline-flex items-center gap-[5px]">
+                  <span
+                    className="w-[5px] h-[5px] rounded-full shrink-0"
+                    style={{
+                      background:
+                        r.score >= 70 ? "var(--brand-kaki)"
+                        : r.score >= 40 ? "var(--brand-blue)"
+                        : "var(--brand-yellow)",
+                    }}
+                  />
                   {r.score}
                 </div>
                 <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
