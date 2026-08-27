@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { TAG_COLORS } from "@/lib/tags-service";
+import { TAG_COLORS, normalizeTagColor } from "@/lib/tags-service";
 
 export type TagDTO = { id: string; name: string; color: string };
 
@@ -18,18 +18,20 @@ export function TagChip({
     size === "sm"
       ? "text-[10px] px-[7px] py-[1px]"
       : "text-[11px] px-[8px] py-[2px]";
+  /* Charte : la couleur du tag habille le fond, la bordure et la puce, mais
+     jamais le texte, qui reste en noir. */
+  const c = normalizeTagColor(tag.color);
   return (
     <span
-      className={`inline-flex items-center gap-[5px] rounded-[var(--radius-pill)] font-medium border ${sz}`}
+      className={`inline-flex items-center gap-[5px] rounded-[var(--radius-pill)] font-medium border text-[var(--text)] ${sz}`}
       style={{
-        background: `${tag.color}1a`,
-        color: tag.color,
-        borderColor: `${tag.color}55`,
+        background: `${c}1f`,
+        borderColor: `${c}66`,
       }}
     >
       <span
         className="w-[6px] h-[6px] rounded-full"
-        style={{ background: tag.color }}
+        style={{ background: c }}
       />
       {tag.name}
       {onRemove && (
@@ -196,7 +198,7 @@ export function TagPicker({
                   >
                     <span
                       className="w-[8px] h-[8px] rounded-full shrink-0"
-                      style={{ background: t.color }}
+                      style={{ background: normalizeTagColor(t.color) }}
                     />
                     <span className="flex-1 truncate">{t.name}</span>
                   </button>

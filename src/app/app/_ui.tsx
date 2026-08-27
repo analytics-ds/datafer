@@ -12,7 +12,7 @@ export function PageHeader({
   return (
     <header className="mb-10 flex items-end justify-between gap-6 flex-wrap">
       <div>
-        <h1 className="font-[family-name:var(--font-display)] text-[44px] leading-[1.05] tracking-[-1.2px] mb-2">
+        <h1 className="df-title text-[44px] leading-[1.05] tracking-[-1.2px] mb-2">
           {title}
         </h1>
         {subtitle && (

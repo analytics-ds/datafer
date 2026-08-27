@@ -16,6 +16,7 @@ import {
 import type { WorkflowStatus } from "./workflow-status";
 import { StatusPicker } from "./status-picker";
 import { TagPicker, type TagDTO } from "./tag-picker";
+import { TrashIcon, FolderIcon, GlobeIcon } from "@/components/icons";
 
 export type BriefCardData = {
   id: string;
@@ -268,10 +269,10 @@ export function BriefCard({
                 onChange={onFolderChange}
               />
               <span className="inline-flex items-center gap-[4px] text-[var(--text-muted)]">
-                <GlobeIcon />
+                <GlobeIcon size={12} />
                 {countryLabel}
               </span>
-              <span className="text-[var(--text-muted)] font-[family-name:var(--font-mono)] text-[11px]">
+              <span className="text-[var(--text-muted)] font-mono text-[11px]">
                 {relativeDate(brief.createdAt)}
               </span>
               <span className="w-[1px] h-3 bg-[var(--border)]" />
@@ -344,7 +345,7 @@ export function BriefCard({
               hover ? "opacity-100" : "opacity-0"
             }`}
           >
-            <TrashIcon />
+            <TrashIcon size={14} />
           </button>
         </div>
       </div>
@@ -380,10 +381,12 @@ function InlineMetric({
   const colors: Record<string, string> = {
     default: "var(--text)",
     muted: "var(--text-muted)",
-    good: "var(--green)",
-    warn: "var(--orange)",
-    bad: "var(--red)",
-    best: "#0E5132",
+    // Charte : ces valeurs sont du texte, donc noires. La hierarchie passe
+    // par le niveau de noir, pas par la couleur.
+    good: "var(--text)",
+    warn: "var(--text)",
+    bad: "var(--text)",
+    best: "var(--bg-black)",
   };
   return (
     <span
@@ -395,7 +398,7 @@ function InlineMetric({
         {label}
       </span>
       <span
-        className="font-[family-name:var(--font-mono)] font-semibold text-[12px]"
+        className="font-mono font-semibold text-[12px]"
         style={{ color: colors[tone] }}
       >
         {value}
@@ -429,7 +432,7 @@ function DeleteBriefConfirm({
         className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-7 w-[440px] max-w-full shadow-[var(--shadow-lg)]"
       >
         <div className="flex items-center gap-2 mb-3 text-[var(--red)]">
-          <TrashIcon />
+          <TrashIcon size={14} />
           <span className="font-semibold text-[16px]">Supprimer ce brief</span>
         </div>
         <p className="text-[13px] text-[var(--text-secondary)] leading-[1.55] mb-5">
@@ -458,19 +461,6 @@ function DeleteBriefConfirm({
   );
 }
 
-function TrashIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <path
-        d="M4 6h12M8 6V4a1 1 0 011-1h2a1 1 0 011 1v2m1 0v10a1 1 0 01-1 1H7a1 1 0 01-1-1V6"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 type PillTone = "best" | "good" | "warn" | "bad" | "info" | "muted";
 
@@ -495,19 +485,22 @@ function PendingGauge({ step }: { step: string | null }) {
   const length = Math.PI * r;
   const offset = length - (pct / 100) * length;
   return (
-    <div className="relative w-[64px] h-[44px]" title={`Analyse en cours · ${pct}%`}>
-      <svg viewBox="0 0 64 44" className="w-full h-full">
+    <div
+      className="relative w-[64px] h-[56px] bg-[var(--bg-black)] rounded-[var(--radius-sm)] flex items-center"
+      title={`Analyse en cours · ${pct}%`}
+    >
+      <svg viewBox="0 0 64 44" className="w-full h-[40px]">
         <path
           d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
           fill="none"
-          stroke="var(--border)"
+          stroke="var(--score-track)"
           strokeWidth="5"
           strokeLinecap="round"
         />
         <path
           d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
           fill="none"
-          stroke="var(--accent-dark)"
+          stroke="var(--score-mid)"
           strokeWidth="5"
           strokeLinecap="round"
           strokeDasharray={length}
@@ -515,7 +508,7 @@ function PendingGauge({ step }: { step: string | null }) {
           style={{ transition: "stroke-dashoffset .4s ease" }}
         />
       </svg>
-      <div className="absolute inset-0 flex items-end justify-center pb-[1px] font-[family-name:var(--font-mono)] font-semibold text-[12px] text-[var(--accent-dark)]">
+      <div className="absolute inset-0 flex items-end justify-center pb-[12px] font-mono font-semibold text-[12px] text-[var(--text-inverse)]">
         {pct}%
       </div>
     </div>
@@ -526,8 +519,11 @@ function FailedGauge() {
   const r = 28;
   const length = Math.PI * r;
   return (
-    <div className="relative w-[64px] h-[44px]" title="Analyse échouée">
-      <svg viewBox="0 0 64 44" className="w-full h-full">
+    <div
+      className="relative w-[64px] h-[56px] bg-[var(--bg-black)] rounded-[var(--radius-sm)] flex items-center"
+      title="Analyse échouée"
+    >
+      <svg viewBox="0 0 64 44" className="w-full h-[40px]">
         <path
           d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
           fill="none"
@@ -539,7 +535,7 @@ function FailedGauge() {
           opacity={0.4}
         />
       </svg>
-      <div className="absolute inset-0 flex items-end justify-center pb-[1px] font-[family-name:var(--font-mono)] font-semibold text-[14px] text-[var(--red)]">
+      <div className="absolute inset-0 flex items-end justify-center pb-[12px] font-mono font-semibold text-[14px] text-[var(--red)]">
         ✕
       </div>
     </div>
@@ -552,7 +548,7 @@ function ProgressBar({ step }: { step: string | null }) {
     <div className="flex items-center gap-3">
       <div className="flex-1 h-[6px] bg-[var(--bg-warm)] rounded-full overflow-hidden">
         <div
-          className="h-full bg-[var(--accent-dark)] rounded-full"
+          className="h-full bg-[var(--brand-kaki)] rounded-full"
           style={{ width: `${pct}%`, transition: "width .4s ease" }}
         />
       </div>
@@ -565,20 +561,24 @@ function ProgressBar({ step }: { step: string | null }) {
 
 // ─── Score gauge (demi-cercle) ─────────────────────────────────────────────
 function ScoreGauge({ score }: { score: number }) {
-  const color = score < 40 ? "var(--red)" : score < 70 ? "var(--orange)" : "var(--green)";
+  // Echelle de score de la charte : jaune, bleu, kaki.
+  const color = score < 40 ? "var(--score-low)" : score < 70 ? "var(--score-mid)" : "var(--score-high)";
 
   // Arc demi-cercle, rayon 28, centre (32, 32). Longueur ≈ π * r = 88.
   const r = 28;
   const length = Math.PI * r;
   const offset = length - (Math.max(0, Math.min(100, score)) / 100) * length;
 
+  /* La jauge est une visualisation de données : la charte la veut sur fond
+     noir, ce qui donne aussi au score le contraste que le jaune n'aurait pas
+     sur une carte blanche. */
   return (
-    <div className="relative w-[64px] h-[44px]">
-      <svg viewBox="0 0 64 44" className="w-full h-full">
+    <div className="relative w-[64px] h-[56px] bg-[var(--bg-black)] rounded-[var(--radius-sm)] flex items-center">
+      <svg viewBox="0 0 64 44" className="w-full h-[40px]">
         <path
           d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
           fill="none"
-          stroke="var(--border)"
+          stroke="var(--score-track)"
           strokeWidth="5"
           strokeLinecap="round"
         />
@@ -594,8 +594,7 @@ function ScoreGauge({ score }: { score: number }) {
         />
       </svg>
       <div
-        className="absolute inset-0 flex items-end justify-center pb-[1px] font-[family-name:var(--font-mono)] font-semibold text-[14px]"
-        style={{ color }}
+        className="absolute inset-0 flex items-end justify-center pb-[12px] font-mono font-semibold text-[14px] text-[var(--text-inverse)]"
       >
         {score}
       </div>
@@ -631,7 +630,7 @@ function FolderPickerInline({
         className="inline-flex items-center gap-[6px] px-[10px] py-[3px] text-[12px] text-[var(--text-secondary)] bg-[var(--bg)] hover:bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] transition-colors"
         title="Changer le client"
       >
-        {current ? <Favicon website={current.website} size={14} /> : <FolderIcon />}
+        {current ? <Favicon website={current.website} size={14} /> : <FolderIcon size={12} />}
         <span className="font-medium">{current ? current.name : "+ Client"}</span>
       </button>
 
@@ -648,7 +647,7 @@ function FolderPickerInline({
           >
             <span className="w-4 h-4 rounded-[3px] bg-[var(--bg-warm)] text-[var(--text-muted)] flex items-center justify-center text-[10px] shrink-0">·</span>
             <span className="flex-1">Aucun client</span>
-            {!current && <span className="text-[var(--accent-dark)] text-[12px]">✓</span>}
+            {!current && <span className="text-[var(--text)] text-[12px]">✓</span>}
           </button>
           {folders.map((f) => (
             <button
@@ -663,7 +662,7 @@ function FolderPickerInline({
             >
               <Favicon website={f.website} size={16} />
               <span className="flex-1 truncate">{f.name}</span>
-              {current?.id === f.id && <span className="text-[var(--accent-dark)] text-[12px]">✓</span>}
+              {current?.id === f.id && <span className="text-[var(--text)] text-[12px]">✓</span>}
             </button>
           ))}
         </div>
@@ -690,7 +689,7 @@ function AuthorAvatar({ author }: { author: BriefCardData["author"] }) {
   return (
     <div
       title={author.name ?? ""}
-      className="w-7 h-7 rounded-full bg-[var(--bg-olive-light)] text-[var(--accent-dark)] flex items-center justify-center text-[11px] font-semibold border border-[var(--border)]"
+      className="w-7 h-7 rounded-full bg-[var(--bg-olive-light)] text-[var(--text)] flex items-center justify-center text-[11px] font-semibold border border-[var(--border)]"
     >
       {initials}
     </div>
@@ -720,27 +719,5 @@ function Favicon({ website, size }: { website: string | null; size: number }) {
       className="rounded-[3px] bg-[var(--bg-warm)] shrink-0"
       loading="lazy"
     />
-  );
-}
-
-function FolderIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
-      <path
-        d="M3 6a1 1 0 011-1h3l2 2h7a1 1 0 011 1v7a1 1 0 01-1 1H4a1 1 0 01-1-1V6z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function GlobeIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
-      <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M3 10h14M10 3c2.5 3 2.5 11 0 14M10 3c-2.5 3-2.5 11 0 14" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
   );
 }

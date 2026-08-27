@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { ChatCircleIcon } from "@/components/icons";
 
 /* Widget feedback "chatbot" : un bouton sticky en bas à droite, présent sur
    toutes les pages /app. Clic = ouvre un panneau slide-over à droite avec
@@ -57,7 +58,7 @@ export function FeedbackWidget() {
         aria-label="Signaler un bug ou faire un retour"
         className="fixed z-40 right-5 bottom-5 inline-flex items-center gap-2 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] pl-3 pr-4 py-[10px] text-[13px] font-semibold shadow-[var(--shadow-lg)] hover:bg-[var(--bg-dark)] hover:scale-[1.03] transition-all"
       >
-        <ChatIcon />
+        <ChatCircleIcon size={16} />
         Feedback
       </button>
       {open && <FeedbackPanel onClose={() => setOpen(false)} />}
@@ -193,7 +194,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
             <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)]">
               Feedback
             </div>
-            <div className="font-[family-name:var(--font-display)] text-[18px] tracking-[-0.4px] font-semibold">
+            <div className="df-title text-[18px] tracking-[-0.4px] font-semibold">
               On t&apos;écoute<span className="df-accent">.</span>
             </div>
           </div>
@@ -211,10 +212,10 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
 
         {sent ? (
           <div className="flex-1 flex flex-col items-center justify-center px-7 text-center gap-2">
-            <div className="w-14 h-14 rounded-full bg-[var(--green-bg)] text-[var(--green)] flex items-center justify-center text-[26px]">
+            <div className="w-14 h-14 rounded-full bg-[var(--green-bg)] text-[var(--text)] flex items-center justify-center text-[26px]">
               ✓
             </div>
-            <div className="font-[family-name:var(--font-display)] text-[20px] font-semibold mt-2">
+            <div className="df-title text-[20px] font-semibold mt-2">
               Merci pour ton retour !
             </div>
             <p className="text-[13px] text-[var(--text-secondary)] leading-[1.5] max-w-[300px]">
@@ -269,7 +270,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
                 }
                 className="w-full px-3 py-[9px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] outline-none focus:border-[var(--bg-black)] transition-colors text-[13px] resize-none leading-[1.5]"
               />
-              <div className={`text-[10px] mt-1 text-right font-[family-name:var(--font-mono)] ${tooLong ? "text-[var(--red)]" : "text-[var(--text-muted)]"}`}>
+              <div className={`text-[10px] mt-1 text-right font-mono ${tooLong ? "text-[var(--red)]" : "text-[var(--text-muted)]"}`}>
                 {remaining} car. restants
               </div>
             </div>
@@ -338,7 +339,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
             <div className="mb-4 rounded-[var(--radius-xs)] bg-[var(--bg-warm)] border border-[var(--border)] px-3 py-2 text-[11px] text-[var(--text-secondary)]">
               <div className="flex items-start gap-2 mb-[3px]">
                 <span className="text-[var(--text-muted)] shrink-0">Page :</span>
-                <span className="font-[family-name:var(--font-mono)] break-all">{shortPath(currentUrl)}</span>
+                <span className="font-mono break-all">{shortPath(currentUrl)}</span>
               </div>
               <div className="text-[10px] text-[var(--text-muted)]">
                 Ton nom, ton email et l&apos;URL ci-dessus seront envoyés avec ton message.
@@ -396,17 +397,4 @@ function shortPath(url: string): string {
   } catch {
     return url;
   }
-}
-
-function ChatIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-      <path
-        d="M4 4h12a2 2 0 012 2v7a2 2 0 01-2 2h-4l-4 3v-3H4a2 2 0 01-2-2V6a2 2 0 012-2z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }

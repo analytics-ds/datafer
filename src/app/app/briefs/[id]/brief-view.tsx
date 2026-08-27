@@ -88,16 +88,16 @@ export function BriefView({
           {folder && (
             <Link
               href={folder.scope === "agency" ? `/app/agency/${folder.id}` : `/app/folders/${folder.id}`}
-              className="text-[11px] text-[var(--text-secondary)] font-[family-name:var(--font-mono)] hover:text-[var(--text)]"
+              className="text-[11px] text-[var(--text-secondary)] font-mono hover:text-[var(--text)]"
             >
               · {folder.name}
             </Link>
           )}
-          <span className="px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase bg-[var(--green-bg)] text-[var(--green)]">
+          <span className="px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase bg-[var(--green-bg)] text-[var(--text)]">
             {crawledCount}/{serp.length} pages crawlées
           </span>
         </div>
-        <h1 className="font-[family-name:var(--font-display)] text-[44px] leading-[1.05] tracking-[-1.2px] mb-2">
+        <h1 className="df-title text-[44px] leading-[1.05] tracking-[-1.2px] mb-2">
           {keyword}<span className="df-accent">.</span>
         </h1>
       </header>
@@ -159,8 +159,8 @@ export function BriefView({
                 t.kind === "exact"
                   ? { background: "var(--bg-black)", borderColor: "var(--bg-black)", color: "var(--text-inverse)" }
                   : t.kind === "extension"
-                    ? { background: "var(--blue-bg)", borderColor: "var(--blue)", color: "var(--blue)" }
-                    : { background: "var(--bg-olive-light)", borderColor: "var(--accent-dark)", color: "var(--accent-dark)" };
+                    ? { background: "var(--blue-bg)", borderColor: "var(--blue)", color: "var(--text)" }
+                    : { background: "var(--state-ok-bg)", borderColor: "var(--brand-kaki)", color: "var(--text)" };
               return (
                 <span
                   key={t.term}
@@ -177,7 +177,7 @@ export function BriefView({
                   {t.term}
                   {t.maxCount > 0 && (
                     <span
-                      className="text-[9px] opacity-80 font-[family-name:var(--font-mono)]"
+                      className="text-[9px] opacity-80 font-mono"
                       title={`Présent chez ${t.presence}% des concurrents (moyenne ${t.avgCount})`}
                     >
                       {t.minCount === t.maxCount
@@ -208,7 +208,7 @@ export function BriefView({
               >
                 <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-2">
                   {c.label}
-                  <span className="ml-2 font-[family-name:var(--font-mono)] font-normal opacity-70">
+                  <span className="ml-2 font-mono font-normal opacity-70">
                     {c.terms.length}
                   </span>
                 </div>
@@ -239,7 +239,7 @@ export function BriefView({
               className={`px-[12px] py-[5px] rounded-[var(--radius-pill)] text-[12px] font-semibold transition-colors ${termsView === "all" ? "bg-[var(--bg-card)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
             >
               Tout{" "}
-              <span className="font-[family-name:var(--font-mono)] opacity-70">{allTermsCount}</span>
+              <span className="font-mono opacity-70">{allTermsCount}</span>
             </button>
             <button
               type="button"
@@ -248,14 +248,14 @@ export function BriefView({
               className={`px-[12px] py-[5px] rounded-[var(--radius-pill)] text-[12px] font-semibold transition-colors ${termsView === "headings" ? "bg-[var(--bg-card)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
             >
               Headings{" "}
-              <span className="font-[family-name:var(--font-mono)] opacity-70">{headingsTermsCount}</span>
+              <span className="font-mono opacity-70">{headingsTermsCount}</span>
             </button>
           </div>
           {essentialView.length > 0 && (
-            <KwTier color="var(--red)" label="Essentiels" bg="#FFF0F0" terms={essentialView} />
+            <KwTier color="var(--text)" label="Essentiels" bg="var(--state-warn-bg)" terms={essentialView} />
           )}
           {importantView.length > 0 && (
-            <KwTier color="var(--orange)" label="Importants" bg="var(--orange-bg)" terms={importantView} />
+            <KwTier color="var(--text)" label="Importants" bg="var(--state-ok-bg)" terms={importantView} />
           )}
           {opportunityView.length > 0 && (
             <KwTier color="var(--blue)" label="Opportunité" bg="var(--blue-bg)" terms={opportunityView} />
@@ -288,9 +288,9 @@ export function BriefView({
                 className="bg-[var(--green-bg)] border border-[var(--green)] rounded-[var(--radius-sm)] px-4 py-3 text-[13px] flex items-start gap-3"
                 title={`Couvert par seulement ${o.competitorCoverage}% des concurrents`}
               >
-                <span className="text-[var(--green)] font-bold shrink-0">+</span>
+                <span className="text-[var(--text)] font-bold shrink-0">+</span>
                 <span className="flex-1">{o.text}</span>
-                <span className="text-[10px] font-semibold text-[var(--green)] font-[family-name:var(--font-mono)] shrink-0">
+                <span className="text-[10px] font-semibold text-[var(--text)] font-mono shrink-0">
                   {o.competitorCoverage}%
                 </span>
               </div>
@@ -330,9 +330,9 @@ export function BriefView({
               className="grid grid-cols-[44px_1fr_auto] gap-4 items-center bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] px-4 py-3 hover:border-[var(--border-strong)] transition-colors"
             >
               <span
-                className={`w-9 h-9 flex items-center justify-center font-[family-name:var(--font-mono)] font-semibold text-[14px] rounded-[var(--radius-xs)] ${
+                className={`w-9 h-9 flex items-center justify-center font-mono font-semibold text-[14px] rounded-[var(--radius-xs)] ${
                   r.position <= 3
-                    ? "bg-[var(--bg-olive-light)] text-[var(--accent-dark)]"
+                    ? "bg-[var(--bg-olive-light)] text-[var(--text)]"
                     : "bg-[var(--bg-warm)] text-[var(--text-secondary)]"
                 }`}
               >
@@ -340,13 +340,13 @@ export function BriefView({
               </span>
               <div className="min-w-0">
                 <div className="font-semibold text-[13px] truncate">{r.title}</div>
-                <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] truncate">
+                <div className="text-[11px] text-[var(--text-muted)] font-mono truncate">
                   {r.displayed_link}
                 </div>
               </div>
               <div className="flex gap-4 text-right">
                 <div>
-                  <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
+                  <div className="font-mono text-[13px] font-semibold">
                     {r.wordCount ? fmtNum(r.wordCount) : "N/A"}
                   </div>
                   <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
@@ -354,7 +354,7 @@ export function BriefView({
                   </div>
                 </div>
                 <div>
-                  <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
+                  <div className="font-mono text-[13px] font-semibold">
                     {r.headings ?? "N/A"}
                   </div>
                   <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
@@ -393,7 +393,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
       <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-1">
         {label}
       </div>
-      <div className="font-[family-name:var(--font-display)] text-[24px] tracking-[-0.5px]">
+      <div className="df-title text-[24px] tracking-[-0.5px]">
         {value}
       </div>
     </div>
@@ -408,7 +408,7 @@ function BenchRow({ label, value, last }: { label: string; value: string; last?:
       }`}
     >
       <span className="text-[var(--text-secondary)]">{label}</span>
-      <span className="font-[family-name:var(--font-mono)] font-semibold">{value}</span>
+      <span className="font-mono font-semibold">{value}</span>
     </div>
   );
 }
@@ -429,7 +429,7 @@ function KwTier({
       <div className="flex items-center gap-2 mb-2">
         <span className="w-[6px] h-[6px] rounded-full" style={{ background: color }} />
         <span className="text-[11px] font-semibold uppercase tracking-[0.8px]">{label}</span>
-        <span className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+        <span className="text-[11px] text-[var(--text-muted)] font-mono">
           {terms.length}
         </span>
       </div>
@@ -443,7 +443,7 @@ function KwTier({
             {t.term}
             {t.maxCount > 0 && (
               <span
-                className="text-[9px] opacity-80 font-[family-name:var(--font-mono)]"
+                className="text-[9px] opacity-80 font-mono"
                 title={`Fourchette concurrents (moyenne ${t.avgCount})`}
               >
                 {t.minCount === t.maxCount
@@ -486,11 +486,11 @@ function getIntentDescription(intent: string): string {
 
 function getIntentStyle(intent: string): React.CSSProperties {
   switch (intent) {
-    case "transactional": return { background: "var(--orange-bg)", color: "var(--orange)" };
-    case "informational": return { background: "var(--blue-bg)", color: "var(--blue)" };
-    case "commercial":    return { background: "var(--bg-olive-light)", color: "var(--accent-dark)" };
-    case "navigational":  return { background: "#FFF0F0", color: "var(--red)" };
-    case "local":         return { background: "var(--green-bg)", color: "var(--green)" };
+    case "transactional": return { background: "var(--state-warn-bg)", color: "var(--text)" };
+    case "informational": return { background: "var(--state-info-bg)", color: "var(--text)" };
+    case "commercial":    return { background: "var(--state-ok-bg)", color: "var(--text)" };
+    case "navigational":  return { background: "var(--bg-warm)", color: "var(--text)" };
+    case "local":         return { background: "var(--state-ok-bg)", color: "var(--text)" };
     default:              return {};
   }
 }

@@ -6,7 +6,7 @@ import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysi
 import { BriefEditor } from "@/app/app/briefs/[id]/brief-editor";
 import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
-import { LogoRankShaker } from "@/components/brand";
+import { LogoApp } from "@/components/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +42,7 @@ export default async function SharedSingleBriefPage({
   return (
     <div className="min-h-screen bg-[var(--bg)] flex flex-col">
       <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 h-14 flex items-center justify-between shrink-0">
-        <LogoRankShaker height={20} className="text-[var(--text)]" />
+        <LogoApp height={20} className="text-[var(--text)]" />
       </header>
 
       <div className="flex-1 flex flex-col">

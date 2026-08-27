@@ -89,9 +89,11 @@ function StatCard({ label, value, highlight, muted }: { label: string; value: nu
         {label}
       </div>
       <div
-        className="font-[family-name:var(--font-display)] text-[28px] leading-none tabular-nums tracking-[-0.6px]"
+        className="df-title text-[28px] leading-none tabular-nums tracking-[-0.6px]"
+        /* La charte n'autorise le texte qu'en noir ou blanc : la mise en avant
+           passe par le niveau de noir, plus par une couleur d'accent. */
         style={{
-          color: highlight ? "var(--accent-dark)" : muted ? "var(--text-muted)" : "var(--text)",
+          color: muted ? "var(--text-muted)" : highlight ? "var(--text)" : "var(--text-secondary)",
         }}
       >
         {value}

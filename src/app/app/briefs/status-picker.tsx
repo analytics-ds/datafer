@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { CaretDownIcon } from "@/components/icons";
 import {
   WORKFLOW_STATUSES,
   WORKFLOW_STATUS_LABELS,
@@ -75,15 +76,7 @@ export function StatusPicker({
       >
         <StatusBadge status={status} size={size} />
         {!disabled && (
-          <svg width="9" height="9" viewBox="0 0 20 20" fill="none">
-            <path
-              d="M5 8l5 5 5-5"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <CaretDownIcon size={10} />
         )}
       </button>
 
@@ -105,7 +98,7 @@ export function StatusPicker({
             >
               <StatusBadge status={s} size="sm" />
               {s === status && (
-                <span className="ml-auto text-[var(--accent-dark)] text-[12px]">✓</span>
+                <span className="ml-auto text-[var(--text)] text-[12px]">✓</span>
               )}
             </button>
           ))}

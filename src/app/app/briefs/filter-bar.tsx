@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { normalizeTagColor } from "@/lib/tags-service";
 import {
   WORKFLOW_STATUSES,
   WORKFLOW_STATUS_LABELS,
   type WorkflowStatus,
 } from "./workflow-status";
 import type { TagDTO } from "./tag-picker";
+import { CaretDownIcon } from "@/components/icons";
 
 export type FilterState = {
   query: string;
@@ -166,15 +168,7 @@ function FilterDropdown({
             {count}
           </span>
         )}
-        <svg width="9" height="9" viewBox="0 0 20 20" fill="none">
-          <path
-            d="M5 8l5 5 5-5"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <CaretDownIcon size={10} />
       </button>
 
       {open && (
@@ -251,7 +245,7 @@ function TagsFilter({
                 <Checkbox checked={selected.includes(t.id)} />
                 <span
                   className="w-[8px] h-[8px] rounded-full shrink-0"
-                  style={{ background: t.color }}
+                  style={{ background: normalizeTagColor(t.color) }}
                 />
                 <span className="flex-1 truncate">{t.name}</span>
               </button>

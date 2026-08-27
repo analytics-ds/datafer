@@ -7,17 +7,21 @@ export const WORKFLOW_STATUS_LABELS: Record<WorkflowStatus, string> = {
   published: "Publié",
 };
 
-// Logique progressive : gris (pas commencé) → bleu (en action) → orange
-// (presque fini, à valider) → vert (terminé). Beaucoup plus parlant qu'un
-// simple rouge → orange → jaune → vert où le rouge évoque l'erreur.
+// Logique progressive : gris (pas commencé) → bleu (en action) → jaune
+// (presque fini, à valider) → kaki (terminé).
+//
+// Charte datashake : ce sont des tags, l'un des rares usages où les couleurs
+// secondaires sont autorisées. Elles ne portent donc que le fond voilé et la
+// bordure ; le libellé reste en noir, puisque la charte réserve le texte au
+// noir et au blanc.
 export const WORKFLOW_STATUS_TONES: Record<
   WorkflowStatus,
   { bg: string; color: string; border: string }
 > = {
-  pending: { bg: "#F1F2F4", color: "#6B7280", border: "#D1D5DB" },
-  in_progress: { bg: "#E0F2FE", color: "#0369A1", border: "#7DD3FC" },
-  drafted: { bg: "#FFEDD5", color: "#C2410C", border: "#FDBA74" },
-  published: { bg: "#DCFCE7", color: "#15803D", border: "#86EFAC" },
+  pending: { bg: "var(--brand-grey-light)", color: "var(--text-secondary)", border: "var(--brand-grey-medium)" },
+  in_progress: { bg: "var(--state-info-bg)", color: "var(--text)", border: "var(--brand-blue)" },
+  drafted: { bg: "var(--state-warn-bg)", color: "var(--text)", border: "var(--brand-yellow)" },
+  published: { bg: "var(--state-ok-bg)", color: "var(--text)", border: "var(--brand-kaki)" },
 };
 
 export const WORKFLOW_STATUSES: WorkflowStatus[] = [

@@ -684,7 +684,7 @@ export function CommentStyles() {
       }
       .df-comment-textarea:focus {
         outline: none;
-        border-color: var(--accent);
+        border-color: var(--text);
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
       }
       .df-comment-textarea::placeholder { color: var(--text-muted); }
@@ -750,7 +750,7 @@ export function CommentStyles() {
         height: 28px;
         border-radius: var(--radius-pill);
         background: var(--bg-olive-light);
-        color: var(--accent-dark);
+        color: var(--text);
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -762,7 +762,7 @@ export function CommentStyles() {
       }
       .df-comment-avatar-client {
         background: var(--bg-warm);
-        color: var(--accent-dark);
+        color: var(--text);
         box-shadow: inset 0 0 0 1px var(--border-strong);
       }
       .df-comment-avatar-img {
@@ -796,7 +796,7 @@ export function CommentStyles() {
         padding: 1px 6px;
         border-radius: var(--radius-pill);
         background: var(--bg-olive-light);
-        color: var(--accent-dark);
+        color: var(--text);
         text-transform: uppercase;
         letter-spacing: 0.06em;
         font-weight: 700;

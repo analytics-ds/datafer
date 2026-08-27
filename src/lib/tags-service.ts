@@ -5,18 +5,41 @@ import { brief, briefTag, tag } from "@/db/schema";
 
 // Palette autorisée (alignée avec l'UI). Le serveur valide pour éviter qu'un
 // client n'injecte n'importe quelle couleur dans la base.
+//
+// Charte datashake : les tags sont l'un des rares usages explicitement
+// autorisés pour les couleurs secondaires. La palette se limite donc aux trois
+// secondaires de la marque et à deux neutres, ce qui donne cinq pastilles
+// nettement distinctes sans sortir du brandbook.
 export const TAG_COLORS = [
-  "#5B8DEF", // bleu
-  "#22A06B", // vert
-  "#E8704A", // orange
-  "#D14343", // rouge
-  "#9B5BDF", // violet
-  "#E0A03B", // ocre
-  "#3FA8A3", // turquoise
-  "#7A6E5C", // taupe
+  "#77B0ED", // bleu
+  "#FFFF7D", // jaune
+  "#ADAC2F", // kaki
+  "#101010", // noir
+  "#E8E8E8", // gris medium
 ] as const;
 
 export type TagColor = (typeof TAG_COLORS)[number];
+
+/**
+ * Ramène une couleur de tag déjà enregistrée en base sur la palette de la
+ * charte. Les tags créés avant la refonte gardent leur valeur d'origine en
+ * base : plutôt que de migrer la table, on les projette à l'affichage sur la
+ * couleur de marque la plus proche.
+ */
+const LEGACY_TAG_COLORS: Record<string, TagColor> = {
+  "#5B8DEF": "#77B0ED", // bleu
+  "#3FA8A3": "#77B0ED", // turquoise
+  "#9B5BDF": "#77B0ED", // violet
+  "#22A06B": "#ADAC2F", // vert
+  "#E0A03B": "#ADAC2F", // ocre
+  "#E8704A": "#FFFF7D", // orange
+  "#D14343": "#101010", // rouge
+  "#7A6E5C": "#E8E8E8", // taupe
+};
+
+export function normalizeTagColor(color: string): string {
+  return LEGACY_TAG_COLORS[color.toUpperCase()] ?? color;
+}
 export type TagSource = "agency" | "client";
 
 function normalizeName(raw: string): string {

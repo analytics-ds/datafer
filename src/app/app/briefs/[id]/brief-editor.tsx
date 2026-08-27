@@ -41,6 +41,7 @@ import { ExportMenu } from "./export-menu";
 import { BriefSettingsModal } from "./brief-settings-modal";
 import { InfoBubble } from "./info-bubble";
 import type { BriefOverrides } from "@/lib/brief-overrides";
+import { CaretDownIcon, GearIcon, SidebarIcon } from "@/components/icons";
 
 type Folder = { id: string; name: string; website: string | null; scope: "personal" | "agency" };
 
@@ -358,7 +359,11 @@ export function BriefEditor(props: BriefEditorProps) {
   // (seuils validés Pierre 2026-05-06).
   useEffect(() => {
     if (!editorRef.current) return;
-    const colorMap = { green: "#10b981", yellow: "#f59e0b", red: "#ef4444" } as const;
+    // Échelle de la charte, adaptée au fond clair de l'éditeur : kaki (bon),
+    // bleu (moyen), noir (faible). Le jaune de la charte est fait pour les
+    // fonds noirs ; sur du blanc il ne signalerait plus rien.
+    // Les clés restent nommées green/yellow/red côté scoring.
+    const colorMap = { green: "#ADAC2F", yellow: "#77B0ED", red: "#101010" } as const;
     const paragraphs = editorRef.current.querySelectorAll("p, ul, ol");
     for (const p of paragraphs) {
       const text = (p.textContent || "").trim();
@@ -644,14 +649,16 @@ export function BriefEditor(props: BriefEditorProps) {
   const wcTarget = nlp?.avgWordCount ?? 1200;
   const wcPct = Math.min(100, Math.round((wc / (nlp?.maxWordCount ?? wcTarget)) * 100));
   const wcBarColor =
-    nlp && wc < nlp.minWordCount ? "var(--red)" : nlp && wc <= nlp.maxWordCount ? "var(--green)" : "var(--orange)";
+    // Barre posée sur fond clair : noir sous la cible, kaki dans la cible,
+    // bleu au-dessus. Le jaune est réservé aux fonds noirs.
+    nlp && wc < nlp.minWordCount ? "var(--bg-black)" : nlp && wc <= nlp.maxWordCount ? "var(--brand-kaki)" : "var(--brand-blue)";
 
   return (
     <div className="flex flex-col h-[calc(100vh)] min-h-[640px]">
       {/* Top bar */}
       <div className="flex items-center justify-between gap-3 px-7 py-4 bg-[var(--bg-card)] border-b border-[var(--border)] flex-wrap">
         <div className="flex items-center gap-[12px]">
-          <h2 className="font-[family-name:var(--font-display)] text-[24px] tracking-[-0.6px] font-semibold leading-none">
+          <h2 className="df-title text-[24px] tracking-[-0.6px] font-semibold leading-none">
             {keyword}
           </h2>
           <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase">
@@ -660,19 +667,20 @@ export function BriefEditor(props: BriefEditorProps) {
           {folder && !hideNewAnalysis && (
             <Link
               href={`/app/folders/${folder.id}`}
-              className="flex items-center gap-[6px] text-[12px] text-[var(--text-secondary)] hover:text-[var(--text)] font-[family-name:var(--font-mono)]"
+              className="flex items-center gap-[6px] text-[12px] text-[var(--text-secondary)] hover:text-[var(--text)] font-mono"
             >
               <FolderFavicon website={folder.website} size={14} />
               <span>{folder.name}</span>
             </Link>
           )}
           {folder && hideNewAnalysis && (
-            <span className="flex items-center gap-[6px] text-[12px] text-[var(--text-secondary)] font-[family-name:var(--font-mono)]">
+            <span className="flex items-center gap-[6px] text-[12px] text-[var(--text-secondary)] font-mono">
               <FolderFavicon website={folder.website} size={14} />
               <span>{folder.name}</span>
             </span>
           )}
-          <span className="px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase bg-[var(--green-bg)] text-[var(--green)]">
+          <span className="inline-flex items-center gap-[5px] px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase bg-[var(--state-ok-bg)] text-[var(--text)]">
+            <span className="w-[5px] h-[5px] rounded-full bg-[var(--brand-kaki)]" />
             {crawledCount}/{serp.length} pages crawlées
           </span>
           <StatusPicker status={workflowStatus} onChange={changeWorkflowStatus} size="sm" />
@@ -734,7 +742,7 @@ export function BriefEditor(props: BriefEditorProps) {
               aria-label="Paramètres du brief"
               className="ml-1 inline-flex items-center justify-center w-[38px] h-[38px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] transition-colors"
             >
-              <SettingsGearIcon />
+              <GearIcon size={18} />
             </button>
           )}
         </div>
@@ -771,7 +779,7 @@ export function BriefEditor(props: BriefEditorProps) {
           <div className="flex flex-col border-r border-[var(--border)] overflow-hidden">
             {/* Word count bar */}
             <div className="flex items-center justify-end px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-card)] gap-[10px]">
-              <span className="font-[family-name:var(--font-mono)] text-[12px] text-[var(--text-secondary)]">
+              <span className="font-mono text-[12px] text-[var(--text-secondary)]">
                 <strong className="text-[var(--text)]">{wc}</strong> mots
               </span>
               <div className="w-[120px] h-1 bg-[var(--bg-warm)] rounded-full overflow-hidden">
@@ -780,7 +788,7 @@ export function BriefEditor(props: BriefEditorProps) {
                   style={{ width: `${wcPct}%`, background: wcBarColor }}
                 />
               </div>
-              <span className="font-[family-name:var(--font-mono)] text-[12px] text-[var(--text-muted)]">
+              <span className="font-mono text-[12px] text-[var(--text-muted)]">
                 / {wcTarget}
               </span>
               {/* Toggle du panneau d'analyse. Panneau masqué : on garde le score
@@ -793,11 +801,11 @@ export function BriefEditor(props: BriefEditorProps) {
                 className="ml-2 inline-flex items-center gap-2 px-2 h-[28px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] transition-colors"
               >
                 {!panelOpen && (
-                  <span className="font-[family-name:var(--font-mono)] text-[11px] font-semibold text-[var(--text)]">
+                  <span className="font-mono text-[11px] font-semibold text-[var(--text)]">
                     Score {score.total}
                   </span>
                 )}
-                <PanelRightIcon open={panelOpen} />
+                <SidebarIcon size={16} className="scale-x-[-1]" />
               </button>
             </div>
 
@@ -994,7 +1002,7 @@ export function BriefEditor(props: BriefEditorProps) {
           border-bottom: 2px solid var(--bg-olive-light);
         }
         /* Hiérarchie typographique volontairement marquée : retours clients
-           Content Optimizer 2026-06 (« H2/H3 à la même taille que les paragraphes »).
+           2026-06 (« H2/H3 à la même taille que les paragraphes »).
            Le paragraphe est fixé explicitement à 16px pour que l'écart reste
            visible quel que soit le contexte d'embed (share, exports). */
         .rich-editor h2 {
@@ -1043,7 +1051,7 @@ export function BriefEditor(props: BriefEditorProps) {
           border-radius: var(--radius-sm);
           margin: 12px 0;
         }
-        .rich-editor a { color: var(--accent-dark); text-decoration: underline; }
+        .rich-editor a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
         .rich-editor table {
           width: 100%;
           border-collapse: collapse;
@@ -1110,7 +1118,7 @@ function ScoreInfoTrigger() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Comment est calculé le score SEO ?"
-        className="ml-1 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border border-[var(--border-strong)] text-[10px] font-bold text-[var(--text-muted)] align-middle leading-none hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+        className="ml-1 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border border-[var(--border-strong)] text-[10px] font-bold text-[var(--text-muted)] align-middle leading-none hover:border-[var(--accent)] hover:text-[var(--text)] transition-colors"
       >
         ?
       </button>
@@ -1163,9 +1171,9 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
             <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
         </button>
-        <h3 className="font-[family-name:var(--font-display)] text-[20px] mb-3">Comment est calculé le score ?</h3>
+        <h3 className="df-title text-[20px] mb-3">Comment est calculé le score ?</h3>
         <p className="text-[13px] leading-[1.55] text-[var(--text-secondary)] mb-5">
-          Le score Content Optimizer est <strong>calibré sur tes concurrents</strong> du top 10 Google.
+          Le score est <strong>calibré sur tes concurrents</strong> du top 10 Google.
           La médiane des scores bruts concurrents = 50, médiane × 1,5 = 100. Sur les requêtes
           à concurrence faible, on remonte la médiane à 60 pour rester ambitieux. Ce n&apos;est
           pas une note absolue : un score de 70 signifie que ton contenu fait ~40 % de mieux
@@ -1188,7 +1196,7 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
                     style={{ width: `${(c.pts / maxPts) * 100}%` }}
                   />
                 </div>
-                <span className="font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-secondary)] w-[24px] text-right">
+                <span className="font-mono text-[11px] text-[var(--text-secondary)] w-[24px] text-right">
                   {c.pts}
                 </span>
               </div>
@@ -1305,9 +1313,9 @@ function EditorSidebar({
   const [termsView, setTermsView] = useState<"all" | "headings">("all");
 
   const subItems = [
-    { label: "Mot-clé exact", s: score.keyword, color: "var(--accent)",
+    { label: "Mot-clé exact", s: score.keyword, color: "var(--text)",
       tip: score.keyword.score < 10 ? "↑ Ajoutez des occurrences naturelles du mot-clé" : "✓ Bonne densité de mot-clé" },
-    { label: "Couverture NLP", s: score.nlpCoverage, color: "var(--purple)",
+    { label: "Couverture NLP", s: score.nlpCoverage, color: "var(--text)",
       tip: Number(score.nlpCoverage.details.coverage ?? 0) < 50
         ? `↑ Utilisez les termes sémantiques (${score.nlpCoverage.details.used}/${score.nlpCoverage.details.total} couverts)`
         : "✓ Bon champ sémantique" },
@@ -1315,29 +1323,29 @@ function EditorSidebar({
     // (max=0) si le KW n'a aucun terme d'opportunité.
     ...(score.differentiation.max > 0
       ? [{
-          label: "Différenciation", s: score.differentiation, color: "var(--blue)",
+          label: "Différenciation", s: score.differentiation, color: "var(--text)",
           tip: score.differentiation.score >= 3
             ? "✓ Tu couvres des angles que le top 10 sous-traite (apport)"
             : "↑ Couvre des termes « Opportunité » que les concurrents oublient pour te différencier du top 10",
         }]
       : []),
-    { label: "Longueur", s: score.contentLength, color: "var(--green)",
+    { label: "Longueur", s: score.contentLength, color: "var(--text)",
       tip: wc < (nlp?.minWordCount ?? 500) ? `↑ Visez au moins ${nlp?.minWordCount} mots` : "✓ Longueur dans la cible" },
-    { label: "Titres H1/H2/H3", s: score.headings, color: "#E85D3A",
+    { label: "Titres H1/H2/H3", s: score.headings, color: "var(--text)",
       tip: score.headings.score < 10
         ? Number(score.headings.details.h1 ?? 0) === 0 ? "↑ Ajoutez un H1 avec votre mot-clé"
         : Number(score.headings.details.h1 ?? 0) > 1 ? "⚠ Un seul H1 recommandé"
         : "↑ Ajoutez des H2 pour structurer"
         : "✓ Bonne hiérarchie de titres" },
-    { label: "Placement KW", s: score.placement, color: "var(--blue)",
+    { label: "Placement KW", s: score.placement, color: "var(--text)",
       tip: score.placement.score < 10 ? "↑ Placez le mot-clé dans l'intro et répartissez-le" : "✓ Mot-clé bien distribué" },
-    { label: "Structure", s: score.structure, color: "var(--orange)",
+    { label: "Structure", s: score.structure, color: "var(--text)",
       tip: score.structure.score < 6 ? "↑ Découpez en paragraphes plus courts" : "✓ Bonne structure" },
     { label: "Qualité rédac.", s: score.quality, color: "var(--text-secondary)",
       tip: score.quality.score < 4 ? "↑ Variez le vocabulaire et la longueur des phrases" : "✓ Bonne qualité rédactionnelle" },
     // Jauge Images retirée (itération 9, 2026-06-10) : le critère est
     // neutralisé dans le scoring (max=0), plus rien à afficher.
-    { label: "GEO (LLMs)", s: { score: score.geo.total, max: 100, details: {} }, color: "var(--purple)",
+    { label: "GEO (LLMs)", s: { score: score.geo.total, max: 100, details: {} }, color: "var(--text)",
       tip: score.geo.total < 60
         ? "↑ Ajoutez tableau / FAQ / liste / résumé / chiffre pour citation IA"
         : "✓ Bons signaux GEO" },
@@ -1345,7 +1353,7 @@ function EditorSidebar({
     // brief antérieur ou si le debounce live n'a pas encore scoré les paras.
     ...(score.semantic.max > 0
       ? [{
-          label: "Sémantique Google", s: score.semantic, color: "var(--accent)",
+          label: "Sémantique Google", s: score.semantic, color: "var(--text)",
           tip: (() => {
             const avg = Number(score.semantic.details.avgCosine ?? 0);
             const n = Number(score.semantic.details.paragraphsScored ?? 0);
@@ -1359,7 +1367,7 @@ function EditorSidebar({
     // mention. Neutralisé (max=0) tant que le corps n'a pas de texte.
     ...(score.salience.max > 0
       ? [{
-          label: "Saillance entité", s: score.salience, color: "#E85D3A",
+          label: "Saillance entité", s: score.salience, color: "var(--text)",
           tip: score.salience.score > 0
             ? "✓ Mot-clé mis en avant (gras) à sa première mention"
             : "↑ Mets ton mot-clé exact en gras à sa première mention dans le texte",
@@ -1405,7 +1413,9 @@ function EditorSidebar({
 
   const ringCirc = 2 * Math.PI * 44;
   const ringOffset = ringCirc - (scoreTotal / 100) * ringCirc;
-  const scoreColor = scoreTotal < 40 ? "var(--red)" : scoreTotal < 70 ? "var(--orange)" : "var(--green)";
+  /* Échelle de score de la charte : le graphique se pose sur fond noir et
+     n'emploie que les couleurs secondaires (jaune, bleu, kaki). */
+  const scoreColor = scoreTotal < 40 ? "var(--score-low)" : scoreTotal < 70 ? "var(--score-mid)" : "var(--score-high)";
   const scoreHint =
     wc < 10 ? "Commencez à écrire"
     : scoreTotal < 25 ? "Ajoutez du contenu"
@@ -1417,10 +1427,13 @@ function EditorSidebar({
   return (
     <aside className="flex flex-col overflow-y-auto bg-[var(--bg)] p-5 text-[13px]">
       {/* Big score ring */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-5 mb-5 flex items-center gap-4">
+      {/* Carte de score : c'est le graphique principal de l'outil, la charte
+          demande de poser ce type de visualisation sur fond noir et de n'y
+          employer que les couleurs secondaires. */}
+      <div className="bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius)] p-5 mb-5 flex items-center gap-4">
         <div className="relative w-[100px] h-[100px] shrink-0">
           <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-            <circle cx="50" cy="50" r="44" fill="none" stroke="var(--border)" strokeWidth="6" />
+            <circle cx="50" cy="50" r="44" fill="none" stroke="var(--score-track)" strokeWidth="6" />
             <circle
               cx="50" cy="50" r="44"
               fill="none"
@@ -1433,31 +1446,33 @@ function EditorSidebar({
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-[family-name:var(--font-display)] text-[36px] leading-none">{scoreTotal}</span>
-            <span className="text-[10px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] mt-[2px]">/ 100</span>
+            <span className="df-title df-title-inverse text-[36px] leading-none">{scoreTotal}</span>
+            <span className="text-[10px] text-[var(--text-inverse-muted)] font-mono mt-[2px]">/ 100</span>
           </div>
         </div>
         <div className="flex flex-col gap-[4px] min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] inline-flex items-center">
+          <span className="text-[10px] font-semibold uppercase tracking-[1px] text-[var(--text-inverse-muted)] inline-flex items-center">
             Score SEO
             <ScoreInfoTrigger />
           </span>
-          <span className="text-[13px] font-semibold leading-tight">{scoreHint}</span>
+          <span className="text-[13px] font-semibold leading-tight text-[var(--text-inverse)]">{scoreHint}</span>
           {nlp?.intent && (
             <span
-              className="self-start mt-1 px-[8px] py-[2px] rounded-[var(--radius-pill)] text-[9px] font-semibold uppercase tracking-[0.5px]"
-              style={(() => {
-                switch (nlp.intent) {
-                  case "transactional": return { background: "var(--orange-bg)", color: "var(--orange)" };
-                  case "informational": return { background: "var(--blue-bg)", color: "var(--blue)" };
-                  case "commercial":    return { background: "var(--bg-olive-light)", color: "var(--accent-dark)" };
-                  case "navigational":  return { background: "#FFF0F0", color: "var(--red)" };
-                  case "local":         return { background: "var(--green-bg)", color: "var(--green)" };
-                  default:              return {};
-                }
-              })()}
+              className="self-start mt-1 inline-flex items-center gap-[5px] px-[8px] py-[3px] rounded-[var(--radius-pill)] border border-[rgba(255,255,255,0.22)] text-[9px] font-semibold uppercase tracking-[0.5px] text-[var(--text-inverse)]"
               title="Intent de recherche détecté pour ce keyword"
             >
+              {/* La charte réserve les couleurs secondaires aux tout petits
+                  éléments : seule la puce est colorée, le texte reste blanc. */}
+              <span
+                className="w-[5px] h-[5px] rounded-full shrink-0"
+                style={{
+                  background:
+                    nlp.intent === "transactional" ? "var(--brand-yellow)"
+                    : nlp.intent === "commercial" ? "var(--brand-kaki)"
+                    : nlp.intent === "navigational" ? "var(--brand-white)"
+                    : "var(--brand-blue)",
+                }}
+              />
               {nlp.intent === "transactional" ? "Transactionnel"
                 : nlp.intent === "informational" ? "Informationnel"
                 : nlp.intent === "commercial" ? "Comparatif"
@@ -1483,24 +1498,27 @@ function EditorSidebar({
       <Section
         title="Score détaillé"
         dotColor="var(--bg-black)"
-        info="Décomposition du score SEO en 8 critères pondérés, ramenés sur 100. Chaque barre indique ta progression sur le critère (vert ≥70%, orange 40-69%, rouge <40%). La somme pondérée donne le score affiché en haut."
+        dark
+        info="Décomposition du score SEO en 8 critères pondérés, ramenés sur 100. Chaque barre indique ta progression sur le critère (kaki ≥70%, bleu 40-69%, jaune <40%). La somme pondérée donne le score affiché en haut."
       >
         {subItems.map((i) => {
           const pct = Math.round((i.s.score / i.s.max) * 100);
-          const valColor = pct >= 70 ? "var(--green)" : pct >= 40 ? "var(--orange)" : "var(--red)";
+          /* Panneau noir : les barres portent la couleur, les valeurs restent
+             en blanc, comme l'exige la charte pour les textes. */
+          const barColor = pct >= 70 ? "var(--score-high)" : pct >= 40 ? "var(--score-mid)" : "var(--score-low)";
           return (
-            <div key={i.label} className="mb-[10px]">
+            <div key={i.label} className="mb-[10px] last:mb-0">
               <div className="flex justify-between items-center mb-[3px]">
-                <span className="text-[11px] font-medium text-[var(--text-secondary)]">{i.label}</span>
-                <span className="font-[family-name:var(--font-mono)] text-[11px] font-semibold" style={{ color: valColor }}>
+                <span className="text-[11px] font-medium text-[var(--text-inverse-secondary)]">{i.label}</span>
+                <span className="font-mono text-[11px] font-semibold text-[var(--text-inverse)]">
                   {i.s.score}/{i.s.max}
                 </span>
               </div>
-              <div className="h-1 bg-[var(--bg-warm)] rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-[width] duration-400" style={{ width: `${pct}%`, background: i.color }} />
+              <div className="h-1 rounded-full overflow-hidden bg-[var(--score-track)]">
+                <div className="h-full rounded-full transition-[width] duration-400" style={{ width: `${pct}%`, background: barColor }} />
               </div>
               {pct < 100 && (
-                <div className="text-[10px] text-[var(--text-muted)] mt-[3px] italic leading-[1.3]">{i.tip}</div>
+                <div className="text-[10px] text-[var(--text-inverse-muted)] mt-[3px] leading-[1.3]">{i.tip}</div>
               )}
             </div>
           );
@@ -1513,7 +1531,7 @@ function EditorSidebar({
           dotColor="var(--accent)"
           info="Densité = (occurrences × longueur du KW) / nombre total de mots × 100. La fourchette idéale est calculée d'après les concurrents top 10. Trop bas = mot-clé sous-représenté, trop haut = bourrage (risque de pénalité Google)."
         >
-          <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold px-3 py-[7px] bg-[var(--bg-warm)] rounded-[var(--radius-xs)] mb-[10px] text-center">
+          <div className="font-mono text-[13px] font-semibold px-3 py-[7px] bg-[var(--bg-warm)] rounded-[var(--radius-xs)] mb-[10px] text-center">
             &quot;{ek.keyword}&quot;
           </div>
           <Metric label="Occurrences" value={`${kwCount} / ~${ek.avgCount}`} tone={kwCount >= ek.avgCount * 0.7 ? "good" : "warn"} />
@@ -1549,7 +1567,7 @@ function EditorSidebar({
               className={`px-[11px] py-[4px] rounded-[var(--radius-pill)] text-[11px] font-semibold transition-colors ${termsView === "all" ? "bg-[var(--bg-card)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
             >
               Tout{" "}
-              <span className="font-[family-name:var(--font-mono)] opacity-70">{allTermsCount}</span>
+              <span className="font-mono opacity-70">{allTermsCount}</span>
             </button>
             <button
               type="button"
@@ -1558,7 +1576,7 @@ function EditorSidebar({
               className={`px-[11px] py-[4px] rounded-[var(--radius-pill)] text-[11px] font-semibold transition-colors ${termsView === "headings" ? "bg-[var(--bg-card)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
             >
               Headings{" "}
-              <span className="font-[family-name:var(--font-mono)] opacity-70">{headingsTermsCount}</span>
+              <span className="font-mono opacity-70">{headingsTermsCount}</span>
             </button>
           </div>
           {showHeadings && headingsTermsCount === 0 && (
@@ -1568,7 +1586,7 @@ function EditorSidebar({
           )}
           <TierTags
             label="Essentiels"
-            color="var(--red)" bg="#FFF0F0" border="#E8BCBC"
+            color="var(--text)" bg="var(--state-warn-bg)" border="var(--brand-yellow)"
             terms={essentialView}
             kwTerms={showHeadings ? undefined : (nlp.keywordTerms ?? []).filter((k) => k.kind === "exact")}
             lower={lower}
@@ -1577,13 +1595,13 @@ function EditorSidebar({
           />
           <TierTags
             label="Importants"
-            color="var(--orange)" bg="var(--orange-bg)" border="#E8D6A0"
+            color="var(--text)" bg="var(--state-ok-bg)" border="var(--brand-kaki)"
             terms={importantView} lower={lower} onInsert={insertTermAtCursor}
             info="Termes présents chez 40-69% des concurrents. Pas obligatoires mais fortement attendus. Couvrir le maximum donne jusqu'à 10/27 pts de NLP."
           />
           <TierTags
             label="Opportunité"
-            color="var(--blue)" bg="var(--blue-bg)" border="#B8D0E8"
+            color="var(--text)" bg="var(--state-info-bg)" border="var(--brand-blue)"
             terms={opportunityView} lower={lower} onInsert={insertTermAtCursor}
             info="Termes présents chez moins de 40% des concurrents. Ignorés du scoring (zéro pénalité). À ajouter en bonus si pertinent pour différencier ton contenu."
           />
@@ -1638,11 +1656,11 @@ function EditorSidebar({
                 onClick={() => insertPaaAsH2(o.text)}
                 title={`Couvert par seulement ${o.competitorCoverage}% des concurrents — angle unique`}
                 className="flex items-center gap-2 px-[10px] py-[7px] bg-[var(--green-bg)] border border-[var(--green)] rounded-[var(--radius-xs)] text-left text-[12px] leading-[1.4] hover:opacity-80 transition-opacity"
-                style={{ color: "var(--green)" }}
+                style={{ color: "var(--text)" }}
               >
                 <span className="font-bold text-[14px] shrink-0">+</span>
                 <span className="flex-1">{o.text}</span>
-                <span className="text-[9px] font-[family-name:var(--font-mono)] shrink-0 opacity-80">
+                <span className="text-[9px] font-mono shrink-0 opacity-80">
                   {o.competitorCoverage}%
                 </span>
               </button>
@@ -1701,7 +1719,7 @@ function EditorSidebar({
                         className="flex items-center gap-2 flex-1 min-w-0"
                         title={r.link}
                       >
-                        <span className="text-[10px] font-[family-name:var(--font-mono)] text-[var(--text-muted)] w-[18px] shrink-0">
+                        <span className="text-[10px] font-mono text-[var(--text-muted)] w-[18px] shrink-0">
                           {r.position}.
                         </span>
                         {fav && (
@@ -1718,7 +1736,7 @@ function EditorSidebar({
                           {host || r.link}
                         </span>
                         <span
-                          className={`shrink-0 font-[family-name:var(--font-mono)] text-[10px] ${
+                          className={`shrink-0 font-mono text-[10px] ${
                             wc === 0 ? "text-[var(--red)]" : "text-[var(--text-muted)]"
                           }`}
                         >
@@ -1758,11 +1776,16 @@ function Section({
   defaultOpen = false,
   info,
   headerAction,
+  dark = false,
   children,
 }: {
   title: string;
   dotColor: string;
   defaultOpen?: boolean;
+  /** Pose le contenu de la section sur un panneau noir. Réservé aux blocs de
+   *  visualisation de données : la charte n'autorise les couleurs secondaires
+   *  dans un graphique que sur fond noir. */
+  dark?: boolean;
   /** Tooltip d'aide affiché via une bulle "i" à côté du titre. */
   info?: string;
   /** Élément cliquable affiché à droite du titre (ex : bouton "Copier").
@@ -1793,19 +1816,17 @@ function Section({
         </span>
         <span className="flex items-center gap-[8px]">
           {headerAction}
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 20 20"
-            fill="none"
-            className="transition-transform shrink-0"
-            style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
-          >
-            <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <CaretDownIcon size={10} className="transition-transform shrink-0" style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }} />
         </span>
       </div>
-      {open && children}
+      {open &&
+        (dark ? (
+          <div className="bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] p-4">
+            {children}
+          </div>
+        ) : (
+          children
+        ))}
     </div>
   );
 }
@@ -1862,11 +1883,21 @@ function CopyTermsButton({ terms }: { terms: string[] }) {
 }
 
 function Metric({ label, value, tone, last }: { label: string; value: string; tone?: "good" | "warn" | "bad"; last?: boolean }) {
-  const toneColor = tone === "good" ? "var(--green)" : tone === "bad" ? "var(--red)" : tone === "warn" ? "var(--orange)" : "var(--text)";
+  /* Charte : la valeur reste en noir, la puce porte l'état. */
+  const toneDot =
+    tone === "good" ? "var(--brand-kaki)"
+    : tone === "bad" ? "var(--brand-blue)"
+    : tone === "warn" ? "var(--brand-yellow)"
+    : null;
   return (
     <div className={`flex justify-between items-center py-[5px] text-[11px] ${last ? "" : "border-b border-[var(--border)]"}`}>
       <span className="text-[var(--text-secondary)]">{label}</span>
-      <span className="font-[family-name:var(--font-mono)] font-semibold" style={{ color: toneColor }}>{value}</span>
+      <span className="inline-flex items-center gap-[5px] font-mono font-semibold text-[var(--text)]">
+        {toneDot && (
+          <span className="w-[5px] h-[5px] rounded-full shrink-0" style={{ background: toneDot }} />
+        )}
+        {value}
+      </span>
     </div>
   );
 }
@@ -1938,8 +1969,8 @@ function CompetitorSections({
                 </span>
                 <span className="flex-1 font-medium capitalize">{titleCase}</span>
                 <span
-                  className="text-[9px] font-[family-name:var(--font-mono)] shrink-0"
-                  style={{ color: covered ? "var(--text-muted)" : "var(--orange)" }}
+                  className="text-[9px] font-mono shrink-0"
+                  style={{ color: "var(--text-secondary)" }}
                   title={`${section.hits}/${section.total} concurrents traitent ce sous-sujet`}
                 >
                   {pct}%
@@ -1991,11 +2022,11 @@ function EntityList({
             style={{
               background: mentioned ? "var(--green-bg)" : "var(--bg-card)",
               borderColor: mentioned ? "var(--green)" : "var(--border)",
-              color: mentioned ? "var(--green)" : "var(--text)",
+              color: "var(--text)",
             }}
           >
             {entity.label}
-            <span className="text-[9px] font-[family-name:var(--font-mono)] opacity-75">
+            <span className="text-[9px] font-mono opacity-75">
               {entity.hits}/{entity.total}
             </span>
           </span>
@@ -2133,7 +2164,7 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert, info, kwTe
       <div className="text-[10px] font-semibold uppercase tracking-[0.8px] mb-[6px] flex items-center gap-[5px]" style={{ color }}>
         <span className="w-[5px] h-[5px] rounded-full" style={{ background: color }} />
         {label}
-        <span className="font-[family-name:var(--font-mono)] font-normal text-[var(--text-muted)]">
+        <span className="font-mono font-normal text-[var(--text-muted)]">
           {totalUsed}/{totalCount}
         </span>
         {info && <InfoBubble text={info} />}
@@ -2159,13 +2190,13 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert, info, kwTe
             k.kind === "exact"
               ? { background: "var(--bg-black)", borderColor: "var(--bg-black)", color: "var(--text-inverse)" }
               : k.kind === "extension"
-                ? { background: "var(--blue-bg)", borderColor: "var(--blue)", color: "var(--blue)" }
-                : { background: "var(--bg-olive-light)", borderColor: "var(--accent-dark)", color: "var(--accent-dark)" };
+                ? { background: "var(--blue-bg)", borderColor: "var(--blue)", color: "var(--text)" }
+                : { background: "var(--bg-olive-light)", borderColor: "var(--brand-kaki)", color: "var(--text)" };
           const overlay =
             tone === "good"
-              ? { background: "var(--green-bg)", borderColor: "var(--green)", color: "var(--green)" }
+              ? { background: "var(--green-bg)", borderColor: "var(--green)", color: "var(--text)" }
               : tone === "over"
-                ? { background: "var(--orange-bg)", borderColor: "var(--orange)", color: "var(--orange)" }
+                ? { background: "var(--orange-bg)", borderColor: "var(--orange)", color: "var(--text)" }
                 : null;
           const style = overlay ?? baseStyle;
           return (
@@ -2183,12 +2214,12 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert, info, kwTe
             >
               {k.term}
               {rangeLabel && (
-                <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+                <span className="text-[9px] font-mono font-normal opacity-80">
                   {currentCount}/{rangeLabel}
                 </span>
               )}
               {!rangeLabel && currentCount > 0 && (
-                <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+                <span className="text-[9px] font-mono font-normal opacity-80">
                   {currentCount}
                 </span>
               )}
@@ -2227,9 +2258,9 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert, info, kwTe
 
           const style =
             styleMode === "in-range"
-              ? { background: "var(--green-bg)", borderColor: "var(--green)", color: "var(--green)" }
+              ? { background: "var(--green-bg)", borderColor: "var(--green)", color: "var(--text)" }
               : styleMode === "over"
-                ? { background: "var(--orange-bg)", borderColor: "var(--orange)", color: "var(--orange)" }
+                ? { background: "var(--orange-bg)", borderColor: "var(--orange)", color: "var(--text)" }
                 : { background: bg, borderColor: border, color };
 
           return (
@@ -2405,7 +2436,7 @@ function KeywordChip({
       >
         {term}
         {rangeLabel && (
-          <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+          <span className="text-[9px] font-mono font-normal opacity-80">
             {currentCount > 0 ? `${currentCount}/${rangeLabel}` : rangeLabel}
             {hasTarget && minCount !== maxCount && (
               <span className="opacity-60"> (~{avgCount})</span>
@@ -2413,7 +2444,7 @@ function KeywordChip({
           </span>
         )}
         {!rangeLabel && currentCount > 0 && (
-          <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+          <span className="text-[9px] font-mono font-normal opacity-80">
             {currentCount}
           </span>
         )}
@@ -2451,7 +2482,7 @@ function KeywordChip({
       >
         {term}
         {rangeLabel && (
-          <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+          <span className="text-[9px] font-mono font-normal opacity-80">
             {currentCount > 0 ? `${currentCount}/${rangeLabel}` : rangeLabel}
             {hasTarget && minCount !== maxCount && (
               <span className="opacity-60"> (~{avgCount})</span>
@@ -2459,7 +2490,7 @@ function KeywordChip({
           </span>
         )}
         {!rangeLabel && currentCount > 0 && (
-          <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+          <span className="text-[9px] font-mono font-normal opacity-80">
             {currentCount}
           </span>
         )}
@@ -2536,7 +2567,7 @@ function CitationPopover({
         <div className="text-[10px] font-semibold uppercase tracking-[0.6px] text-[var(--text-muted)]">
           « {term} » chez les concurrents
         </div>
-        <div className="text-[10px] font-[family-name:var(--font-mono)] text-[var(--text-muted)]">
+        <div className="text-[10px] font-mono text-[var(--text-muted)]">
           {idx + 1}/{total}
         </div>
       </div>
@@ -2546,7 +2577,7 @@ function CitationPopover({
             href={cite.url}
             target="_blank"
             rel="noreferrer noopener"
-            className="block text-[11px] font-semibold text-[var(--accent)] hover:underline truncate mb-[6px]"
+            className="block text-[11px] font-semibold text-[var(--text)] hover:underline truncate mb-[6px]"
             title={cite.url}
           >
             {host}
@@ -2630,13 +2661,13 @@ function KeywordTermsList({
           k.kind === "exact"
             ? { background: "var(--bg-black)", borderColor: "var(--bg-black)", color: "var(--text-inverse)" }
             : k.kind === "extension"
-              ? { background: "var(--blue-bg)", borderColor: "var(--blue)", color: "var(--blue)" }
-              : { background: "var(--bg-olive-light)", borderColor: "var(--accent-dark)", color: "var(--accent-dark)" };
+              ? { background: "var(--blue-bg)", borderColor: "var(--blue)", color: "var(--text)" }
+              : { background: "var(--bg-olive-light)", borderColor: "var(--brand-kaki)", color: "var(--text)" };
         const overlay =
           tone === "good"
-            ? { background: "var(--green-bg)", borderColor: "var(--green)", color: "var(--green)" }
+            ? { background: "var(--green-bg)", borderColor: "var(--green)", color: "var(--text)" }
             : tone === "over"
-              ? { background: "var(--orange-bg)", borderColor: "var(--orange)", color: "var(--orange)" }
+              ? { background: "var(--orange-bg)", borderColor: "var(--orange)", color: "var(--text)" }
               : null;
         const style = overlay ?? baseStyle;
         return (
@@ -2654,12 +2685,12 @@ function KeywordTermsList({
           >
             {k.term}
             {rangeLabel && (
-              <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+              <span className="text-[9px] font-mono font-normal opacity-80">
                 {currentCount}/{rangeLabel}
               </span>
             )}
             {!rangeLabel && currentCount > 0 && (
-              <span className="text-[9px] font-[family-name:var(--font-mono)] font-normal opacity-80">
+              <span className="text-[9px] font-mono font-normal opacity-80">
                 {currentCount}
               </span>
             )}
@@ -2674,7 +2705,7 @@ function BenchRow({ label, value, last }: { label: string; value: string; last?:
   return (
     <div className={`flex justify-between py-[7px] text-[12px] ${last ? "" : "border-b border-[var(--border)]"}`}>
       <span className="text-[var(--text-secondary)]">{label}</span>
-      <span className="font-[family-name:var(--font-mono)] font-semibold">{value}</span>
+      <span className="font-mono font-semibold">{value}</span>
     </div>
   );
 }
@@ -2688,7 +2719,7 @@ function GeoChecklistItem({
   ok: boolean;
   last?: boolean;
 }) {
-  const color = ok ? "var(--green)" : "var(--text-muted)";
+  const color = ok ? "var(--brand-kaki)" : "var(--text-muted)";
   return (
     <div className={`flex items-center gap-2 py-[7px] text-[12px] ${last ? "" : "border-b border-[var(--border)]"}`}>
       <span
@@ -2721,7 +2752,7 @@ function TabButton({ active, onClick, count, children }: { active: boolean; onCl
       {children}
       {count !== undefined && (
         <span
-          className={`ml-[6px] inline-flex items-center justify-center min-w-[18px] h-[18px] px-[5px] rounded-full text-[10px] font-[family-name:var(--font-mono)] font-semibold ${
+          className={`ml-[6px] inline-flex items-center justify-center min-w-[18px] h-[18px] px-[5px] rounded-full text-[10px] font-mono font-semibold ${
             active ? "bg-[var(--bg-black)] text-[var(--text-inverse)]" : "bg-[var(--bg-warm)] text-[var(--text-muted)]"
           }`}
         >
@@ -2849,7 +2880,7 @@ function InsightsPane({
             href={myUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="block text-[13px] text-[var(--accent-dark)] underline break-all leading-snug mb-2"
+            className="block text-[13px] text-[var(--text)] underline break-all leading-snug mb-2"
           >
             {myUrl}
           </a>
@@ -2948,7 +2979,7 @@ function SerpAnalyticsCharts({
         />
       </ChartCard>
 
-      <ChartCard title="Sous-titres (H2 + H3)" dotColor="#E85D3A" subtitle={`Moyenne SERP : ${avg(headingSeries.competitors.map((c) => c.value))} — Toi : ${userH2Count + userH3Count}`}>
+      <ChartCard title="Sous-titres (H2 + H3)" dotColor="var(--brand-yellow)" subtitle={`Moyenne SERP : ${avg(headingSeries.competitors.map((c) => c.value))} — Toi : ${userH2Count + userH3Count}`}>
         <BarChartHorizontalStacked series={headingSeries} />
       </ChartCard>
 
@@ -3063,7 +3094,7 @@ function BarChartHorizontal<T extends BarPoint>({
                 style={{ width: `${Math.max(pct, 2)}%`, background: color, opacity: isMe ? 1 : 0.85 }}
               />
             </div>
-            <div className={`font-[family-name:var(--font-mono)] text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
+            <div className={`font-mono text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
               {p.value.toLocaleString("fr-FR")}{suffix}
             </div>
           </div>
@@ -3100,7 +3131,7 @@ function BarChartHorizontalStacked({
               <div className="h-full" style={{ width: `${h2Pct}%`, background: baseColor, opacity: isMe ? 1 : 0.9 }} />
               <div className="h-full" style={{ width: `${h3Pct}%`, background: baseColor, opacity: isMe ? 0.55 : 0.45 }} />
             </div>
-            <div className={`font-[family-name:var(--font-mono)] text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
+            <div className={`font-mono text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
               {p.h2}H2 · {p.h3}H3
             </div>
           </div>
@@ -3145,7 +3176,7 @@ function ScatterChart({
               cx={cx}
               cy={cy}
               r={p.isMe ? 7 : 5}
-              fill={p.isMe ? "var(--accent)" : "var(--purple)"}
+              fill={p.isMe ? "var(--brand-kaki)" : "var(--brand-blue)"}
               opacity={p.isMe ? 1 : 0.7}
               stroke={p.isMe ? "var(--text)" : "none"}
               strokeWidth={p.isMe ? 1.5 : 0}
@@ -3177,7 +3208,7 @@ function PositioningGauge({
   const range = max - min || 1;
   return (
     <div className="relative h-[40px]">
-      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[6px] bg-gradient-to-r from-[var(--red)] via-[var(--orange)] to-[var(--green)] rounded-full opacity-50" />
+      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[6px] bg-gradient-to-r from-[var(--score-low)] via-[var(--score-mid)] to-[var(--score-high)] rounded-full opacity-70" />
       {competitors.map((c, i) => (
         <div
           key={i}
@@ -3195,7 +3226,7 @@ function PositioningGauge({
           ★ Toi : {userScore}
         </div>
       </div>
-      <div className="absolute inset-x-0 bottom-0 flex justify-between text-[9px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+      <div className="absolute inset-x-0 bottom-0 flex justify-between text-[9px] text-[var(--text-muted)] font-mono">
         <span>{min}</span>
         <span>{max}</span>
       </div>
@@ -3209,11 +3240,11 @@ function PositioningGauge({
  */
 function colorByScoreDeviation(value: number, mean: number): string {
   const delta = value - mean;
-  if (delta >= 15) return "var(--green)";
-  if (delta >= 5) return "#7BAE5C"; // vert un peu plus pâle
-  if (delta >= -5) return "#C7B958"; // jaune (autour de la moyenne)
-  if (delta >= -15) return "var(--orange)";
-  return "var(--red)";
+  // Rampe de la charte : kaki (au-dessus), bleu (dans la moyenne), jaune (en dessous).
+  if (delta >= 15) return "var(--brand-kaki)";
+  if (delta >= 5) return "var(--brand-kaki)";
+  if (delta >= -5) return "var(--brand-blue)";
+  return "var(--brand-yellow)";
 }
 
 /**
@@ -3223,11 +3254,11 @@ function colorByScoreDeviation(value: number, mean: number): string {
 function colorByVolumeDeviation(value: number, mean: number): string {
   if (mean <= 0) return "var(--text-muted)";
   const ratio = value / mean;
-  if (ratio >= 0.85 && ratio <= 1.15) return "var(--green)"; // idéal
-  if (ratio >= 0.7 && ratio <= 1.4) return "#7BAE5C"; // proche
-  if (ratio >= 0.5 && ratio <= 1.7) return "#C7B958"; // jaune
-  if (ratio >= 0.3 && ratio <= 2.2) return "var(--orange)"; // s'éloigne
-  return "var(--red)"; // beaucoup trop court ou beaucoup trop long
+  // Rampe de la charte : kaki (dans la cible), bleu (ecart modere), jaune (loin).
+  if (ratio >= 0.85 && ratio <= 1.15) return "var(--brand-kaki)";
+  if (ratio >= 0.7 && ratio <= 1.4) return "var(--brand-kaki)";
+  if (ratio >= 0.5 && ratio <= 1.7) return "var(--brand-blue)";
+  return "var(--brand-yellow)";
 }
 
 function CompetitorScoreRow({ scoreTotal, serp }: { scoreTotal: number; serp: SerpResult[] }) {
@@ -3292,19 +3323,24 @@ function CompareCell({
   tone: "good" | "warn" | "bad";
   tooltip: string;
 }) {
-  const palette: Record<typeof tone, string> = {
-    good: "var(--green)",
-    warn: "var(--orange)",
-    bad: "var(--red)",
+  /* Charte : l'écart reste écrit en noir. Le signal de couleur passe par une
+     puce, un petit élément, seul usage autorisé pour les secondaires. */
+  const dot: Record<typeof tone, string> = {
+    good: "var(--brand-kaki)",
+    warn: "var(--brand-yellow)",
+    bad: "var(--brand-blue)",
   };
-  const color = palette[tone];
   const sign = gap > 0 ? "+" : "";
   return (
     <div title={tooltip}>
       <div className="text-[10px] uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[2px]">{label}</div>
       <div className="flex items-baseline gap-2">
-        <span className="font-[family-name:var(--font-mono)] font-semibold text-[15px]">{value}</span>
-        <span className="text-[11px] font-semibold font-[family-name:var(--font-mono)]" style={{ color }}>
+        <span className="font-mono font-semibold text-[15px]">{value}</span>
+        <span className="inline-flex items-center gap-[4px] text-[11px] font-semibold font-mono text-[var(--text)]">
+          <span
+            className="w-[5px] h-[5px] rounded-full shrink-0 self-center"
+            style={{ background: dot[tone] }}
+          />
           {sign}
           {gap}
         </span>
@@ -3385,7 +3421,7 @@ function KeywordStatsRow({
             target="_blank"
             rel="noreferrer"
             title={rankingUrl}
-            className="block truncate text-[11px] text-[var(--accent-dark)] underline"
+            className="block truncate text-[11px] text-[var(--text)] underline"
           >
             {rankingUrl.replace(/^https?:\/\//i, "")}
           </a>
@@ -3418,9 +3454,9 @@ function KeyStat({
   tone: StatTone;
 }) {
   const palette: Record<StatTone, { bg: string; color: string; border: string }> = {
-    best: { bg: "#0E5132", color: "#FFFFFF", border: "#0E5132" },
-    good: { bg: "var(--bg-card)", color: "var(--green)", border: "var(--green)" },
-    warn: { bg: "var(--bg-card)", color: "var(--orange)", border: "var(--orange)" },
+    best: { bg: "var(--bg-black)", color: "var(--text-inverse)", border: "var(--bg-black)" },
+    good: { bg: "var(--bg-card)", color: "var(--text)", border: "var(--green)" },
+    warn: { bg: "var(--bg-card)", color: "var(--text)", border: "var(--orange)" },
     bad: { bg: "var(--bg-card)", color: "var(--red)", border: "var(--red)" },
     info: { bg: "var(--bg-card)", color: "var(--text)", border: "var(--border)" },
     muted: { bg: "var(--bg-card)", color: "var(--text-muted)", border: "var(--border)" },
@@ -3440,7 +3476,7 @@ function KeyStat({
         {label}
       </span>
       <span
-        className="font-[family-name:var(--font-mono)] font-semibold text-[15px] leading-none"
+        className="font-mono font-semibold text-[15px] leading-none"
         style={{ color: p.color }}
       >
         {value}
@@ -3476,7 +3512,7 @@ function InsightMetric({
         {label}
         {tooltip && <InfoBubble text={tooltip} />}
       </span>
-      <span className="font-[family-name:var(--font-mono)] font-semibold text-[14px]">{value}</span>
+      <span className="font-mono font-semibold text-[14px]">{value}</span>
     </div>
   );
 }
@@ -3544,7 +3580,7 @@ function SerpScoreChart({
           style={{ bottom: `${(avg / maxValue) * 180}px` }}
           title={`Moyenne SERP : ${avg}/100`}
         >
-          <span className="absolute -top-[6px] right-0 text-[9px] font-[family-name:var(--font-mono)] text-[var(--text-muted)] bg-[var(--bg-card)] px-1">
+          <span className="absolute -top-[6px] right-0 text-[9px] font-mono text-[var(--text-muted)] bg-[var(--bg-card)] px-1">
             moy {avg}
           </span>
         </div>
@@ -3555,17 +3591,17 @@ function SerpScoreChart({
             const color = b.isMe
               ? "var(--bg-black)"
               : b.score >= 70
-                ? "var(--green)"
+                ? "var(--score-high)"
                 : b.score >= 40
-                  ? "var(--orange)"
-                  : "var(--red)";
+                  ? "var(--score-mid)"
+                  : "var(--score-low)";
             return (
               <div
                 key={b.key}
                 className="flex-1 flex flex-col items-center min-w-0"
                 title={`${b.label} : ${b.score}/100${b.position ? ` (position ${b.position})` : ""}`}
               >
-                <span className="text-[10px] font-[family-name:var(--font-mono)] font-semibold mb-[3px]">
+                <span className="text-[10px] font-mono font-semibold mb-[3px]">
                   {b.score}
                 </span>
                 <div
@@ -3580,7 +3616,7 @@ function SerpScoreChart({
           {bars.map((b) => (
             <div
               key={`l-${b.key}`}
-              className="flex-1 text-[9px] text-center text-[var(--text-muted)] font-[family-name:var(--font-mono)] truncate"
+              className="flex-1 text-[9px] text-center text-[var(--text-muted)] font-mono truncate"
               title={b.label}
             >
               {b.isMe ? "Toi" : `#${b.position}`}
@@ -3611,9 +3647,9 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
           href={r.link}
           target="_blank"
           rel="noopener noreferrer"
-          className={`w-10 h-10 flex items-center justify-center font-[family-name:var(--font-mono)] font-semibold text-[14px] rounded-[var(--radius-xs)] ${
+          className={`w-10 h-10 flex items-center justify-center font-mono font-semibold text-[14px] rounded-[var(--radius-xs)] ${
             r.position <= 3
-              ? "bg-[var(--bg-olive-light)] text-[var(--accent-dark)]"
+              ? "bg-[var(--bg-olive-light)] text-[var(--text)]"
               : "bg-[var(--bg-warm)] text-[var(--text-secondary)]"
           }`}
           aria-label={`Ouvrir le résultat ${r.position}`}
@@ -3627,7 +3663,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
           className="min-w-0 hover:underline"
         >
           <div className="font-semibold text-[13px] truncate">{r.title}</div>
-          <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] truncate">
+          <div className="text-[11px] text-[var(--text-muted)] font-mono truncate">
             {r.displayed_link}
           </div>
         </a>
@@ -3642,7 +3678,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             if (isPdf) {
               return (
                 <div title="Document PDF : pas de structure HTML (titres, images) donc le score automatique n'est pas comparable. Le contenu textuel a bien été crawlé et alimente les mots-clés / NLP. Exclu du calcul de la médiane de référence.">
-                  <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold text-[var(--red)]">
+                  <div className="font-mono text-[13px] font-semibold text-[var(--red)]">
                     PDF
                   </div>
                 </div>
@@ -3652,7 +3688,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
               <div
                 title="Score non fiable : page probablement mal crawlée (rendu JavaScript non capté, blocage anti-bot...). Exclue du calcul de la moyenne. Ce n'est pas un jugement sur la qualité réelle du concurrent."
               >
-                <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold text-[var(--text-muted)]">
+                <div className="font-mono text-[13px] font-semibold text-[var(--text-muted)]">
                   ⚠
                 </div>
                 <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
@@ -3662,10 +3698,10 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             ) : (
               <div title="Score SEO du concurrent (même algorithme que la rédaction)">
                 <div
-                  className="font-[family-name:var(--font-mono)] text-[13px] font-semibold"
+                  className="font-mono text-[13px] font-semibold"
                   style={{
                     color:
-                      r.score >= 70 ? "var(--green)" : r.score >= 40 ? "var(--orange)" : "var(--red)",
+                      r.score >= 70 ? "var(--score-high)" : r.score >= 40 ? "var(--score-mid)" : "var(--score-low)",
                   }}
                 >
                   {r.score}
@@ -3677,7 +3713,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             );
           })()}
           <div>
-            <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
+            <div className="font-mono text-[13px] font-semibold">
               {r.wordCount ? r.wordCount : "N/A"}
             </div>
             <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
@@ -3685,7 +3721,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             </div>
           </div>
           <div>
-            <div className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">
+            <div className="font-mono text-[13px] font-semibold">
               {r.headings ?? "N/A"}
             </div>
             <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
@@ -3742,7 +3778,7 @@ function HeadingLine({ level, text }: { level: "h1" | "h2" | "h3"; text: string 
   const pillBg =
     level === "h1" ? "var(--bg-olive-light)" : level === "h2" ? "var(--bg-warm)" : "var(--bg-card)";
   const pillColor =
-    level === "h1" ? "var(--accent-dark)" : "var(--text-secondary)";
+    level === "h1" ? "var(--text)" : "var(--text-secondary)";
   const fontSize = level === "h1" ? "13px" : level === "h2" ? "12px" : "11px";
   const fontWeight = level === "h1" ? 700 : level === "h2" ? 600 : 500;
 
@@ -3756,7 +3792,7 @@ function HeadingLine({ level, text }: { level: "h1" | "h2" | "h3"; text: string 
         />
       )}
       <span
-        className="inline-flex items-center justify-center px-[6px] py-[1px] rounded-[3px] font-[family-name:var(--font-mono)] text-[9px] font-semibold uppercase shrink-0 mt-[2px]"
+        className="inline-flex items-center justify-center px-[6px] py-[1px] rounded-[3px] font-mono text-[9px] font-semibold uppercase shrink-0 mt-[2px]"
         style={{ background: pillBg, color: pillColor, border: `1px solid ${pillColor}20` }}
       >
         {level}
@@ -3788,48 +3824,6 @@ function spellcheckLang(country: string): string {
   }
 }
 
-// Icône engrenage paramètres (Lucide-style, stroke 1.75, 18px) pour le
-// bouton "Paramètres du brief" en barre d'actions.
-function SettingsGearIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-// Icône "panneau latéral droit" : le volet droit est rempli quand le panneau
-// est ouvert, vide quand il est masqué.
-function PanelRightIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M15 4v16" />
-      {open && <path d="M15 4h6v16h-6z" fill="currentColor" stroke="none" opacity="0.35" />}
-    </svg>
-  );
-}
 
 /**
  * Modal "Importer une URL" : crawle la page (cascade fetch direct → Bright
@@ -3903,7 +3897,7 @@ function ImportUrlModal({
         onClick={(e) => e.stopPropagation()}
         className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] shadow-[var(--shadow-lg)] w-[480px] max-w-full p-6"
       >
-        <h3 className="font-[family-name:var(--font-display)] text-[18px] mb-1">
+        <h3 className="df-title text-[18px] mb-1">
           Importer le contenu d&apos;une URL
         </h3>
         <p className="text-[12px] text-[var(--text-muted)] mb-4">
@@ -3923,10 +3917,10 @@ function ImportUrlModal({
             }
           }}
           placeholder="https://exemple.fr/ma-page"
-          className="w-full px-3 py-[10px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[13px] font-[family-name:var(--font-mono)] mb-3 disabled:opacity-60"
+          className="w-full px-3 py-[10px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[13px] font-mono mb-3 disabled:opacity-60"
         />
         {hasContent && !loading && (
-          <p className="text-[12px] text-[var(--orange)] bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] px-3 py-2 mb-3">
+          <p className="text-[12px] text-[var(--text)] bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] px-3 py-2 mb-3">
             L&apos;éditeur contient déjà du texte : l&apos;import le remplacera
             entièrement.
           </p>

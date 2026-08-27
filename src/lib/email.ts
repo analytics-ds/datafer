@@ -5,7 +5,7 @@
  * - Compte Resend (gratuit jusqu'à 100 mails/jour) → récupérer une clé API.
  * - `wrangler secret put RESEND_API_KEY` (et idem sur le worker consumer
  *   si on s'en sert ailleurs).
- * - Pour avoir un `from` personnalisé du type `feedback@rankshake.com`, il
+ * - Pour avoir un `from` personnalisé du type `feedback@datashake.fr`, il
  *   faut vérifier le domaine côté Resend. Tant que ce n'est pas fait, on
  *   utilise `onboarding@resend.dev` qui est utilisable hors prod.
  *

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { DownloadIcon, CaretDownIcon } from "@/components/icons";
 
 export function ExportMenu({
   exportEndpoint,
@@ -44,17 +45,9 @@ export function ExportMenu({
         className="inline-flex items-center gap-[6px] px-3 py-[8px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[12px] font-semibold hover:bg-[var(--bg-warm)] transition-colors cursor-pointer"
         title="Télécharger le contenu rédigé"
       >
-        <DownloadIcon />
+        <DownloadIcon size={14} />
         Télécharger
-        <svg width="9" height="9" viewBox="0 0 20 20" fill="none">
-          <path
-            d="M5 8l5 5 5-5"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <CaretDownIcon size={10} />
       </button>
 
       {open && (
@@ -98,19 +91,5 @@ function ExportItem({
       <span className="text-[13px] font-semibold">{primary}</span>
       <span className="text-[11px] text-[var(--text-muted)]">{secondary}</span>
     </button>
-  );
-}
-
-function DownloadIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-      <path
-        d="M10 3v10m0 0l-4-4m4 4l4-4M4 17h12"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

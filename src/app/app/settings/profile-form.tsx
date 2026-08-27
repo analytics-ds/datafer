@@ -87,7 +87,7 @@ export function ProfileForm({
           {status === "saving" ? "Enregistrement…" : "Enregistrer"}
         </button>
         {status === "saved" && (
-          <span className="text-[12px] text-[var(--green)] font-semibold">
+          <span className="text-[12px] text-[var(--text)] font-semibold">
             ✓ Modifications enregistrées
           </span>
         )}

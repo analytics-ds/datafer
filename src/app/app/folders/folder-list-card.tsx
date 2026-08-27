@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { faviconUrl } from "@/lib/favicon";
 import { deleteFolderAction, toggleFavoriteAction } from "./actions";
+import { StarIcon, StarFillIcon, TrashIcon } from "@/components/icons";
 
 type Folder = {
   id: string;
@@ -70,11 +71,11 @@ export function FolderListCard({ folder }: { folder: Folder }) {
             <span className="font-semibold text-[14px] truncate">{folder.name}</span>
           </div>
           {folder.website && (
-            <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] truncate mb-3">
+            <div className="text-[11px] text-[var(--text-muted)] font-mono truncate mb-3">
               {folder.website}
             </div>
           )}
-          <div className="text-[11px] text-[var(--text-secondary)] font-[family-name:var(--font-mono)]">
+          <div className="text-[11px] text-[var(--text-secondary)] font-mono">
             {folder.briefCount} {folder.briefCount > 1 ? "briefs" : "brief"}
           </div>
           {folder.briefCount > 0 && folder.totalVolume != null && (
@@ -85,7 +86,7 @@ export function FolderListCard({ folder }: { folder: Folder }) {
                 style={{ borderColor: "var(--border)" }}
               >
                 <span className="text-[9px] uppercase tracking-[0.5px] opacity-75">Vol</span>
-                <span className="font-[family-name:var(--font-mono)] font-semibold">
+                <span className="font-mono font-semibold">
                   {fmtNum(folder.totalVolume)}
                 </span>
               </span>
@@ -101,13 +102,13 @@ export function FolderListCard({ folder }: { folder: Folder }) {
             title={favorited ? "Retirer des favoris" : "Ajouter aux favoris"}
             className={`w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] border transition-all ${
               favorited
-                ? "bg-[var(--bg-olive-light)] border-[var(--accent)] text-[var(--accent-dark)] opacity-100"
-                : `bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent-dark)] hover:border-[var(--accent)] hover:bg-[var(--bg-olive-light)] ${
+                ? "bg-[var(--bg-olive-light)] border-[var(--accent)] text-[var(--text)] opacity-100"
+                : `bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--accent)] hover:bg-[var(--bg-olive-light)] ${
                     hover ? "opacity-100" : "opacity-0"
                   }`
             } disabled:opacity-50`}
           >
-            <StarIcon filled={favorited} />
+            {favorited ? <StarFillIcon size={14} /> : <StarIcon size={14} />}
           </button>
           <button
             onClick={(e) => {
@@ -121,7 +122,7 @@ export function FolderListCard({ folder }: { folder: Folder }) {
               hover ? "opacity-100" : "opacity-0"
             }`}
           >
-            <TrashIcon />
+            <TrashIcon size={14} />
           </button>
         </div>
       </div>
@@ -174,7 +175,7 @@ function DeleteConfirmModal({
         className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-7 w-[500px] max-w-full shadow-[var(--shadow-lg)]"
       >
         <div className="flex items-center gap-2 mb-3 text-[var(--red)]">
-          <TrashIcon />
+          <TrashIcon size={14} />
           <span className="font-semibold text-[16px]">Supprimer « {folderName} »</span>
         </div>
         <p className="text-[13px] text-[var(--text-secondary)] leading-[1.55] mb-5">
@@ -182,7 +183,7 @@ function DeleteConfirmModal({
           seront également perdus. Pour confirmer, retape le site associé (ou le nom du
           client s&apos;il n&apos;a pas de site) :
         </p>
-        <div className="bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] px-3 py-2 mb-3 font-[family-name:var(--font-mono)] text-[12px] text-[var(--text)] select-all">
+        <div className="bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] px-3 py-2 mb-3 font-mono text-[12px] text-[var(--text)] select-all">
           {expected}
         </div>
         <input
@@ -190,7 +191,7 @@ function DeleteConfirmModal({
           value={confirmation}
           onChange={(e) => setConfirmation(e.target.value)}
           placeholder="Retape le texte ci-dessus"
-          className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-4 outline-none focus:border-[var(--red)] transition-colors text-[14px] bg-[var(--bg-card)] font-[family-name:var(--font-mono)]"
+          className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-4 outline-none focus:border-[var(--red)] transition-colors text-[14px] bg-[var(--bg-card)] font-mono"
           autoFocus
         />
 
@@ -219,32 +220,5 @@ function DeleteConfirmModal({
         </div>
       </form>
     </div>
-  );
-}
-
-function StarIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg width="13" height="13" viewBox="0 0 20 20" fill={filled ? "currentColor" : "none"}>
-      <path
-        d="M10 2l2.4 5.2 5.6.6-4.2 3.9 1.2 5.7L10 14.5l-5 2.9 1.2-5.7L2 7.8l5.6-.6L10 2z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <path
-        d="M4 6h12M8 6V4a1 1 0 011-1h2a1 1 0 011 1v2m1 0v10a1 1 0 01-1 1H7a1 1 0 01-1-1V6"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

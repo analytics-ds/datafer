@@ -1,76 +1,110 @@
-/* Brand assets datashake — Brand Guidelines 2026.
-   Le symbole et le wordmark sont inlinés en SVG pour pouvoir suivre
-   currentColor (le logo s'utilise exclusivement en noir ou blanc selon
-   le fond ; jamais d'autre couleur). */
+/* Assets de marque datashake — Brand Style Guidelines 2026.
+
+   La charte impose trois choses sur le logo :
+   - le bloc-marque complet (wordmark + symbole à droite) est la version
+     principale ;
+   - le symbole seul est réservé aux contextes où la marque est déjà
+     identifiée (favicon, icône d'application, chrome interne) ;
+   - logo et symbole s'emploient exclusivement en noir ou en blanc, jamais
+     déformés, jamais recolorés, toujours en vectoriel.
+
+   Les fichiers officiels de `public/brand/` sont donc utilisés tels quels, en
+   masque CSS : la forme reste le vecteur fourni par la charte, et la couleur
+   suit `currentColor`, ce qui garantit le noir sur fond clair et le blanc sur
+   fond noir sans jamais recolorer le tracé. Les ratios sont ceux des SVG
+   d'origine, pour ne pas déformer le logo. */
 
 import type { CSSProperties } from "react";
 
+/* Ratios relevés sur les viewBox des SVG officiels. */
+const BLOC_RATIO = 612 / 95;
+const WORDMARK_RATIO = 525 / 80;
+
+function maskStyle(src: string): CSSProperties {
+  return {
+    backgroundColor: "currentColor",
+    WebkitMaskImage: `url(${src})`,
+    maskImage: `url(${src})`,
+    WebkitMaskRepeat: "no-repeat",
+    maskRepeat: "no-repeat",
+    WebkitMaskPosition: "center",
+    maskPosition: "center",
+    WebkitMaskSize: "contain",
+    maskSize: "contain",
+  };
+}
+
 type LogoMarkProps = {
-  /** Taille en pixels (carré). Le SVG natif est en viewBox 100×100. */
+  /** Taille en pixels (carré). */
   size?: number;
   className?: string;
   style?: CSSProperties;
 };
 
-/** Symbole seul (2 carrés arrondis décalés). Suit currentColor. */
+/** Symbole seul. Suit currentColor : noir ou blanc selon le fond. */
 export function LogoMark({ size = 24, className, style }: LogoMarkProps) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 100 100"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+    <span
+      role="img"
+      aria-label="datashake"
       className={className}
-      style={style}
-      aria-hidden="true"
-    >
-      <path
-        d="M0 58.0954C0 52.6106 4.4208 48.1475 9.90547 48.1065C21.3582 48.0209 30.4387 48.0052 42.0095 48.0022C42.8693 48.002 43.7267 47.8913 44.5577 47.6708C44.5986 47.66 44.6395 47.6491 44.6804 47.6383C49.0177 46.4866 52.0055 42.5438 52.0049 38.0563L52.0013 10.0013C52.0006 4.47793 56.478 0 62.0013 0H90C95.5229 0 100 4.47716 100 10V42C100 47.5229 95.5229 52 90 52H58.2002L57.1548 52.0887C51.9782 52.5278 48 56.8577 48 62.0529V90C48 95.5228 43.5229 100 38 100H10C4.47716 100 0 95.5228 0 90V58.0954Z"
-        fill="currentColor"
-      />
-    </svg>
+      style={{
+        display: "inline-block",
+        width: size,
+        height: size,
+        flexShrink: 0,
+        ...maskStyle("/brand/symbole-black.svg"),
+        ...style,
+      }}
+    />
   );
 }
 
-type LogoDatashakeProps = {
-  /** Hauteur en pixels. La largeur s'adapte au ratio du wordmark + symbole. */
+type LogoProps = {
+  /** Hauteur en pixels. La largeur suit le ratio officiel du fichier. */
   height?: number;
   className?: string;
 };
 
-/** Bloc-marque complet (wordmark "datashake" + symbole à droite). */
-export function LogoDatashake({ height = 22, className }: LogoDatashakeProps) {
-  /* Ratio du SVG officiel Bloc-marque : on respecte les proportions du
-     brandbook pour ne jamais déformer le logo (règle explicite de la charte). */
+/** Bloc-marque complet : wordmark « datashake » + symbole à droite. */
+export function LogoDatashake({ height = 22, className }: LogoProps) {
   return (
     <span
-      className={`inline-flex items-center text-current ${className ?? ""}`}
-      style={{ height }}
-    >
-      <span className="font-[family-name:var(--font-body)] font-semibold tracking-[-0.02em]" style={{ fontSize: height * 0.95, lineHeight: 1 }}>
-        datashake
-      </span>
-      <LogoMark size={height * 0.55} style={{ marginLeft: height * 0.25 }} />
-    </span>
+      role="img"
+      aria-label="datashake"
+      className={className}
+      style={{
+        display: "inline-block",
+        height,
+        width: height * BLOC_RATIO,
+        flexShrink: 0,
+        ...maskStyle("/brand/logo-datashake-black.svg"),
+      }}
+    />
   );
 }
 
-/** Combo "symbole + Content Optimizer" utilisé dans la sidebar et les chrome interne. */
-export function LogoRankShaker({ height = 22, className }: LogoDatashakeProps) {
+/** Wordmark seul, sans le symbole. */
+export function LogoWordmark({ height = 20, className }: LogoProps) {
   return (
     <span
-      className={`inline-flex items-center gap-[8px] text-current ${className ?? ""}`}
-      style={{ height }}
-    >
-      <LogoMark size={height * 0.9} />
-      <span
-        className="font-[family-name:var(--font-body)] font-semibold tracking-[-0.02em]"
-        style={{ fontSize: height * 0.85, lineHeight: 1 }}
-      >
-        Content Optimizer
-      </span>
-    </span>
+      role="img"
+      aria-label="datashake"
+      className={className}
+      style={{
+        display: "inline-block",
+        height,
+        width: height * WORDMARK_RATIO,
+        flexShrink: 0,
+        ...maskStyle("/brand/wordmark-black.svg"),
+      }}
+    />
   );
 }
 
+/** Marque du chrome interne (sidebar, en-têtes d'écrans partagés).
+    L'outil n'affiche aucun nom de produit : seul le bloc-marque datashake
+    identifie l'interface. */
+export function LogoApp({ height = 22, className }: LogoProps) {
+  return <LogoDatashake height={height} className={className} />;
+}

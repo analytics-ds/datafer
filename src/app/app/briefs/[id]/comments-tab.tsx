@@ -143,8 +143,8 @@ export function CommentsTab({
                       className={
                         "relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold uppercase tracking-wide " +
                         (c.authorType === "client"
-                          ? "bg-[var(--bg-warm)] text-[var(--accent-dark)] ring-1 ring-[var(--border-strong)]"
-                          : "bg-[var(--bg-olive-light)] text-[var(--accent-dark)]")
+                          ? "bg-[var(--bg-warm)] text-[var(--text)] ring-1 ring-[var(--border-strong)]"
+                          : "bg-[var(--bg-olive-light)] text-[var(--text)]")
                       }
                       style={{ fontFamily: "var(--font-mono)" }}
                       aria-hidden
@@ -174,7 +174,7 @@ export function CommentsTab({
                           {formatDateFull(c.createdAt)}
                         </span>
                         {c.authorType === "client" && (
-                          <span className="rounded-full bg-[var(--bg-olive-light)] px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-[var(--accent-dark)]">
+                          <span className="rounded-full bg-[var(--bg-olive-light)] px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-[var(--text)]">
                             client
                           </span>
                         )}
@@ -200,7 +200,7 @@ export function CommentsTab({
 
               {t.resolved && t.root.resolvedByName && (
                 <p
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[var(--green-bg)] px-2.5 py-0.5 text-[10.5px] font-semibold text-[var(--green)]"
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[var(--green-bg)] px-2.5 py-0.5 text-[10.5px] font-semibold text-[var(--text)]"
                   style={{ fontFamily: "var(--font-mono)" }}
                 >
                   ✓ Résolu par {t.root.resolvedByName} · {formatDateFull(t.root.resolvedAt!)}

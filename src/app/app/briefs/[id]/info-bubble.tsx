@@ -86,8 +86,8 @@ export function InfoBubble({
         aria-expanded={open}
         className={`ml-1 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border text-[10px] font-bold leading-none transition-colors ${
           open
-            ? "border-[var(--accent)] text-[var(--accent)]"
-            : "border-[var(--border-strong)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+            ? "border-[var(--accent)] text-[var(--text)]"
+            : "border-[var(--border-strong)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--text)]"
         }`}
       >
         ?

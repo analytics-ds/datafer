@@ -179,7 +179,7 @@ function SharedBriefCard({
             {brief.keyword}
           </div>
           <div className="flex items-center gap-[6px] mt-[6px] text-[12px] text-[var(--text-secondary)] flex-wrap">
-            <span className="font-[family-name:var(--font-mono)] uppercase text-[11px]">
+            <span className="font-mono uppercase text-[11px]">
               {brief.country}
             </span>
             <Pill
@@ -218,7 +218,7 @@ function SharedBriefCard({
         </div>
       </Link>
       <div className="flex flex-col items-end gap-[6px] shrink-0">
-        <span className="text-[12px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+        <span className="text-[12px] text-[var(--text-muted)] font-mono">
           {relativeDate(brief.createdAt)}
         </span>
         <div className="flex items-center gap-[5px] flex-wrap justify-end">
@@ -265,9 +265,9 @@ function Pill({
   tone: PillTone;
 }) {
   const palette: Record<PillTone, { bg: string; color: string; border: string }> = {
-    best: { bg: "#0E5132", color: "#FFFFFF", border: "#0E5132" },
-    good: { bg: "var(--green-bg)", color: "var(--green)", border: "var(--green)" },
-    warn: { bg: "var(--orange-bg)", color: "var(--orange)", border: "var(--orange)" },
+    best: { bg: "var(--bg-black)", color: "var(--text-inverse)", border: "var(--bg-black)" },
+    good: { bg: "var(--green-bg)", color: "var(--text)", border: "var(--green)" },
+    warn: { bg: "var(--orange-bg)", color: "var(--text)", border: "var(--orange)" },
     bad: { bg: "var(--red-bg)", color: "var(--red)", border: "var(--red)" },
     info: { bg: "var(--bg-warm)", color: "var(--text-secondary)", border: "var(--border)" },
     muted: { bg: "var(--bg)", color: "var(--text-muted)", border: "var(--border)" },
@@ -284,13 +284,13 @@ function Pill({
       }}
     >
       <span className="text-[9px] uppercase tracking-[0.5px] opacity-75">{label}</span>
-      <span className="font-[family-name:var(--font-mono)] font-semibold">{value}</span>
+      <span className="font-mono font-semibold">{value}</span>
     </span>
   );
 }
 
 function ScoreGauge({ score }: { score: number }) {
-  const color = score < 40 ? "var(--red)" : score < 70 ? "var(--orange)" : "var(--green)";
+  const color = score < 40 ? "var(--score-low)" : score < 70 ? "var(--score-mid)" : "var(--score-high)";
   const r = 24;
   const length = Math.PI * r;
   const offset = length - (Math.max(0, Math.min(100, score)) / 100) * length;
@@ -315,7 +315,7 @@ function ScoreGauge({ score }: { score: number }) {
         />
       </svg>
       <div
-        className="absolute inset-0 flex items-end justify-center pb-[1px] font-[family-name:var(--font-mono)] font-semibold text-[13px]"
+        className="absolute inset-0 flex items-end justify-center pb-[1px] font-mono font-semibold text-[13px]"
         style={{ color }}
       >
         {score}

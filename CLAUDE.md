@@ -2,6 +2,22 @@
 
 Notes opérationnelles pour Claude Code sur ce repo. Les choses évidentes à la lecture du code ne sont pas dupliquées ici — focus sur les pièges et workflows manuels.
 
+## Direction artistique — charte datashake 2026
+
+Source : `~/Desktop/SEO-Claude/Perso/DA datashake/datashake_Brandbook.pdf`. Toute la couche de design vit dans `src/app/globals.css`, qui reprend les règles du brandbook en commentaire. Les cinq à connaître avant de toucher à l'UI :
+
+1. **Fonds** : uniquement blanc, beige `#F3EDE8` ou noir `#101010`. Jamais un fond bleu, jaune ou kaki, ni un dégradé teinté.
+2. **Couleurs secondaires** (bleu `#77B0ED`, jaune `#FFFF7D`, kaki `#ADAC2F`) : petits éléments seulement — tags, puces, icônes, segments de graphe.
+3. **Graphiques de données sur fond noir.** C'est pourquoi la carte de score, la section « Score détaillé », les jauges des cartes de brief et le donut de l'accueil sont des aplats noirs. Les tokens `--score-low/-mid/-high` (jaune → bleu → kaki) sont l'échelle de performance officielle. Sur un fond clair où le jaune ne porterait pas (bordures de paragraphe, barre de comptage de mots), le noir remplace le jaune.
+4. **Textes en noir ou blanc, jamais en couleur.** La hiérarchie passe par le niveau de noir : titres à 100 % (`--text`), paragraphes à 70 % (`--text-secondary`). Une pastille colorée à côté du texte remplace le texte coloré. Seule exception assumée : `--danger`, hors palette, réservé aux erreurs et aux actions destructives — il ne qualifie jamais une performance.
+5. **Typographies** : titres en **Season Sans Medium** via la classe `.df-title` (police locale dans `public/fonts/`, licence Displaay achetée), paragraphes en **Inter Regular**. Aucune autre famille. `font-mono` ne charge plus de police à chasse fixe : c'est Inter en chiffres tabulaires. Les vrais blocs de code utilisent `--font-code` (chasse fixe système).
+
+**Logo** : composants de `src/components/brand.tsx`, qui masquent les SVG officiels de `public/brand/` — la couleur suit `currentColor`, donc noir ou blanc selon le fond, et le ratio d'origine est respecté. Ne jamais redessiner le logo à la main ni le recolorer.
+
+**Icônes** : `src/components/icons.tsx`, tracés Phosphor Icons (poids Regular, plus `star-fill`), la bibliothèque imposée par la charte. Fichier généré à partir de `@phosphor-icons/core` : pour en ajouter une, reprendre le SVG Regular sur phosphoricons.com, pas un tracé maison.
+
+⚠️ **Le repo est public et `public/fonts/SeasonSans-Medium.woff2` est une police payante** (licence Displaay Desktop + Web, 25 postes). Passer le repo en privé, ou servir la police depuis un hébergement privé, avant de pousser. Sans le fichier, Inter prend le relais — c'est le substitut que la charte autorise explicitement.
+
 ## Stack
 
 - Next.js 16 (App Router) + React 19
