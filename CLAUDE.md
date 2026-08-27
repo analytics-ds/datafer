@@ -8,13 +8,18 @@ Source : `~/Desktop/SEO-Claude/Perso/DA datashake/datashake_Brandbook.pdf`. Tout
 
 1. **Fonds** : uniquement blanc, beige `#F3EDE8` ou noir `#101010`. Jamais un fond bleu, jaune ou kaki, ni un dégradé teinté.
 2. **Couleurs secondaires** (bleu `#77B0ED`, jaune `#FFFF7D`, kaki `#ADAC2F`) : petits éléments seulement — tags, puces, icônes, segments de graphe.
-3. **Graphiques de données sur fond noir.** C'est pourquoi la carte de score, la section « Score détaillé », les jauges des cartes de brief et le donut de l'accueil sont des aplats noirs. Les tokens `--score-low/-mid/-high` (jaune → bleu → kaki) sont l'échelle de performance officielle. Sur un fond clair où le jaune ne porterait pas (bordures de paragraphe, barre de comptage de mots), le noir remplace le jaune.
+3. **Graphiques : couleurs secondaires seulement sur fond noir.** Sur fond clair, la charte impose les nuances de gris et de noir. C'est pourquoi tout ce qui visualise une donnée est posé sur un aplat noir : carte de score, section « Score détaillé », cartes de l'onglet Insights, bloc « Concurrence SERP », histogramme de l'onglet SERP, jauges des cartes de brief, donut de l'accueil. Les tokens `--score-low/-mid/-high` (jaune → bleu → kaki) sont l'échelle de performance officielle, et ne s'emploient que sur noir. Les rares graphiques restés sur fond clair (progression d'analyse, jauge d'XP, barres du classement) sont en noir et gris.
 4. **Textes en noir ou blanc, jamais en couleur.** La hiérarchie passe par le niveau de noir : titres à 100 % (`--text`), paragraphes à 70 % (`--text-secondary`). Une pastille colorée à côté du texte remplace le texte coloré. Seule exception assumée : `--danger`, hors palette, réservé aux erreurs et aux actions destructives — il ne qualifie jamais une performance.
 5. **Typographies** : titres en **Season Sans Medium** via la classe `.df-title` (police locale dans `public/fonts/`, licence Displaay achetée), paragraphes en **Inter Regular**. Aucune autre famille. `font-mono` ne charge plus de police à chasse fixe : c'est Inter en chiffres tabulaires. Les vrais blocs de code utilisent `--font-code` (chasse fixe système).
 
 **Logo** : composants de `src/components/brand.tsx`, qui masquent les SVG officiels de `public/brand/` — la couleur suit `currentColor`, donc noir ou blanc selon le fond, et le ratio d'origine est respecté. Ne jamais redessiner le logo à la main ni le recolorer.
 
 **Icônes** : `src/components/icons.tsx`, tracés Phosphor Icons (poids Regular, plus `star-fill`), la bibliothèque imposée par la charte. Fichier généré à partir de `@phosphor-icons/core` : pour en ajouter une, reprendre le SVG Regular sur phosphoricons.com, pas un tracé maison.
+
+**Les deux écarts assumés**, à ne pas « corriger » sans arbitrage :
+
+- Le rouge `--danger` n'existe pas dans la charte. Il est gardé pour les erreurs et les actions destructives, où la sécurité d'usage prime. Il ne qualifie jamais une performance.
+- La charte veut Inter en Regular, le gras réservé à un mot dans un paragraphe. L'app garde `font-semibold` sur ses libellés d'interface (boutons, en-têtes, navigation) : dans un outil, la graisse est le principal outil de hiérarchie, et la règle du brandbook vise les supports marketing. Les titres, eux, tiennent la règle : Season Sans est chargée en une seule graisse, et la plage `font-weight: 400 700` du `@font-face` empêche tout faux gras.
 
 ⚠️ **Le repo est public et `public/fonts/SeasonSans-Medium.woff2` est une police payante** (licence Displaay Desktop + Web, 25 postes). Passer le repo en privé, ou servir la police depuis un hébergement privé, avant de pousser. Sans le fichier, Inter prend le relais — c'est le substitut que la charte autorise explicitement.
 
