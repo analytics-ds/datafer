@@ -17,6 +17,7 @@ import type { WorkflowStatus } from "./workflow-status";
 import { StatusPicker } from "./status-picker";
 import { TagPicker, type TagDTO } from "./tag-picker";
 import { TrashIcon, FolderIcon, GlobeIcon } from "@/components/icons";
+import { scoreColor } from "@/lib/score-color";
 
 export type BriefCardData = {
   id: string;
@@ -479,66 +480,88 @@ function fmtNum(n: number): string {
 }
 
 // ─── Gauge "analyse en cours" : spinner en demi-cercle ────────────────────
-function PendingGauge({ step }: { step: string | null }) {
-  const { pct } = progressFromStep(step);
-  const r = 28;
-  const length = Math.PI * r;
-  const offset = length - (pct / 100) * length;
+/* Gabarit commun aux trois jauges de la liste.
+
+   Le viewBox est calé sur la boîte réelle du tracé, épaisseur de trait
+   comprise : le demi-cercle a pour centre (32, 38) et pour rayon 28, il occupe
+   donc y de 10 à 38, et le trait de 5 déborde de 2,5 de chaque côté. L'ancien
+   viewBox « 0 0 64 44 » laissait du vide sous l'arc, ce qui décalait le groupe
+   vers le bas du carré noir au lieu de le centrer. */
+const ARC_VIEWBOX = "1.5 7.5 61 33";
+const ARC_PATH = "M 4 38 A 28 28 0 0 1 60 38";
+const ARC_LENGTH = Math.PI * 28;
+
+function GaugeTile({
+  title,
+  value,
+  valueClass,
+  children,
+}: {
+  title: string;
+  value: React.ReactNode;
+  valueClass: string;
+  children: React.ReactNode;
+}) {
   return (
     <div
-      className="relative w-[64px] h-[56px] bg-[var(--bg-black)] rounded-[var(--radius-sm)] flex items-center"
-      title={`Analyse en cours · ${pct}%`}
+      className="w-[64px] h-[56px] bg-[var(--bg-black)] rounded-[var(--radius-sm)] flex items-center justify-center"
+      title={title}
     >
-      <svg viewBox="0 0 64 44" className="w-full h-[40px]">
-        <path
-          d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
-          fill="none"
-          stroke="var(--score-track)"
-          strokeWidth="5"
-          strokeLinecap="round"
-        />
-        <path
-          d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
-          fill="none"
-          stroke="var(--score-mid)"
-          strokeWidth="5"
-          strokeLinecap="round"
-          strokeDasharray={length}
-          strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset .4s ease" }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-end justify-center pb-[12px] font-mono font-semibold text-[12px] text-[var(--text-inverse)]">
-        {pct}%
+      {/* Boîte aux dimensions exactes de l'arc : centrée, elle centre le tout. */}
+      <div className="relative w-[46px] h-[25px]">
+        <svg viewBox={ARC_VIEWBOX} className="absolute inset-0 w-full h-full">
+          {children}
+        </svg>
+        <span
+          className={`absolute inset-x-0 bottom-[1px] text-center leading-none font-mono font-semibold ${valueClass}`}
+        >
+          {value}
+        </span>
       </div>
     </div>
   );
 }
 
-function FailedGauge() {
-  const r = 28;
-  const length = Math.PI * r;
+function PendingGauge({ step }: { step: string | null }) {
+  const { pct } = progressFromStep(step);
+  const offset = ARC_LENGTH - (pct / 100) * ARC_LENGTH;
   return (
-    <div
-      className="relative w-[64px] h-[56px] bg-[var(--bg-black)] rounded-[var(--radius-sm)] flex items-center"
-      title="Analyse échouée"
+    <GaugeTile
+      title={`Analyse en cours · ${pct}%`}
+      value={`${pct}%`}
+      valueClass="text-[12px] text-[var(--text-inverse)]"
     >
-      <svg viewBox="0 0 64 44" className="w-full h-[40px]">
-        <path
-          d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
-          fill="none"
-          stroke="var(--red)"
-          strokeWidth="5"
-          strokeLinecap="round"
-          strokeDasharray={length}
-          strokeDashoffset={0}
-          opacity={0.4}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-end justify-center pb-[12px] font-mono font-semibold text-[14px] text-[var(--red)]">
-        ✕
-      </div>
-    </div>
+      <path d={ARC_PATH} fill="none" stroke="var(--score-track)" strokeWidth="5" strokeLinecap="round" />
+      <path
+        d={ARC_PATH}
+        fill="none"
+        stroke="var(--score-mid)"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeDasharray={ARC_LENGTH}
+        strokeDashoffset={offset}
+        style={{ transition: "stroke-dashoffset .4s ease" }}
+      />
+    </GaugeTile>
+  );
+}
+
+function FailedGauge() {
+  return (
+    <GaugeTile
+      title="Analyse échouée"
+      value="✕"
+      valueClass="text-[14px] text-[var(--red)]"
+    >
+      <path
+        d={ARC_PATH}
+        fill="none"
+        stroke="var(--red)"
+        strokeWidth="5"
+        strokeLinecap="round"
+        opacity={0.4}
+      />
+    </GaugeTile>
   );
 }
 
@@ -561,44 +584,26 @@ function ProgressBar({ step }: { step: string | null }) {
 
 // ─── Score gauge (demi-cercle) ─────────────────────────────────────────────
 function ScoreGauge({ score }: { score: number }) {
-  // Echelle de score de la charte : jaune, bleu, kaki.
-  const color = score < 40 ? "var(--score-low)" : score < 70 ? "var(--score-mid)" : "var(--score-high)";
-
-  // Arc demi-cercle, rayon 28, centre (32, 32). Longueur ≈ π * r = 88.
-  const r = 28;
-  const length = Math.PI * r;
-  const offset = length - (Math.max(0, Math.min(100, score)) / 100) * length;
-
-  /* La jauge est une visualisation de données : la charte la veut sur fond
-     noir, ce qui donne aussi au score le contraste que le jaune n'aurait pas
-     sur une carte blanche. */
+  const color = scoreColor(score);
+  const offset = ARC_LENGTH - (Math.max(0, Math.min(100, score)) / 100) * ARC_LENGTH;
   return (
-    <div className="relative w-[64px] h-[56px] bg-[var(--bg-black)] rounded-[var(--radius-sm)] flex items-center">
-      <svg viewBox="0 0 64 44" className="w-full h-[40px]">
-        <path
-          d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
-          fill="none"
-          stroke="var(--score-track)"
-          strokeWidth="5"
-          strokeLinecap="round"
-        />
-        <path
-          d={`M 4 38 A ${r} ${r} 0 0 1 60 38`}
-          fill="none"
-          stroke={color}
-          strokeWidth="5"
-          strokeLinecap="round"
-          strokeDasharray={length}
-          strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset .4s ease" }}
-        />
-      </svg>
-      <div
-        className="absolute inset-0 flex items-end justify-center pb-[12px] font-mono font-semibold text-[14px] text-[var(--text-inverse)]"
-      >
-        {score}
-      </div>
-    </div>
+    <GaugeTile
+      title={`Score SEO : ${score}/100`}
+      value={score}
+      valueClass="text-[14px] text-[var(--text-inverse)]"
+    >
+      <path d={ARC_PATH} fill="none" stroke="var(--score-track)" strokeWidth="5" strokeLinecap="round" />
+      <path
+        d={ARC_PATH}
+        fill="none"
+        stroke={color}
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeDasharray={ARC_LENGTH}
+        strokeDashoffset={offset}
+        style={{ transition: "stroke-dashoffset .4s ease" }}
+      />
+    </GaugeTile>
   );
 }
 
