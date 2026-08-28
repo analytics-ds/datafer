@@ -3632,6 +3632,11 @@ function SerpScoreChart({
   );
 }
 
+/* Largeur commune des cellules de métrique de la liste SERP. Sans elle, les
+   colonnes se décalent d'une ligne à l'autre dès qu'une valeur ou un libellé
+   change de longueur. */
+const SERP_METRIC_CELL = "w-[52px] shrink-0";
+
 function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
   const [open, setOpen] = useState(false);
   const hasStructure = (r.h1?.length ?? 0) + (r.h2?.length ?? 0) + (r.h3?.length ?? 0) > 0;
@@ -3681,15 +3686,19 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             const isPdf = /\.pdf(?:$|[?#])/i.test(r.link ?? "");
             if (isPdf) {
               return (
-                <div title="Document PDF : pas de structure HTML (titres, images) donc le score automatique n'est pas comparable. Le contenu textuel a bien été crawlé et alimente les mots-clés / NLP. Exclu du calcul de la médiane de référence.">
+                <div className={SERP_METRIC_CELL} title="Document PDF : pas de structure HTML (titres, images) donc le score automatique n'est pas comparable. Le contenu textuel a bien été crawlé et alimente les mots-clés / NLP. Exclu du calcul de la médiane de référence.">
                   <div className="font-mono text-[13px] font-semibold text-[var(--red)]">
                     PDF
+                  </div>
+                  <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
+                    pdf
                   </div>
                 </div>
               );
             }
             return r.score < MIN_VALID_COMPETITOR_SCORE ? (
               <div
+                className={SERP_METRIC_CELL}
                 title="Score non fiable : page probablement mal crawlée (rendu JavaScript non capté, blocage anti-bot...). Exclue du calcul de la moyenne. Ce n'est pas un jugement sur la qualité réelle du concurrent."
               >
                 <div className="font-mono text-[13px] font-semibold text-[var(--text-muted)]">
@@ -3700,14 +3709,18 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
                 </div>
               </div>
             ) : (
-              <div title="Score SEO du concurrent (même algorithme que la rédaction)">
-                {/* Charte : le chiffre reste en noir, la puce porte le niveau. */}
-                <div className="font-mono text-[13px] font-semibold text-[var(--text)] inline-flex items-center gap-[5px]">
-                  <span
-                    className="w-[5px] h-[5px] rounded-full shrink-0"
-                    style={{ background: scoreColor(r.score) }}
-                  />
-                  {r.score}
+              <div className={SERP_METRIC_CELL} title="Score SEO du concurrent (même algorithme que la rédaction)">
+                {/* Le chiffre reste en noir, la puce porte le niveau. Elle est
+                    posée hors du flux : si elle restait dans la ligne, sa
+                    largeur décalerait le chiffre par rapport à son libellé. */}
+                <div className="font-mono text-[13px] font-semibold text-[var(--text)]">
+                  <span className="relative inline-block">
+                    <span
+                      className="absolute right-full top-1/2 -translate-y-1/2 mr-[5px] w-[5px] h-[5px] rounded-full"
+                      style={{ background: scoreColor(r.score) }}
+                    />
+                    {r.score}
+                  </span>
                 </div>
                 <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
                   score
@@ -3715,7 +3728,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
               </div>
             );
           })()}
-          <div>
+          <div className={SERP_METRIC_CELL}>
             <div className="font-mono text-[13px] font-semibold">
               {r.wordCount ? r.wordCount : "N/A"}
             </div>
@@ -3723,7 +3736,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
               mots
             </div>
           </div>
-          <div>
+          <div className={SERP_METRIC_CELL}>
             <div className="font-mono text-[13px] font-semibold">
               {r.headings ?? "N/A"}
             </div>
