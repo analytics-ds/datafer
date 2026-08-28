@@ -12,6 +12,7 @@ import {
 import { StatusPicker } from "@/app/app/briefs/status-picker";
 import { TagPicker, type TagDTO } from "@/app/app/briefs/tag-picker";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
+import { scoreColor } from "@/lib/score-color";
 
 export type SharedBriefRow = {
   id: string;
@@ -290,34 +291,33 @@ function Pill({
 }
 
 function ScoreGauge({ score }: { score: number }) {
-  const color = score < 40 ? "var(--score-low)" : score < 70 ? "var(--score-mid)" : "var(--score-high)";
+  const color = scoreColor(score);
   const r = 24;
   const length = Math.PI * r;
   const offset = length - (Math.max(0, Math.min(100, score)) / 100) * length;
-  /* Jauge = visualisation de données : la charte la veut sur fond noir, seul
-     contexte où les couleurs secondaires sont autorisées dans un graphique. */
+  const path = `M 4 34 A ${r} ${r} 0 0 1 52 34`;
+  /* Jauge = visualisation de donnees : la charte la veut sur fond noir. Le
+     viewBox est cale sur la boite reelle du trace (arc de centre (28, 34) et
+     de rayon 24, trait de 4,5 qui deborde de 2,25), sinon le groupe tombe bas
+     dans le carre au lieu d'y etre centre. */
   return (
-    <div className="relative w-[56px] h-[48px] bg-[var(--bg-black)] rounded-[var(--radius-sm)] flex items-center">
-      <svg viewBox="0 0 56 38" className="w-full h-[34px]">
-        <path
-          d={`M 4 34 A ${r} ${r} 0 0 1 52 34`}
-          fill="none"
-          stroke="var(--score-track)"
-          strokeWidth="4.5"
-          strokeLinecap="round"
-        />
-        <path
-          d={`M 4 34 A ${r} ${r} 0 0 1 52 34`}
-          fill="none"
-          stroke={color}
-          strokeWidth="4.5"
-          strokeLinecap="round"
-          strokeDasharray={length}
-          strokeDashoffset={offset}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-end justify-center pb-[9px] font-mono font-semibold text-[13px] text-[var(--text-inverse)]">
-        {score}
+    <div className="w-[56px] h-[48px] bg-[var(--bg-black)] rounded-[var(--radius-sm)] flex items-center justify-center">
+      <div className="relative w-[42px] h-[23px]">
+        <svg viewBox="1.75 7.75 52.5 28.5" className="absolute inset-0 w-full h-full">
+          <path d={path} fill="none" stroke="var(--score-track)" strokeWidth="4.5" strokeLinecap="round" />
+          <path
+            d={path}
+            fill="none"
+            stroke={color}
+            strokeWidth="4.5"
+            strokeLinecap="round"
+            strokeDasharray={length}
+            strokeDashoffset={offset}
+          />
+        </svg>
+        <span className="absolute inset-x-0 bottom-[1px] text-center leading-none font-mono font-semibold text-[13px] text-[var(--text-inverse)]">
+          {score}
+        </span>
       </div>
     </div>
   );

@@ -104,7 +104,14 @@ export function LogoWordmark({ height = 20, className }: LogoProps) {
 
 /** Nom du produit. Il s'écrit « corpus », en minuscules, comme « datashake ».
     En Season Sans, la typographie de titre de la charte, et en noir ou blanc
-    selon le fond, jamais en couleur secondaire. */
+    selon le fond, jamais en couleur secondaire.
+
+    Sur la taille : « datashake » porte quatre ascendantes (d, t, h, k), ses
+    lettres remplissent donc presque toute la hauteur du bloc-marque. « corpus »
+    n'en a aucune. À taille de police égale, il paraît nettement plus petit,
+    parce que l'œil compare des hauteurs d'x et non des corps. Les verrous
+    ci-dessous le posent donc à une taille supérieure à la hauteur du logo,
+    pour que les deux mots pèsent pareil optiquement. */
 export function ProductName({
   size = 15,
   className,
@@ -136,9 +143,9 @@ export function LogoApp({ height = 22, className }: LogoProps) {
       <LogoDatashake height={height} />
       <span
         aria-hidden
-        style={{ width: 1, height: height * 1.1, background: "currentColor", opacity: 0.2 }}
+        style={{ width: 1, height: height * 1.5, background: "currentColor", opacity: 0.2 }}
       />
-      <ProductName size={height * 0.78} />
+      <ProductName size={height * 1.4} />
     </span>
   );
 }
@@ -153,7 +160,7 @@ export function LogoAppCompact({ height = 22, className }: LogoProps) {
       style={{ gap: height * 0.42 }}
     >
       <LogoMark size={height} />
-      <ProductName size={height * 0.86} />
+      <ProductName size={height * 1.55} />
     </span>
   );
 }

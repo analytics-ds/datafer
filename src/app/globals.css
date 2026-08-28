@@ -106,12 +106,22 @@
   --bg-olive: var(--brand-kaki);
   --bg-olive-light: rgba(173, 172, 47, 0.18);
 
-  /* --- Échelle de score (data viz) ---
-     Toujours posée sur fond noir, conformément à la charte. */
-  --score-low: var(--brand-yellow);
-  --score-mid: var(--brand-blue);
-  --score-high: var(--brand-kaki);
+  /* --- Échelle de score ---
+     Feu tricolore : rouge sous 40, jaune de 40 à 80, vert au-dessus.
+     Les seuils vivent dans src/lib/score-color.ts.
+
+     Écart assumé à la charte : le rouge et le vert ne sont pas dans la palette
+     du brandbook. Sur les scores, la lecture instantanée prime, et ces trois
+     teintes sont choisies pour rester lisibles aussi bien sur un aplat noir
+     que sur un fond clair. Le reste de l'interface tient la charte. */
+  --score-bad: #e5484d;
+  --score-mid: #ffc93c;
+  --score-good: #3ec98a;
   --score-track: rgba(255, 255, 255, 0.14);
+
+  /* Alias historiques de l'échelle, conservés pour les appels existants. */
+  --score-low: var(--score-bad);
+  --score-high: var(--score-good);
 
   --radius: 16px;
   --radius-sm: 10px;

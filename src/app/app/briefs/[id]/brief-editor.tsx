@@ -42,6 +42,7 @@ import { BriefSettingsModal } from "./brief-settings-modal";
 import { InfoBubble } from "./info-bubble";
 import type { BriefOverrides } from "@/lib/brief-overrides";
 import { CaretDownIcon, GearIcon, SidebarIcon } from "@/components/icons";
+import { scoreColor, ratioColor } from "@/lib/score-color";
 
 type Folder = { id: string; name: string; website: string | null; scope: "personal" | "agency" };
 
@@ -1413,9 +1414,7 @@ function EditorSidebar({
 
   const ringCirc = 2 * Math.PI * 44;
   const ringOffset = ringCirc - (scoreTotal / 100) * ringCirc;
-  /* Échelle de score de la charte : le graphique se pose sur fond noir et
-     n'emploie que les couleurs secondaires (jaune, bleu, kaki). */
-  const scoreColor = scoreTotal < 40 ? "var(--score-low)" : scoreTotal < 70 ? "var(--score-mid)" : "var(--score-high)";
+  const ringColor = scoreColor(scoreTotal);
   const scoreHint =
     wc < 10 ? "Commencez à écrire"
     : scoreTotal < 25 ? "Ajoutez du contenu"
@@ -1437,7 +1436,7 @@ function EditorSidebar({
             <circle
               cx="50" cy="50" r="44"
               fill="none"
-              stroke={scoreColor}
+              stroke={ringColor}
               strokeWidth="6"
               strokeLinecap="round"
               strokeDasharray={ringCirc}
@@ -1505,7 +1504,7 @@ function EditorSidebar({
           const pct = Math.round((i.s.score / i.s.max) * 100);
           /* Panneau noir : les barres portent la couleur, les valeurs restent
              en blanc, comme l'exige la charte pour les textes. */
-          const barColor = pct >= 70 ? "var(--score-high)" : pct >= 40 ? "var(--score-mid)" : "var(--score-low)";
+          const barColor = ratioColor(pct);
           return (
             <div key={i.label} className="mb-[10px] last:mb-0">
               <div className="flex justify-between items-center mb-[3px]">
@@ -3222,7 +3221,7 @@ function PositioningGauge({
 
       {/* Règle : dégradé de l'échelle de score, repères concurrents, jalon utilisateur */}
       <div className="absolute inset-x-0 top-[26px] bottom-[16px]">
-        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[6px] bg-gradient-to-r from-[var(--score-low)] via-[var(--score-mid)] to-[var(--score-high)] rounded-full opacity-70" />
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[6px] bg-gradient-to-r from-[var(--score-bad)] via-[var(--score-mid)] to-[var(--score-good)] rounded-full opacity-70" />
         {competitors.map((c, i) => (
           <div
             key={i}
@@ -3599,13 +3598,7 @@ function SerpScoreChart({
         <div className="flex items-end gap-[6px] h-[200px] border-b border-[rgba(255,255,255,0.16)]">
           {bars.map((b) => {
             const h = Math.max(2, (b.score / maxValue) * 180);
-            const color = b.isMe
-              ? "var(--brand-white)"
-              : b.score >= 70
-                ? "var(--score-high)"
-                : b.score >= 40
-                  ? "var(--score-mid)"
-                  : "var(--score-low)";
+            const color = b.isMe ? "var(--brand-white)" : scoreColor(b.score);
             return (
               <div
                 key={b.key}
@@ -3712,12 +3705,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
                 <div className="font-mono text-[13px] font-semibold text-[var(--text)] inline-flex items-center gap-[5px]">
                   <span
                     className="w-[5px] h-[5px] rounded-full shrink-0"
-                    style={{
-                      background:
-                        r.score >= 70 ? "var(--brand-kaki)"
-                        : r.score >= 40 ? "var(--brand-blue)"
-                        : "var(--brand-yellow)",
-                    }}
+                    style={{ background: scoreColor(r.score) }}
                   />
                   {r.score}
                 </div>

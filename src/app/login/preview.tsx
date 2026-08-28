@@ -50,7 +50,7 @@ export function LoginPreview() {
 
 function MockInterface() {
   const circumference = 2 * Math.PI * 26;
-  const score = 78;
+  const score = 84;
   const dashOffset = circumference - (score / 100) * circumference;
 
   return (
@@ -86,7 +86,7 @@ function MockInterface() {
                 cy="30"
                 r="26"
                 fill="none"
-                stroke="var(--score-high)"
+                stroke="var(--score-good)"
                 strokeWidth="4"
                 strokeLinecap="round"
                 strokeDasharray={circumference}
@@ -107,7 +107,7 @@ function MockInterface() {
             <strong className="text-[var(--text-inverse)]">1 284</strong> mots
           </span>
           <div className="w-[90px] h-1 bg-[var(--score-track)] rounded-full overflow-hidden">
-            <div className="h-full bg-[var(--score-high)] rounded-full" style={{ width: "82%" }} />
+            <div className="h-full bg-[var(--score-good)] rounded-full" style={{ width: "82%" }} />
           </div>
         </div>
       </div>
