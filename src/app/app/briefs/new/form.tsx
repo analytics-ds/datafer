@@ -294,7 +294,7 @@ export function NewBriefForm({
           <div className="w-10 h-10 border-[3px] border-[var(--border)] border-t-[var(--bg-black)] rounded-full animate-spin" />
           {mode === "bulk" ? (
             <>
-              <div className="font-[family-name:var(--font-display)] text-[22px] tracking-[-0.3px]">
+              <div className="df-title text-[22px] tracking-[-0.3px]">
                 Création de {validRows.length} briefs…
               </div>
               <p className="text-[13px] text-[var(--text-muted)] max-w-[340px] text-center">
@@ -303,7 +303,7 @@ export function NewBriefForm({
             </>
           ) : (
             <>
-              <div className="font-[family-name:var(--font-display)] text-[22px] tracking-[-0.3px]">
+              <div className="df-title text-[22px] tracking-[-0.3px]">
                 Analyse en cours…
               </div>
               <ul className="flex flex-col gap-[10px] max-w-[340px]">
@@ -448,7 +448,7 @@ function SimpleSection({
                 : "border-[var(--border)] hover:border-[var(--border-strong)] text-[var(--text)]"
             }`}
           >
-            <span className="font-[family-name:var(--font-mono)] text-[11px] mr-2">
+            <span className="font-mono text-[11px] mr-2">
               {c.value.toUpperCase()}
             </span>
             {c.label}
@@ -622,7 +622,7 @@ function BulkRow({
         <select
           value={row.country}
           onChange={(e) => patch({ country: e.target.value })}
-          className={`px-2 py-[7px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[12px] bg-[var(--bg-card)] font-[family-name:var(--font-mono)] ${
+          className={`px-2 py-[7px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[12px] bg-[var(--bg-card)] font-mono ${
             !row.country && !isHead ? "text-[var(--text-muted)] italic" : ""
           }`}
         >

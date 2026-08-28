@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { LogoRankShaker } from "@/components/brand";
+import { LogoApp } from "@/components/brand";
 import { eq, desc } from "drizzle-orm";
 import { getDb } from "@/db";
 import { brief, client } from "@/db/schema";
@@ -77,7 +77,7 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
   return (
     <main className="min-h-screen bg-[var(--bg)]">
       <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 py-5 flex items-center justify-between">
-        <LogoRankShaker height={20} className="text-[var(--text)]" />
+        <LogoApp height={20} className="text-[var(--text)]" />
       </header>
 
       <div className="max-w-[1000px] mx-auto px-8 py-12">
@@ -98,12 +98,12 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
             Client
           </span>
         </div>
-        <h1 className="font-[family-name:var(--font-display)] text-[48px] leading-[1.05] tracking-[-1.2px] mb-2">
+        <h1 className="df-title text-[48px] leading-[1.05] tracking-[-1.2px] mb-2">
           {folder.name}
           <span className="df-accent">.</span>
         </h1>
         {folder.website && (
-          <p className="text-[13px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] mb-10">
+          <p className="text-[13px] text-[var(--text-muted)] font-mono mb-10">
             {folder.website}
           </p>
         )}

@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
 import { getAuth } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
-import type { DataferEnv } from "@/lib/datafer-env";
+import type { CorpusEnv } from "@/lib/corpus-env";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,7 @@ type Body = {
 };
 
 const DEFAULT_TO = "pierre@datashake.fr";
-const DEFAULT_FROM = "Content Optimizer Feedback <onboarding@resend.dev>";
+const DEFAULT_FROM = "corpus Feedback <onboarding@resend.dev>";
 
 export async function POST(req: Request) {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
   }
 
   const { env } = getCloudflareContext();
-  const e = env as DataferEnv;
+  const e = env as CorpusEnv;
   const db = drizzle(e.DB, { schema });
 
   const id = crypto.randomUUID();
@@ -112,7 +112,7 @@ export async function POST(req: Request) {
       screenshotsCount: screenshots.length,
     });
 
-    const subject = `${categoryTag(category)} Content Optimizer feedback de ${session.user.name}`;
+    const subject = `${categoryTag(category)} corpus feedback de ${session.user.name}`;
 
     const result = await sendEmail({
       apiKey: e.RESEND_API_KEY,
@@ -159,24 +159,24 @@ function renderFeedbackEmail(p: {
   const label = p.category === "bug" ? "Bug" : p.category === "suggestion" ? "Suggestion" : "Question";
   return `<!doctype html>
 <html><body style="margin:0;padding:24px;background:#F3EDE8;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;color:#101010;">
-  <div style="max-width:560px;margin:0 auto;background:#FFFFFF;border:1px solid #E8E2DC;border-radius:14px;overflow:hidden">
-    <div style="padding:20px 24px;border-bottom:1px solid #E8E2DC;background:#FAF6F2;">
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#8A8A8A;margin-bottom:4px">
-        Content Optimizer · Nouveau feedback
+  <div style="max-width:560px;margin:0 auto;background:#FFFFFF;border:1px solid #E8E8E8;border-radius:14px;overflow:hidden">
+    <div style="padding:20px 24px;border-bottom:1px solid #E8E8E8;background:#F5F5F5;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:rgba(16,16,16,0.45);margin-bottom:4px">
+        corpus · Nouveau feedback
       </div>
       <div style="font-size:22px;font-weight:700;letter-spacing:-0.5px">${categoryTag(p.category)} ${label}</div>
     </div>
     <div style="padding:20px 24px">
       <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px">
-        <tr><td style="color:#8A8A8A;padding:4px 0;width:90px">De</td><td style="padding:4px 0"><strong>${escapeHtml(p.userName)}</strong> &lt;${escapeHtml(p.userEmail)}&gt;</td></tr>
-        <tr><td style="color:#8A8A8A;padding:4px 0">Page</td><td style="padding:4px 0"><a href="${escapeHtml(p.url)}" style="color:#7E7D22">${escapeHtml(p.url)}</a></td></tr>
-        ${p.viewport ? `<tr><td style="color:#8A8A8A;padding:4px 0">Viewport</td><td style="padding:4px 0;font-family:ui-monospace,monospace">${escapeHtml(p.viewport)}</td></tr>` : ""}
-        ${p.userAgent ? `<tr><td style="color:#8A8A8A;padding:4px 0;vertical-align:top">User-Agent</td><td style="padding:4px 0;font-family:ui-monospace,monospace;font-size:11px;color:#5C5C5C;word-break:break-all">${escapeHtml(p.userAgent)}</td></tr>` : ""}
+        <tr><td style="color:rgba(16,16,16,0.45);padding:4px 0;width:90px">De</td><td style="padding:4px 0"><strong>${escapeHtml(p.userName)}</strong> &lt;${escapeHtml(p.userEmail)}&gt;</td></tr>
+        <tr><td style="color:rgba(16,16,16,0.45);padding:4px 0">Page</td><td style="padding:4px 0"><a href="${escapeHtml(p.url)}" style="color:#101010">${escapeHtml(p.url)}</a></td></tr>
+        ${p.viewport ? `<tr><td style="color:rgba(16,16,16,0.45);padding:4px 0">Viewport</td><td style="padding:4px 0;font-family:ui-monospace,monospace">${escapeHtml(p.viewport)}</td></tr>` : ""}
+        ${p.userAgent ? `<tr><td style="color:rgba(16,16,16,0.45);padding:4px 0;vertical-align:top">User-Agent</td><td style="padding:4px 0;font-family:ui-monospace,monospace;font-size:11px;color:rgba(16,16,16,0.7);word-break:break-all">${escapeHtml(p.userAgent)}</td></tr>` : ""}
       </table>
-      <div style="background:#FAF6F2;border:1px solid #E8E2DC;border-radius:8px;padding:14px 16px;font-size:14px;line-height:1.55;white-space:pre-wrap">${escapeHtml(p.message)}</div>
-      ${p.screenshotsCount > 0 ? `<div style="margin-top:14px;font-size:12px;color:#5C5C5C">📎 ${p.screenshotsCount} capture${p.screenshotsCount > 1 ? "s" : ""} d'écran en pièce jointe.</div>` : ""}
+      <div style="background:#F5F5F5;border:1px solid #E8E8E8;border-radius:8px;padding:14px 16px;font-size:14px;line-height:1.55;white-space:pre-wrap">${escapeHtml(p.message)}</div>
+      ${p.screenshotsCount > 0 ? `<div style="margin-top:14px;font-size:12px;color:rgba(16,16,16,0.7)">📎 ${p.screenshotsCount} capture${p.screenshotsCount > 1 ? "s" : ""} d'écran en pièce jointe.</div>` : ""}
     </div>
-    <div style="padding:14px 24px;border-top:1px solid #E8E2DC;background:#FAF6F2;font-size:11px;color:#8A8A8A;text-align:center">
+    <div style="padding:14px 24px;border-top:1px solid #E8E8E8;background:#F5F5F5;font-size:11px;color:rgba(16,16,16,0.45);text-align:center">
       Tu peux répondre à cet email pour échanger directement avec ${escapeHtml(p.userName.split(" ")[0])}.
     </div>
   </div>

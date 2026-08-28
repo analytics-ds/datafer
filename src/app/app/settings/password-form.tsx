@@ -78,7 +78,7 @@ export function PasswordForm() {
           {status === "saving" ? "Mise à jour…" : "Changer le mot de passe"}
         </button>
         {status === "saved" && (
-          <span className="text-[12px] text-[var(--green)] font-semibold">
+          <span className="text-[12px] text-[var(--text)] font-semibold">
             ✓ Mot de passe mis à jour
           </span>
         )}

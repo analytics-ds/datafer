@@ -110,7 +110,7 @@ async function parseRobotsSitemaps(origin: string, env: BrightDataEnv): Promise<
   try {
     const res = await fetch(robotsUrl, {
       signal: AbortSignal.timeout(8000),
-      headers: { "User-Agent": "DataferSitemapBot/1.0 (+https://datafer.analytics-e0d.workers.dev)" },
+      headers: { "User-Agent": "CorpusSitemapBot/1.0 (+https://datafer.analytics-e0d.workers.dev)" },
       redirect: "follow",
     });
     if (res.ok) {
@@ -151,7 +151,7 @@ async function fetchSitemapXml(sitemapUrl: string, env: BrightDataEnv): Promise<
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       headers: {
         Accept: "application/xml, text/xml, */*;q=0.5",
-        "User-Agent": "DataferSitemapBot/1.0 (+https://datafer.analytics-e0d.workers.dev)",
+        "User-Agent": "CorpusSitemapBot/1.0 (+https://datafer.analytics-e0d.workers.dev)",
       },
       redirect: "follow",
     });

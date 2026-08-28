@@ -108,10 +108,10 @@ export default async function AppHome() {
           className="group flex items-center justify-between bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius)] px-7 py-6 hover:bg-[var(--bg-dark)] transition-colors"
         >
           <div>
-            <div className="text-[11px] font-semibold tracking-[0.8px] uppercase text-[var(--bg-olive-light)] mb-[2px]">
-              Content Optimizer
+            <div className="text-[11px] font-semibold tracking-[0.8px] uppercase text-[var(--text-inverse-muted)] mb-[2px]">
+              Nouvelle analyse
             </div>
-            <div className="font-[family-name:var(--font-display)] text-[28px] leading-tight">
+            <div className="df-title text-[28px] leading-tight">
               Démarrer un nouveau brief
             </div>
           </div>
@@ -125,7 +125,7 @@ export default async function AppHome() {
             <div className="text-[11px] font-semibold tracking-[0.8px] uppercase text-[var(--text-muted)] mb-[2px]">
               Dossier client
             </div>
-            <div className="font-[family-name:var(--font-display)] text-[24px] leading-tight">
+            <div className="df-title text-[24px] leading-tight">
               Nouveau client
             </div>
           </div>
@@ -178,12 +178,12 @@ export default async function AppHome() {
                   <div className="font-semibold text-[13px] truncate flex items-center gap-2">
                     {f.name}
                     {f.scope === "agency" && (
-                      <span className="text-[9px] uppercase tracking-[0.5px] px-[5px] py-[1px] rounded-[var(--radius-pill)] bg-[var(--bg-olive-light)] text-[var(--accent-dark)]">
+                      <span className="text-[9px] uppercase tracking-[0.5px] px-[5px] py-[1px] rounded-[var(--radius-pill)] bg-[var(--bg-olive-light)] text-[var(--text)]">
                         agence
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+                  <div className="text-[11px] text-[var(--text-muted)] font-mono">
                     {f.briefCount} brief{f.briefCount > 1 ? "s" : ""}
                   </div>
                 </div>
@@ -253,23 +253,23 @@ function ShareDonut({ share, myBriefs, totalBriefs }: { share: number; myBriefs:
   const offset = C * (1 - share);
   const pct = Math.round(share * 100);
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-7 flex flex-col">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-1">
+    <div className="bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius)] p-7 flex flex-col">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-inverse-muted)] mb-1">
         Ta part ce mois
       </div>
-      <div className="text-[12px] text-[var(--text-secondary)] mb-6 leading-[1.4]">
+      <div className="text-[12px] text-[var(--text-inverse-secondary)] mb-6 leading-[1.4]">
         Briefs créés par toi vs reste de l&apos;équipe.
       </div>
       <div className="flex items-center gap-5">
         <div className="relative w-[140px] h-[140px] shrink-0">
           <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90">
-            <circle cx="70" cy="70" r={R} fill="none" stroke="var(--border)" strokeWidth="14" />
+            <circle cx="70" cy="70" r={R} fill="none" stroke="var(--score-track)" strokeWidth="14" />
             <circle
               cx="70"
               cy="70"
               r={R}
               fill="none"
-              stroke="var(--accent-dark)"
+              stroke="var(--brand-kaki)"
               strokeWidth="14"
               strokeLinecap="round"
               strokeDasharray={C}
@@ -278,7 +278,7 @@ function ShareDonut({ share, myBriefs, totalBriefs }: { share: number; myBriefs:
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-[family-name:var(--font-display)] text-[34px] leading-none tracking-[-1px]">{pct}%</span>
+            <span className="df-title text-[34px] leading-none tracking-[-1px]">{pct}%</span>
           </div>
         </div>
         <div className="flex-1 min-w-0 flex flex-col gap-3">
@@ -292,11 +292,14 @@ function ShareDonut({ share, myBriefs, totalBriefs }: { share: number; myBriefs:
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 pb-2 border-b border-[var(--border)] last:border-0 last:pb-0">
-      <span className="text-[11px] text-[var(--text-muted)] uppercase tracking-[0.6px] font-semibold">{label}</span>
+    <div className="flex items-baseline justify-between gap-2 pb-2 border-b border-[rgba(255,255,255,0.16)] last:border-0 last:pb-0">
+      <span className="text-[11px] uppercase tracking-[0.6px] font-semibold opacity-45">{label}</span>
       <span
-        className="font-[family-name:var(--font-display)] text-[22px] leading-none tabular-nums tracking-[-0.5px]"
-        style={{ color: accent ? "var(--accent-dark)" : "var(--text)" }}
+        className="df-title text-[22px] leading-none tabular-nums tracking-[-0.5px]"
+        /* Mise en avant par le niveau d'opacité : la charte réserve le texte
+           au noir et au blanc. La couleur est héritée du fond (noire sur clair,
+           blanche sur un aplat noir), seule l'intensité varie. */
+        style={{ opacity: accent ? 1 : 0.7 }}
       >
         {value}
       </span>
@@ -328,7 +331,7 @@ function Leaderboard({
                 key={u.id}
                 className={`flex items-center gap-3 ${u.isMe ? "" : ""}`}
               >
-                <div className="text-[11px] font-[family-name:var(--font-mono)] text-[var(--text-muted)] w-[16px] shrink-0">
+                <div className="text-[11px] font-mono text-[var(--text-muted)] w-[16px] shrink-0">
                   {i + 1}.
                 </div>
                 <Avatar image={u.image} name={display} isMe={u.isMe} />
@@ -341,12 +344,14 @@ function Leaderboard({
                       className="h-full rounded-full transition-all"
                       style={{
                         width: `${pct}%`,
-                        background: u.isMe ? "var(--accent-dark)" : "var(--accent)",
+                        // Graphique sur fond clair : noir pour ta barre, gris
+                        // pour celles de l'équipe, comme l'impose la charte.
+                        background: u.isMe ? "var(--bg-black)" : "var(--border-strong)",
                       }}
                     />
                   </div>
                 </div>
-                <div className={`font-[family-name:var(--font-mono)] text-[14px] tabular-nums w-[36px] text-right ${u.isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-secondary)]"}`}>
+                <div className={`font-mono text-[14px] tabular-nums w-[36px] text-right ${u.isMe ? "font-bold text-[var(--text)]" : "text-[var(--text-secondary)]"}`}>
                   {u.count}
                 </div>
               </div>
@@ -365,7 +370,7 @@ function Avatar({ image, name, isMe }: { image: string | null; name: string; isM
       className={`w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-[11px] font-bold shrink-0 ${
         isMe ? "ring-2 ring-[var(--accent-dark)] ring-offset-2 ring-offset-[var(--bg-card)]" : ""
       }`}
-      style={{ background: image ? "transparent" : "var(--bg-olive-light)", color: "var(--accent-dark)" }}
+      style={{ background: image ? "transparent" : "var(--bg-warm)", color: "var(--text)" }}
     >
       {image ? (
         // eslint-disable-next-line @next/next/no-img-element

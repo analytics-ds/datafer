@@ -15,7 +15,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { client, clientUrlIndex } from "@/db/schema";
-import type { DataferEnv } from "@/lib/datafer-env";
+import type { CorpusEnv } from "@/lib/corpus-env";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +34,7 @@ export async function POST(_req: Request, context: { params: Promise<{ id: strin
     return NextResponse.json({ error: "no sitemap configured" }, { status: 400 });
   }
 
-  const env = getCloudflareContext().env as unknown as DataferEnv;
+  const env = getCloudflareContext().env as unknown as CorpusEnv;
   if (!env.SITEMAP_SYNC_QUEUE) {
     return NextResponse.json({ error: "queue binding missing" }, { status: 500 });
   }

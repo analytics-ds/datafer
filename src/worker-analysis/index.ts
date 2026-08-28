@@ -1,5 +1,5 @@
 /**
- * Worker dédié au traitement asynchrone des briefs Datafer.
+ * Worker dédié au traitement asynchrone des briefs corpus.
  *
  * Architecture (depuis 2026-05-02) :
  *   - L'API HTTP (worker Next.js OpenNext "datafer") écrit le brief en
@@ -23,7 +23,7 @@ import { completeBriefAnalysis } from "@/lib/briefs-service";
 import { cleanupStuckBriefs } from "@/lib/cleanup-stuck";
 import { syncClientSitemap } from "@/lib/maillage/sync";
 import * as schema from "@/db/schema";
-import type { DataferEnv, AnalysisMessage } from "@/lib/datafer-env";
+import type { CorpusEnv, AnalysisMessage } from "@/lib/corpus-env";
 import type { SitemapSyncMessage } from "@/lib/maillage/types";
 
 // Budget CPU pour une invocation du consumer sitemap. On laisse 20s de marge
@@ -34,7 +34,7 @@ const SITEMAP_SYNC_BUDGET_MS = 280_000;
 export default {
   async queue(
     batch: MessageBatch<AnalysisMessage | SitemapSyncMessage>,
-    env: DataferEnv,
+    env: CorpusEnv,
   ): Promise<void> {
     // Dispatch selon la queue source : ce worker écoute 2 queues, une pour
     // les analyses de briefs et une pour la sync sitemap maillage.
@@ -50,7 +50,7 @@ export default {
    * Tourne toutes les minutes et purge les briefs `pending` au-delà de 2 min
    * en `failed`. Source de vérité du cleanup (GH Actions reste en backup).
    */
-  async scheduled(_controller: ScheduledController, env: DataferEnv): Promise<void> {
+  async scheduled(_controller: ScheduledController, env: CorpusEnv): Promise<void> {
     try {
       const res = await cleanupStuckBriefs(env.DB as D1Database);
       console.log("[analysis-consumer:cron] cleanup", res);
@@ -62,7 +62,7 @@ export default {
 
 async function handleAnalysisBatch(
   batch: MessageBatch<AnalysisMessage>,
-  env: DataferEnv,
+  env: CorpusEnv,
 ): Promise<void> {
   for (const msg of batch.messages) {
     const { briefId, userId, input } = msg.body;
@@ -85,7 +85,7 @@ async function handleAnalysisBatch(
 
 async function handleSitemapSyncBatch(
   batch: MessageBatch<SitemapSyncMessage>,
-  env: DataferEnv,
+  env: CorpusEnv,
 ): Promise<void> {
   for (const msg of batch.messages) {
     const { clientId, mode } = msg.body;

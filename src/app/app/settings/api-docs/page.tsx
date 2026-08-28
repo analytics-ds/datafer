@@ -17,12 +17,12 @@ export default function ApiDocsPage() {
 
       <PageHeader
         title={<>Documentation API<span className="df-accent">.</span></>}
-        subtitle="Intègre Content Optimizer dans tes outils pour créer un brief, récupérer le score et envoyer du contenu à scorer."
+        subtitle="Intègre corpus dans ta stack pour créer un brief, récupérer le score et envoyer du contenu à scorer."
       />
 
       <Section title="Vue d'ensemble" dot="var(--accent)">
         <p className="mb-3">
-          L&apos;API Content Optimizer expose deux familles d&apos;endpoints pour piloter les briefs depuis l&apos;extérieur
+          L&apos;API corpus expose deux familles d&apos;endpoints pour piloter les briefs depuis l&apos;extérieur
           (script, N8N, Make, Postman, Zapier, etc.). Le modèle est asynchrone : tu crées un brief,
           tu interroges son statut jusqu&apos;à ce qu&apos;il soit prêt, puis tu peux soumettre ton contenu
           pour récupérer un score comparé à celui de la concurrence SERP.
@@ -53,7 +53,7 @@ export default function ApiDocsPage() {
         </p>
       </Section>
 
-      <Section title="Authentification" dot="var(--red)">
+      <Section title="Authentification" dot="var(--brand-blue)">
         <p className="mb-3">
           Toutes les requêtes doivent inclure une clé API au format Bearer dans l'en-tête
           <Code>Authorization</Code>. Les clés sont générées depuis la page <Link href="/app/settings" className="underline font-semibold">Paramètres → Clés API</Link>.
@@ -85,25 +85,25 @@ export default function ApiDocsPage() {
           </thead>
           <tbody className="text-[var(--text-muted)]">
             <tr className="border-t border-[var(--border)]">
-              <td className="py-2 pr-4 font-mono text-[var(--text)]">keyword</td>
+              <td className="py-2 pr-4 font-code text-[var(--text)]">keyword</td>
               <td className="py-2 pr-4">string</td>
               <td className="py-2 pr-4">oui</td>
               <td className="py-2">Mot-clé cible du brief (ex : « chaussure pas cher »)</td>
             </tr>
             <tr className="border-t border-[var(--border)]">
-              <td className="py-2 pr-4 font-mono text-[var(--text)]">country</td>
+              <td className="py-2 pr-4 font-code text-[var(--text)]">country</td>
               <td className="py-2 pr-4">string</td>
               <td className="py-2 pr-4">non</td>
               <td className="py-2">Code pays ISO-2 en minuscule (<Code>fr</Code>, <Code>be</Code>, <Code>ca</Code>…). Défaut : <Code>fr</Code></td>
             </tr>
             <tr className="border-t border-[var(--border)]">
-              <td className="py-2 pr-4 font-mono text-[var(--text)]">folderId</td>
+              <td className="py-2 pr-4 font-code text-[var(--text)]">folderId</td>
               <td className="py-2 pr-4">uuid</td>
               <td className="py-2 pr-4">non</td>
-              <td className="py-2">Rattachement à un dossier Content Optimizer (doit appartenir au user ou être de scope <Code>agency</Code>)</td>
+              <td className="py-2">Rattachement à un dossier client (doit appartenir au user ou être de scope <Code>agency</Code>)</td>
             </tr>
             <tr className="border-t border-[var(--border)]">
-              <td className="py-2 pr-4 font-mono text-[var(--text)]">myUrl</td>
+              <td className="py-2 pr-4 font-code text-[var(--text)]">myUrl</td>
               <td className="py-2 pr-4">url</td>
               <td className="py-2 pr-4">non</td>
               <td className="py-2">URL existante à crawler. Si fournie, son contenu est importé dans l'éditeur et un score initial est calculé</td>
@@ -172,22 +172,22 @@ export default function ApiDocsPage() {
           </thead>
           <tbody className="text-[var(--text-muted)]">
             <tr className="border-t border-[var(--border)]">
-              <td className="py-2 pr-4 font-mono text-[var(--text)]">keyword</td>
+              <td className="py-2 pr-4 font-code text-[var(--text)]">keyword</td>
               <td className="py-2 pr-4">string</td>
               <td className="py-2">Filtre exact (insensible à la casse) sur le mot-clé</td>
             </tr>
             <tr className="border-t border-[var(--border)]">
-              <td className="py-2 pr-4 font-mono text-[var(--text)]">folderId</td>
+              <td className="py-2 pr-4 font-code text-[var(--text)]">folderId</td>
               <td className="py-2 pr-4">uuid</td>
               <td className="py-2">Filtre par dossier</td>
             </tr>
             <tr className="border-t border-[var(--border)]">
-              <td className="py-2 pr-4 font-mono text-[var(--text)]">status</td>
+              <td className="py-2 pr-4 font-code text-[var(--text)]">status</td>
               <td className="py-2 pr-4">string</td>
               <td className="py-2"><Code>pending</Code>, <Code>ready</Code> ou <Code>failed</Code></td>
             </tr>
             <tr className="border-t border-[var(--border)]">
-              <td className="py-2 pr-4 font-mono text-[var(--text)]">limit</td>
+              <td className="py-2 pr-4 font-code text-[var(--text)]">limit</td>
               <td className="py-2 pr-4">int</td>
               <td className="py-2">Nombre max de résultats, défaut 20, max 100</td>
             </tr>
@@ -341,7 +341,7 @@ export default function ApiDocsPage() {
         <Pre>{`import fetch from "node-fetch";
 
 const API = "${BASE}/api/v1";
-const KEY = process.env.DATAFER_KEY!;
+const KEY = process.env.CORPUS_API_KEY!;
 const auth = { "Authorization": \`Bearer \${KEY}\`, "Content-Type": "application/json" };
 
 async function run(keyword: string, editorHtml: string) {
@@ -376,7 +376,7 @@ async function run(keyword: string, editorHtml: string) {
 
       <Section title="API V2, lecture granulaire" dot="var(--accent-dark)">
         <p className="mb-3">
-          La V2 est en lecture seule. Elle expose toute la richesse de l&apos;analyse Content Optimizer
+          La V2 est en lecture seule. Elle expose toute la richesse de l&apos;analyse corpus
           (SERP, concurrents, NLP, scoring détaillé, Haloscan) sur des endpoints séparés
           pour ne charger que ce dont tu as besoin. Auth identique à la V1, même clé.
         </p>
@@ -594,7 +594,7 @@ GET /api/v2/briefs/{id}/competitors/3/download?format=docx
         <p className="mb-2 text-[var(--text-muted)]">
           Embed un paragraphe via Workers AI bge-m3 et retourne le cosinus vs le centroïde
           sémantique top 10 du brief. Sert à scorer chaque paragraphe individuellement et
-          identifier ceux qui dévient du sujet. Utilisé en live par l&apos;éditeur Content Optimizer
+          identifier ceux qui dévient du sujet. Utilisé en live par l&apos;éditeur corpus
           (debounce 2s par paragraphe modifié).
         </p>
         <Pre>{`POST /api/v2/briefs/{id}/semantic-paragraph
@@ -696,7 +696,7 @@ function H4({ children }: { children: React.ReactNode }) {
 
 function Pre({ children }: { children: React.ReactNode }) {
   return (
-    <pre className="font-mono text-[12px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-xs)] p-3 mb-3 overflow-x-auto whitespace-pre">
+    <pre className="font-code text-[12px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-xs)] p-3 mb-3 overflow-x-auto whitespace-pre">
       {children}
     </pre>
   );
@@ -704,7 +704,7 @@ function Pre({ children }: { children: React.ReactNode }) {
 
 function Code({ children }: { children: React.ReactNode }) {
   return (
-    <code className="font-mono text-[12px] bg-[var(--bg-dark)]/10 rounded px-1 py-[1px]">
+    <code className="font-code text-[12px] bg-[var(--bg-dark)]/10 rounded px-1 py-[1px]">
       {children}
     </code>
   );
@@ -713,8 +713,8 @@ function Code({ children }: { children: React.ReactNode }) {
 function Err({ code, msg, cause }: { code: string; msg: string; cause: string }) {
   return (
     <tr className="border-t border-[var(--border)]">
-      <td className="py-2 pr-4 font-mono text-[var(--text)]">{code}</td>
-      <td className="py-2 pr-4 font-mono">{msg}</td>
+      <td className="py-2 pr-4 font-code text-[var(--text)]">{code}</td>
+      <td className="py-2 pr-4 font-code">{msg}</td>
       <td className="py-2">{cause}</td>
     </tr>
   );

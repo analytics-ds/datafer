@@ -156,7 +156,7 @@ export function renderHtmlDocument(keyword: string, bodyHtml: string): string {
 <meta charset="utf-8">
 <title>${title}</title>
 <style>
-  body { font-family: Georgia, "Times New Roman", serif; max-width: 760px; margin: 40px auto; padding: 0 24px; line-height: 1.7; color: #222; }
+  body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 24px; line-height: 1.7; color: rgba(16,16,16,0.7); }
   h1 { font-size: 32px; margin-top: 32px; }
   h2 { font-size: 24px; margin-top: 28px; }
   h3 { font-size: 19px; margin-top: 22px; }
@@ -166,9 +166,9 @@ export function renderHtmlDocument(keyword: string, bodyHtml: string): string {
   p { font-size: 16px; margin: 12px 0; }
   ul, ol { padding-left: 24px; }
   li { margin-bottom: 4px; }
-  a { color: #0e5132; }
+  a { color: #101010; text-decoration: underline; text-underline-offset: 2px; }
   table { border-collapse: collapse; width: 100%; margin: 16px 0; }
-  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th, td { border: 1px solid #E8E8E8; padding: 8px 12px; text-align: left; }
   img { max-width: 100%; height: auto; }
 </style>
 </head>
@@ -193,7 +193,7 @@ export function renderPrintDocument(keyword: string, bodyHtml: string): string {
 <meta charset="utf-8">
 <title>${title}</title>
 <style>
-  body { font-family: Georgia, "Times New Roman", serif; max-width: 760px; margin: 32px auto; padding: 0 24px; line-height: 1.7; color: #222; }
+  body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 760px; margin: 32px auto; padding: 0 24px; line-height: 1.7; color: rgba(16,16,16,0.7); }
   h1 { font-size: 30px; margin-top: 26px; }
   h2 { font-size: 23px; margin-top: 22px; }
   h3 { font-size: 18px; margin-top: 18px; }
@@ -203,11 +203,11 @@ export function renderPrintDocument(keyword: string, bodyHtml: string): string {
   p { font-size: 15px; margin: 10px 0; }
   ul, ol { padding-left: 24px; }
   table { border-collapse: collapse; width: 100%; margin: 14px 0; }
-  th, td { border: 1px solid #bbb; padding: 8px 12px; text-align: left; }
+  th, td { border: 1px solid #E8E8E8; padding: 8px 12px; text-align: left; }
   img { max-width: 100%; height: auto; }
-  .print-bar { position: sticky; top: 0; background: #fff; border-bottom: 1px solid #eee; padding: 10px 0; margin-bottom: 24px; display: flex; gap: 12px; align-items: center; }
-  .print-bar button { font: inherit; padding: 6px 12px; border: 1px solid #222; background: #222; color: #fff; cursor: pointer; border-radius: 4px; }
-  .print-bar .hint { color: #666; font-size: 13px; }
+  .print-bar { position: sticky; top: 0; background: #FFFFFF; border-bottom: 1px solid #E8E8E8; padding: 10px 0; margin-bottom: 24px; display: flex; gap: 12px; align-items: center; }
+  .print-bar button { font: inherit; padding: 6px 12px; border: 1px solid #101010; background: #101010; color: #FFFFFF; cursor: pointer; border-radius: 4px; }
+  .print-bar .hint { color: rgba(16,16,16,0.7); font-size: 13px; }
   @media print {
     .print-bar { display: none; }
     body { margin: 0; padding: 0; }

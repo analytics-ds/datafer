@@ -5,7 +5,17 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth-client";
 import { faviconUrl } from "@/lib/favicon";
-import { LogoRankShaker } from "@/components/brand";
+import { LogoAppCompact } from "@/components/brand";
+import {
+  SidebarIcon,
+  CaretRightIcon,
+  PlusIcon,
+  HouseIcon,
+  FileTextIcon,
+  FoldersIcon,
+  TrayIcon,
+  GearIcon,
+} from "@/components/icons";
 
 type Favorite = { id: string; name: string; website: string | null };
 
@@ -29,11 +39,11 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
     // on ne peut pas le lire dans l'initializer du useState sans provoquer un
     // mismatch d'hydratation (le serveur rend toujours "ouverte").
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (localStorage.getItem("rs-sidebar") === "closed") setCollapsed(true);
+    if (localStorage.getItem("corpus-sidebar") === "closed") setCollapsed(true);
   }, []);
   const toggleCollapsed = () =>
     setCollapsed((c) => {
-      localStorage.setItem("rs-sidebar", c ? "open" : "closed");
+      localStorage.setItem("corpus-sidebar", c ? "open" : "closed");
       return !c;
     });
 
@@ -58,7 +68,7 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
             aria-label="Afficher le menu"
             className="w-full h-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
           >
-            <ChevronRightIcon />
+            <CaretRightIcon size={14} />
           </button>
         </aside>
         <button
@@ -67,7 +77,7 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
           aria-label="Afficher le menu"
           className="fixed left-[32px] top-[16px] z-40 w-9 h-9 flex items-center justify-center rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] shadow-[var(--shadow-sm)] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
         >
-          <PanelLeftIcon />
+          <SidebarIcon size={16} />
         </button>
       </>
     );
@@ -76,14 +86,14 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
   return (
     <aside className="w-[260px] shrink-0 h-screen sticky top-0 bg-[var(--bg-card)] border-r border-[var(--border)] flex flex-col">
       <div className="pl-5 pr-3 h-[68px] flex items-center justify-between border-b border-[var(--border)]">
-        <LogoRankShaker height={24} />
+        <LogoAppCompact height={22} />
         <button
           onClick={toggleCollapsed}
           title="Masquer le menu"
           aria-label="Masquer le menu"
           className="w-8 h-8 flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
         >
-          <PanelLeftIcon />
+          <SidebarIcon size={16} />
         </button>
       </div>
 
@@ -92,25 +102,25 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
           href="/app/briefs/new"
           className="group flex items-center justify-center gap-2 w-full bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] py-[11px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] transition-colors shadow-[var(--shadow-sm)]"
         >
-          <PlusIcon className="w-[14px] h-[14px] group-hover:rotate-90 transition-transform duration-200" />
+          <PlusIcon size={14} className="group-hover:rotate-90 transition-transform duration-200" />
           Nouveau brief
         </Link>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 pb-4 text-[13px]">
-        <NavItem href="/app" icon={<HomeIcon />} active={pathname === "/app"}>
+        <NavItem href="/app" icon={<HouseIcon size={16} />} active={pathname === "/app"}>
           Accueil
         </NavItem>
         <NavItem
           href="/app/briefs"
-          icon={<DocIcon />}
+          icon={<FileTextIcon size={16} />}
           active={pathname === "/app/briefs" || pathname?.startsWith("/app/briefs/")}
         >
           Tous les briefs
         </NavItem>
         <NavItem
           href="/app/folders"
-          icon={<FoldersIcon />}
+          icon={<FoldersIcon size={16} />}
           active={pathname === "/app/folders" || pathname?.startsWith("/app/folders/")}
         >
           Tous les clients
@@ -135,7 +145,7 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
           <NavSection title="Admin">
             <NavItem
               href="/app/admin/feedback"
-              icon={<InboxIcon />}
+              icon={<TrayIcon size={16} />}
               active={pathname?.startsWith("/app/admin/feedback") ?? false}
             >
               Feedback
@@ -161,7 +171,7 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
               className="w-9 h-9 rounded-full object-cover border border-[var(--border)] shrink-0"
             />
           ) : (
-            <div className="w-9 h-9 rounded-full bg-[var(--bg-olive-light)] text-[var(--accent-dark)] flex items-center justify-center text-[12px] font-semibold shrink-0">
+            <div className="w-9 h-9 rounded-full bg-[var(--bg-olive-light)] text-[var(--text)] flex items-center justify-center text-[12px] font-semibold shrink-0">
               {initials}
             </div>
           )}
@@ -171,17 +181,17 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
                 {user.name}
               </span>
               <span
-                className="shrink-0 inline-flex items-center justify-center px-1.5 py-0.5 rounded-[var(--radius-pill)] text-[10px] font-bold tracking-[0.3px] bg-[var(--bg-olive-light)] text-[var(--accent-dark)] leading-none"
+                className="shrink-0 inline-flex items-center justify-center px-1.5 py-0.5 rounded-[var(--radius-pill)] text-[10px] font-bold tracking-[0.3px] bg-[var(--bg-olive-light)] text-[var(--text)] leading-none"
                 title={`Niveau ${user.level} · Voir le détail dans les paramètres`}
               >
                 Lv {user.level}
               </span>
             </div>
-            <div className="text-[11px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] truncate">
+            <div className="text-[11px] text-[var(--text-muted)] font-mono truncate">
               {user.email}
             </div>
           </div>
-          <CogIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+          <GearIcon size={16} className="text-[var(--text-muted)] shrink-0" />
         </Link>
         <button
           onClick={onLogout}
@@ -220,7 +230,7 @@ function NavItem({
           className="absolute left-[3px] top-[18%] bottom-[18%] w-[3px] rounded-full bg-[var(--accent-dark)]"
         />
       )}
-      <span className={`shrink-0 w-4 h-4 ${active ? "text-[var(--accent-dark)]" : ""}`}>{icon}</span>
+      <span className={`shrink-0 w-4 h-4 ${active ? "text-[var(--text)]" : ""}`}>{icon}</span>
       <span>{children}</span>
     </Link>
   );
@@ -273,74 +283,5 @@ function FolderItem({
       )}
       <span className="truncate">{children}</span>
     </Link>
-  );
-}
-
-function PanelLeftIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M9 4v16" />
-      <path d="M3 4h6v16H3z" fill="currentColor" stroke="none" opacity="0.35" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path d="M7 4l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function PlusIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" className={className}>
-      <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-function HomeIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" className="w-full h-full">
-      <path d="M3 10l7-6 7 6v7a1 1 0 01-1 1h-3v-5H7v5H4a1 1 0 01-1-1v-7z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function DocIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" className="w-full h-full">
-      <path d="M5 3h7l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M12 3v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M7 11h6M7 14h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-function FoldersIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" className="w-full h-full">
-      <path d="M3 6a1 1 0 011-1h3l2 2h7a1 1 0 011 1v7a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function InboxIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" className="w-full h-full">
-      <path d="M3 11h4l1 2h4l1-2h4M3 11l2-6h10l2 6M3 11v5a1 1 0 001 1h12a1 1 0 001-1v-5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function CogIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" className={className}>
-      <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M15.5 10c0-.4 0-.8-.1-1.1l1.8-1.4-1.8-3.1-2.1.8a5 5 0 00-1.9-1.1L11 2h-2l-.4 2.1a5 5 0 00-1.9 1.1l-2.1-.8-1.8 3.1 1.8 1.4c-.1.3-.1.7-.1 1.1s0 .8.1 1.1L2.8 12.5l1.8 3.1 2.1-.8a5 5 0 001.9 1.1L9 18h2l.4-2.1a5 5 0 001.9-1.1l2.1.8 1.8-3.1-1.8-1.4c.1-.3.1-.7.1-1.1z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

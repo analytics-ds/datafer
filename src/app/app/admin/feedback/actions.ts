@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getAuth } from "@/lib/auth";
-import type { DataferEnv } from "@/lib/datafer-env";
+import type { CorpusEnv } from "@/lib/corpus-env";
 
 const ADMIN_EMAIL = "pierre@datashake.fr";
 
@@ -22,7 +22,7 @@ async function ensureAdmin(): Promise<{ ok: true } | { ok: false; reason: string
 
 function getDb() {
   const { env } = getCloudflareContext();
-  return drizzle((env as DataferEnv).DB, { schema });
+  return drizzle((env as CorpusEnv).DB, { schema });
 }
 
 export async function updateFeedbackStatus(

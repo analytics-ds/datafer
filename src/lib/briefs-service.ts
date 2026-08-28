@@ -3,7 +3,7 @@ import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb, getDbFromEnv, type Db } from "@/db";
 import { brief, client } from "@/db/schema";
-import type { DataferEnv } from "@/lib/datafer-env";
+import type { CorpusEnv } from "@/lib/corpus-env";
 import {
   fetchSerp,
   fetchCrazyserpTop100,
@@ -370,7 +370,7 @@ export async function createPendingBrief(
 const ANALYSIS_DEADLINE_MS = 240_000;
 
 export async function completeBriefAnalysis(
-  env: DataferEnv,
+  env: CorpusEnv,
   briefId: string,
   userId: string,
   input: CreateBriefInput,
@@ -484,7 +484,7 @@ type AnalysisPayload =
   | { ok: false; status: number; error: string };
 
 async function createBriefAnalysisPayload(
-  env: DataferEnv,
+  env: CorpusEnv,
   userId: string,
   input: CreateBriefInput,
   setStep: (step: string) => Promise<void> = async () => {},

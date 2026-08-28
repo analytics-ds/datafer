@@ -13,7 +13,7 @@ import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
 import { suggestInternalLinks } from "@/lib/maillage/suggest";
-import type { DataferEnv } from "@/lib/datafer-env";
+import type { CorpusEnv } from "@/lib/corpus-env";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +41,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     return NextResponse.json({ suggestions: [], reason: "no_client" });
   }
 
-  const env = getCloudflareContext().env as unknown as DataferEnv;
+  const env = getCloudflareContext().env as unknown as CorpusEnv;
   const result = await suggestInternalLinks(db, env.AI, {
     clientId: row.clientId,
     editorHtml: body.editorHtml,

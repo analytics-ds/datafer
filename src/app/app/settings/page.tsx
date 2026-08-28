@@ -130,7 +130,7 @@ export default async function SettingsPage() {
 
       <section className="mb-10">
         <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
-          <span className="w-[5px] h-[5px] rounded-full bg-[var(--red)]" />
+          <span className="w-[5px] h-[5px] rounded-full bg-[var(--brand-blue)]" />
           Sécurité
         </h2>
         <PasswordForm />

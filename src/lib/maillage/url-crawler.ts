@@ -7,7 +7,7 @@ const HEAD_TIMEOUT_MS = 6000;
 const MAX_HTML_BYTES = 2_000_000;
 const FIRST_PARAGRAPH_MAX_WORDS = 200;
 const FIRST_PARAGRAPH_MIN_WORDS = 15;
-const USER_AGENT = "DataferSitemapBot/1.0 (+https://datafer.analytics-e0d.workers.dev)";
+const USER_AGENT = "CorpusSitemapBot/1.0 (+https://datafer.analytics-e0d.workers.dev)";
 
 // Pipeline à 2 niveaux :
 // 1. Fetch direct (gratuit, ~70% des sites passent).

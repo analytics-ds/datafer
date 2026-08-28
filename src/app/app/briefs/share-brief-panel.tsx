@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { enableBriefShareAction, revokeBriefShareAction } from "./actions";
+import { ShareIcon, XIcon } from "@/components/icons";
 
 export function ShareBriefPanel({
   briefId,
@@ -68,7 +69,7 @@ export function ShareBriefPanel({
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-2 px-4 py-[8px] rounded-[var(--radius-sm)] text-[12px] font-semibold border bg-[var(--bg)] border-[var(--border)] hover:border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors"
       >
-        <ShareIcon />
+        <ShareIcon size={14} />
         {token ? "Lien client actif" : "Partager au client"}
       </button>
 
@@ -80,7 +81,7 @@ export function ShareBriefPanel({
             aria-label="Fermer"
             className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
           >
-            <CloseIcon />
+            <XIcon size={14} />
           </button>
           <div className="font-semibold text-[14px] mb-1">Partager ce brief</div>
           <p className="text-[12px] text-[var(--text-secondary)] leading-[1.5] mb-4">
@@ -96,7 +97,7 @@ export function ShareBriefPanel({
                   readOnly
                   value={url}
                   onFocus={(e) => e.currentTarget.select()}
-                  className="flex-1 px-3 py-[9px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none text-[12px] bg-[var(--bg)] font-[family-name:var(--font-mono)]"
+                  className="flex-1 px-3 py-[9px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none text-[12px] bg-[var(--bg)] font-mono"
                 />
                 <button
                   onClick={copy}
@@ -125,29 +126,5 @@ export function ShareBriefPanel({
         </div>
       )}
     </div>
-  );
-}
-
-function ShareIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
-      <circle cx="5" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="15" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="15" cy="15" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M7 9l6-3M7 11l6 3" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <path
-        d="M5 5l10 10M15 5L5 15"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }

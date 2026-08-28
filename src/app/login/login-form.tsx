@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
-import { LogoDatashake } from "@/components/brand";
+import { LogoApp } from "@/components/brand";
 
 export function LoginForm() {
   const router = useRouter();
@@ -33,20 +33,18 @@ export function LoginForm() {
     <form onSubmit={onSubmit} className="w-full max-w-[380px]">
       {/* Brand compact visible uniquement en mobile (sinon le panneau de gauche l'affiche déjà) */}
       <div className="flex items-center gap-3 mb-10 md:hidden text-[var(--text)]">
-        <LogoDatashake height={20} />
-        <div className="w-px h-6 bg-[var(--border)]" />
-        <span className="font-semibold text-[14px]">Content Optimizer</span>
+        <LogoApp height={20} />
       </div>
 
       <span className="inline-flex items-center px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.6px] uppercase mb-5">
         Connexion
       </span>
 
-      <h1 className="font-[family-name:var(--font-display)] text-[44px] leading-[1.05] tracking-[-1.2px] mb-2">
+      <h1 className="df-title text-[44px] leading-[1.05] tracking-[-1.2px] mb-2">
         Bon retour<em className="df-accent">.</em>
       </h1>
       <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-10">
-        Connecte-toi à ton espace Content Optimizer pour générer tes briefs et accéder à tes clients.
+        Connecte-toi à ton espace corpus pour générer tes briefs et accéder à tes clients.
       </p>
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">

@@ -1,15 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  CaretDownIcon,
+  TextAlignLeftIcon,
+  ListBulletsIcon,
+  HighlighterIcon,
+  ImageIcon,
+  CodeIcon,
+  TableIcon,
+  LinkIcon,
+  ArrowUUpLeftIcon,
+  ArrowUUpRightIcon,
+} from "@/components/icons";
 
 const HIGHLIGHT_COLORS = [
   { value: "", label: "Aucun", swatch: "transparent", border: true },
-  { value: "#FFF4A3", label: "Jaune", swatch: "#FFF4A3" },
-  { value: "#FFD4B2", label: "Orange", swatch: "#FFD4B2" },
-  { value: "#FFCCCC", label: "Rouge", swatch: "#FFCCCC" },
-  { value: "#D4F0C7", label: "Vert", swatch: "#D4F0C7" },
-  { value: "#C7E0F5", label: "Bleu", swatch: "#C7E0F5" },
-  { value: "#E0D4F5", label: "Violet", swatch: "#E0D4F5" },
+  // Surlignage reduit aux couleurs secondaires de la charte, en voile clair
+  // pour garder un texte noir lisible par-dessus. Les surlignages deja
+  // enregistres dans d'anciens briefs gardent leur couleur d'origine.
+  { value: "#FFFF7D", label: "Jaune", swatch: "#FFFF7D" },
+  { value: "rgba(119,176,237,0.35)", label: "Bleu", swatch: "rgba(119,176,237,0.35)" },
+  { value: "rgba(173,172,47,0.3)", label: "Kaki", swatch: "rgba(173,172,47,0.3)" },
+  { value: "#E8E8E8", label: "Gris", swatch: "#E8E8E8" },
 ];
 
 /** Tags de bloc applicables depuis la toolbar / les raccourcis clavier. */
@@ -90,7 +103,7 @@ export function EditorToolbar(p: ToolbarProps) {
           className="tb-btn min-w-[48px] px-2 gap-1"
           title="Niveau de titre"
         >
-          <span className="font-[family-name:var(--font-mono)] text-[12px] font-bold">
+          <span className="font-mono text-[12px] font-bold">
             {currentHeadingLabel}
           </span>
           <Chevron />
@@ -107,7 +120,7 @@ export function EditorToolbar(p: ToolbarProps) {
               >
                 <span className="flex items-center justify-between gap-4 w-full">
                   <span className={h.className}>{h.label}</span>
-                  <span className="text-[10px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] shrink-0">
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono shrink-0">
                     {h.shortcut}
                   </span>
                 </span>
@@ -146,7 +159,7 @@ export function EditorToolbar(p: ToolbarProps) {
           className="tb-btn gap-1"
           title="Alignement"
         >
-          <AlignIcon />
+          <TextAlignLeftIcon size={15} />
           <Chevron />
         </button>
         {alignOpen && (
@@ -170,7 +183,7 @@ export function EditorToolbar(p: ToolbarProps) {
           className="tb-btn gap-1"
           title="Liste"
         >
-          <ListIcon />
+          <ListBulletsIcon size={15} />
           <Chevron />
         </button>
         {listOpen && (
@@ -194,7 +207,7 @@ export function EditorToolbar(p: ToolbarProps) {
           className="tb-btn gap-1"
           title="Surlignage"
         >
-          <HighlightIcon />
+          <HighlighterIcon size={15} />
           <Chevron />
         </button>
         {highlightOpen && (
@@ -218,7 +231,7 @@ export function EditorToolbar(p: ToolbarProps) {
 
       {/* Image */}
       <TbBtn onClick={() => setImageOpen(true)} title="Insérer une image">
-        <ImageIcon />
+        <ImageIcon size={15} />
       </TbBtn>
 
       {/* HTML source toggle */}
@@ -232,7 +245,7 @@ export function EditorToolbar(p: ToolbarProps) {
               : "Coller / éditer le HTML source directement"
           }
         >
-          <CodeIcon />
+          <CodeIcon size={15} />
         </button>
       )}
 
@@ -247,7 +260,7 @@ export function EditorToolbar(p: ToolbarProps) {
           className="tb-btn"
           title="Insérer un tableau"
         >
-          <TableIcon />
+          <TableIcon size={15} />
         </button>
         {tableOpen && (
           <TableGridPicker
@@ -261,17 +274,17 @@ export function EditorToolbar(p: ToolbarProps) {
 
       {/* Link */}
       <TbBtn onClick={p.onInsertLink} title="Insérer un lien">
-        <LinkIcon />
+        <LinkIcon size={15} />
       </TbBtn>
 
       <Sep />
 
       {/* Undo / Redo */}
       <TbBtn onClick={() => p.onExec("undo")} title="Annuler (Ctrl+Z)">
-        <UndoIcon />
+        <ArrowUUpLeftIcon size={15} />
       </TbBtn>
       <TbBtn onClick={() => p.onExec("redo")} title="Rétablir (Ctrl+Shift+Z)">
-        <RedoIcon />
+        <ArrowUUpRightIcon size={15} />
       </TbBtn>
 
       <Sep />
@@ -354,7 +367,7 @@ function TableGridPicker({ onPick }: { onPick: (rows: number, cols: number) => v
           );
         })}
       </div>
-      <div className="text-center text-[12px] font-[family-name:var(--font-mono)] text-[var(--text-secondary)]">
+      <div className="text-center text-[12px] font-mono text-[var(--text-secondary)]">
         {hover ? `${hover.r + 1} × ${hover.c + 1}` : "Choisis la taille"}
       </div>
     </div>
@@ -428,7 +441,7 @@ function ImageInsertModal({
             <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
         </button>
-        <h3 className="font-[family-name:var(--font-display)] text-[18px] mb-4">Insérer une image</h3>
+        <h3 className="df-title text-[18px] mb-4">Insérer une image</h3>
 
         <div className="flex gap-1 mb-4 border-b border-[var(--border)]">
           {[
@@ -462,7 +475,7 @@ function ImageInsertModal({
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://exemple.com/image.jpg"
                 autoFocus
-                className="w-full px-3 py-[9px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--accent-dark)] transition-colors text-[13px] font-[family-name:var(--font-mono)]"
+                className="w-full px-3 py-[9px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--accent-dark)] transition-colors text-[13px] font-mono"
               />
             </div>
           </div>
@@ -598,97 +611,5 @@ function MenuItem({ onClick, children }: { onClick: () => void; children: React.
 }
 
 function Chevron() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 20 20" fill="none">
-      <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function AlignIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <path d="M3 5h14M3 10h10M3 15h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ListIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <path d="M7 5h10M7 10h10M7 15h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="4" cy="5" r="1" fill="currentColor" />
-      <circle cx="4" cy="10" r="1" fill="currentColor" />
-      <circle cx="4" cy="15" r="1" fill="currentColor" />
-    </svg>
-  );
-}
-
-function HighlightIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <path d="M4 15l3-3 5 5-3 3H4v-5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-      <path d="M7 12l6-6 4 4-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-      <path d="M2 19h16" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ImageIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <rect x="2.5" y="3.5" width="15" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-      <circle cx="7" cy="8" r="1.3" fill="currentColor" />
-      <path d="M3 14l4-4 4 4 3-3 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function CodeIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
-      <path
-        d="M7 6L3 10l4 4M13 6l4 4-4 4"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function TableIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <rect x="2.5" y="3.5" width="15" height="13" rx="1" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M2.5 8h15M2.5 13h15M8 3.5v13M13 3.5v13" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
-  );
-}
-
-function LinkIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <path d="M9 11a3 3 0 004 0l3-3a3 3 0 00-4-4l-1 1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M11 9a3 3 0 00-4 0l-3 3a3 3 0 004 4l1-1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function UndoIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <path d="M6 9L3 6l3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M3 6h9a5 5 0 010 10H7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function RedoIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <path d="M14 9l3-3-3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M17 6H8a5 5 0 000 10h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return <CaretDownIcon size={10} />;
 }

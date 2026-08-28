@@ -5,7 +5,7 @@ import { getDb } from "@/db";
 import { brief } from "@/db/schema";
 import { resolveUser } from "@/lib/api-auth";
 import { createPendingBrief } from "@/lib/briefs-service";
-import type { DataferEnv } from "@/lib/datafer-env";
+import type { CorpusEnv } from "@/lib/corpus-env";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
     });
   }
 
-  const env = getCloudflareContext().env as unknown as DataferEnv;
+  const env = getCloudflareContext().env as unknown as CorpusEnv;
   if (!env.ANALYSIS_QUEUE) {
     return NextResponse.json(
       { error: "ANALYSIS_QUEUE binding missing" },

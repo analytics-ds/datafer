@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { deleteFeedback, updateFeedbackStatus } from "./actions";
+import { CaretDownIcon } from "@/components/icons";
 
 export type FeedbackRow = {
   id: string;
@@ -23,14 +24,14 @@ export type FeedbackRow = {
 
 const CATEGORY_META: Record<FeedbackRow["category"], { label: string; emoji: string; color: string; bg: string }> = {
   bug: { label: "Bug", emoji: "🐛", color: "var(--red)", bg: "var(--red-bg)" },
-  suggestion: { label: "Suggestion", emoji: "💡", color: "var(--accent-dark)", bg: "var(--bg-olive-light)" },
-  question: { label: "Question", emoji: "❓", color: "var(--blue)", bg: "var(--blue-bg)" },
+  suggestion: { label: "Suggestion", emoji: "💡", color: "var(--text)", bg: "var(--state-ok-bg)" },
+  question: { label: "Question", emoji: "❓", color: "var(--text)", bg: "var(--blue-bg)" },
 };
 
 const STATUS_META: Record<FeedbackRow["status"], { label: string; color: string }> = {
-  new: { label: "Nouveau", color: "var(--accent-dark)" },
-  in_progress: { label: "En cours", color: "var(--orange)" },
-  resolved: { label: "Résolu", color: "var(--green)" },
+  new: { label: "Nouveau", color: "var(--text)" },
+  in_progress: { label: "En cours", color: "var(--text)" },
+  resolved: { label: "Résolu", color: "var(--text)" },
 };
 
 export function FeedbackList({ feedbacks }: { feedbacks: FeedbackRow[] }) {
@@ -172,16 +173,14 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
             >
               {status.label}
             </span>
-            <span className="text-[10px] text-[var(--text-muted)] font-[family-name:var(--font-mono)]">
+            <span className="text-[10px] text-[var(--text-muted)] font-mono">
               {formatDate(feedback.createdAt)}
             </span>
           </div>
           <div className="text-[12px] text-[var(--text-secondary)] line-clamp-1">{feedback.message}</div>
         </div>
         <span className="text-[var(--text-muted)] shrink-0">
-          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .2s" }}>
-            <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <CaretDownIcon size={10} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
         </span>
       </button>
 
@@ -192,7 +191,7 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
             <Meta
               label="Page"
               value={
-                <a href={feedback.url} target="_blank" rel="noreferrer" className="text-[var(--accent-dark)] hover:underline break-all font-[family-name:var(--font-mono)] text-[11px]">
+                <a href={feedback.url} target="_blank" rel="noreferrer" className="text-[var(--text)] hover:underline break-all font-mono text-[11px]">
                   {shortPath(feedback.url)}
                 </a>
               }
@@ -277,7 +276,7 @@ function Meta({ label, value, mono, small }: { label: string; value: React.React
         {label}
       </div>
       <div
-        className={`break-all ${mono ? "font-[family-name:var(--font-mono)]" : ""} ${
+        className={`break-all ${mono ? "font-mono" : ""} ${
           small ? "text-[10px] text-[var(--text-muted)]" : "text-[12px]"
         }`}
       >

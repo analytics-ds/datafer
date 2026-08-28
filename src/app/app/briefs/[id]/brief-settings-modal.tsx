@@ -278,7 +278,7 @@ export function BriefSettingsModal({
                       onChange={() => toggleCompetitor(r.link)}
                       className="w-4 h-4 accent-[var(--accent)]"
                     />
-                    <span className="text-[var(--text-muted)] font-[family-name:var(--font-mono)] text-[11px] w-5 shrink-0">
+                    <span className="text-[var(--text-muted)] font-mono text-[11px] w-5 shrink-0">
                       #{i + 1}
                     </span>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -295,7 +295,7 @@ export function BriefSettingsModal({
                     >
                       {host}
                     </span>
-                    <span className="ml-auto text-[10px] text-[var(--text-muted)] font-[family-name:var(--font-mono)] shrink-0">
+                    <span className="ml-auto text-[10px] text-[var(--text-muted)] font-mono shrink-0">
                       {r.wordCount ?? 0} mots
                     </span>
                   </label>
@@ -380,7 +380,7 @@ export function BriefSettingsModal({
                 {addedTerms.map((t) => (
                   <span
                     key={t}
-                    className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-[var(--radius-pill)] bg-[var(--green-bg)] border border-[var(--green)] text-[var(--green)]"
+                    className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-[var(--radius-pill)] bg-[var(--green-bg)] border border-[var(--green)] text-[var(--text)]"
                   >
                     {t}
                     <button
@@ -421,7 +421,7 @@ export function BriefSettingsModal({
             <button
               onClick={save}
               disabled={saving}
-              className="px-4 py-2 text-[13px] font-semibold bg-[var(--accent)] text-[var(--text-inverse)] rounded-[var(--radius-xs)] hover:opacity-90 disabled:opacity-50"
+              className="px-4 py-2 text-[13px] font-semibold bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-xs)] hover:opacity-90 disabled:opacity-50"
             >
               {saving ? "Enregistrement…" : "Enregistrer"}
             </button>

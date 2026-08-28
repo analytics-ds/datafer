@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { faviconUrl } from "@/lib/favicon";
+import { CaretDownIcon } from "@/components/icons";
 
 export type FolderOption = {
   id: string;
@@ -127,15 +128,7 @@ export function FolderSelect({
           className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)]"
           aria-label="Ouvrir la liste"
         >
-          <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
-            <path
-              d="M5 8l5 5 5-5"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <CaretDownIcon size={10} />
         </button>
       </div>
 
@@ -199,7 +192,7 @@ function Option({
     >
       {website !== undefined && <FolderFavicon website={website ?? null} size={16} />}
       <span className="truncate flex-1">{label}</span>
-      {selected && <span className="text-[var(--accent-dark)] text-[12px]">✓</span>}
+      {selected && <span className="text-[var(--text)] text-[12px]">✓</span>}
     </button>
   );
 }

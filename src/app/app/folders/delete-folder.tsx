@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { deleteFolderAction } from "./actions";
+import { TrashIcon } from "@/components/icons";
 
 export function DeleteFolderButton({
   folderId,
@@ -38,7 +39,7 @@ export function DeleteFolderButton({
         }}
         className="inline-flex items-center gap-2 px-4 py-[9px] rounded-[var(--radius-sm)] text-[13px] font-semibold border bg-[var(--bg)] border-[var(--red)]/30 text-[var(--red)] hover:bg-[var(--red-bg)] transition-colors"
       >
-        <TrashIcon />
+        <TrashIcon size={14} />
         Supprimer
       </button>
 
@@ -53,7 +54,7 @@ export function DeleteFolderButton({
             className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-7 w-[500px] max-w-full shadow-[var(--shadow-lg)]"
           >
             <div className="flex items-center gap-2 mb-3 text-[var(--red)]">
-              <TrashIcon />
+              <TrashIcon size={14} />
               <span className="font-semibold text-[16px]">Supprimer le client</span>
             </div>
             <p className="text-[13px] text-[var(--text-secondary)] leading-[1.55] mb-5">
@@ -61,7 +62,7 @@ export function DeleteFolderButton({
               seront également perdus. Pour confirmer, retape le site associé (ou le nom
               du client s&apos;il n&apos;a pas de site) ci-dessous :
             </p>
-            <div className="bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] px-3 py-2 mb-3 font-[family-name:var(--font-mono)] text-[12px] text-[var(--text)] select-all">
+            <div className="bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] px-3 py-2 mb-3 font-mono text-[12px] text-[var(--text)] select-all">
               {expected}
             </div>
             <input
@@ -69,7 +70,7 @@ export function DeleteFolderButton({
               value={confirmation}
               onChange={(e) => setConfirmation(e.target.value)}
               placeholder="Retape le texte ci-dessus"
-              className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-4 outline-none focus:border-[var(--red)] transition-colors text-[14px] bg-[var(--bg-card)] font-[family-name:var(--font-mono)]"
+              className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-4 outline-none focus:border-[var(--red)] transition-colors text-[14px] bg-[var(--bg-card)] font-mono"
               autoFocus
             />
 
@@ -100,19 +101,5 @@ export function DeleteFolderButton({
         </div>
       )}
     </>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-      <path
-        d="M4 6h12M8 6V4a1 1 0 011-1h2a1 1 0 011 1v2m1 0v10a1 1 0 01-1 1H7a1 1 0 01-1-1V6"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
