@@ -7,7 +7,7 @@
  *
  * Volontairement minimal : pas d'images, pas de styles personnalisés.
  * Couvre h1/h2/h3/p, gras/italique/souligné, listes à puces et numérotées,
- * tableaux. Ce qu'on a dans l'éditeur datafer.
+ * tableaux. Ce qu'on a dans l'éditeur corpus.
  */
 
 import { Parser } from "htmlparser2";

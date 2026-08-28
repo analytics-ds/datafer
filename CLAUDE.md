@@ -1,6 +1,12 @@
-# CLAUDE.md — Datafer
+# CLAUDE.md — corpus
 
 Notes opérationnelles pour Claude Code sur ce repo. Les choses évidentes à la lecture du code ne sont pas dupliquées ici — focus sur les pièges et workflows manuels.
+
+## Nom du produit
+
+L'outil s'appelle **corpus**, en minuscules, comme « datashake ». C'est le nom définitif, arrêté après les noms de travail successifs Datafer, Rankshake, RankShaker et le libellé provisoire « Content Optimizer ». Tout ce qui est visible (UI, copy, mails, exports, documentation d'API) dit « corpus ».
+
+L'infrastructure Cloudflare, elle, porte toujours le nom `datafer` : worker `datafer`, base D1 `datafer`, queues `datafer-analysis` / `datafer-sitemap-sync`, URL de prod `datafer.analytics-e0d.workers.dev`, repo GitHub `analytics-ds/datafer`. Ces noms désignent des ressources qui existent réellement sous ce nom : les changer dans le code sans les migrer côté Cloudflare casse le déploiement. Les occurrences restantes de « datafer » dans le code sont donc **toutes** des noms de ressources, jamais le nom du produit.
 
 ## Direction artistique — charte datashake 2026
 

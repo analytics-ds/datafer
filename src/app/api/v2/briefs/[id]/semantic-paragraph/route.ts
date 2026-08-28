@@ -17,7 +17,7 @@ import { NextResponse } from "next/server";
 import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
 import { cosineSim } from "@/lib/analysis";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { DataferEnv } from "@/lib/datafer-env";
+import type { CorpusEnv } from "@/lib/corpus-env";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +61,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     return NextResponse.json({ centroidAvailable: false });
   }
 
-  const env = getCloudflareContext().env as unknown as DataferEnv;
+  const env = getCloudflareContext().env as unknown as CorpusEnv;
   const ai = (env as unknown as { AI?: Ai }).AI;
   if (!ai) {
     return NextResponse.json({ error: "AI binding missing" }, { status: 503 });

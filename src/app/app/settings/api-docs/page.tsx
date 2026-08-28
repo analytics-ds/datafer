@@ -17,12 +17,12 @@ export default function ApiDocsPage() {
 
       <PageHeader
         title={<>Documentation API<span className="df-accent">.</span></>}
-        subtitle="Intègre l'outil dans ta stack pour créer un brief, récupérer le score et envoyer du contenu à scorer."
+        subtitle="Intègre corpus dans ta stack pour créer un brief, récupérer le score et envoyer du contenu à scorer."
       />
 
       <Section title="Vue d'ensemble" dot="var(--accent)">
         <p className="mb-3">
-          L&apos;API expose deux familles d&apos;endpoints pour piloter les briefs depuis l&apos;extérieur
+          L&apos;API corpus expose deux familles d&apos;endpoints pour piloter les briefs depuis l&apos;extérieur
           (script, N8N, Make, Postman, Zapier, etc.). Le modèle est asynchrone : tu crées un brief,
           tu interroges son statut jusqu&apos;à ce qu&apos;il soit prêt, puis tu peux soumettre ton contenu
           pour récupérer un score comparé à celui de la concurrence SERP.
@@ -341,7 +341,7 @@ export default function ApiDocsPage() {
         <Pre>{`import fetch from "node-fetch";
 
 const API = "${BASE}/api/v1";
-const KEY = process.env.DATASHAKE_API_KEY!;
+const KEY = process.env.CORPUS_API_KEY!;
 const auth = { "Authorization": \`Bearer \${KEY}\`, "Content-Type": "application/json" };
 
 async function run(keyword: string, editorHtml: string) {
@@ -376,7 +376,7 @@ async function run(keyword: string, editorHtml: string) {
 
       <Section title="API V2, lecture granulaire" dot="var(--accent-dark)">
         <p className="mb-3">
-          La V2 est en lecture seule. Elle expose toute la richesse de l&apos;analyse
+          La V2 est en lecture seule. Elle expose toute la richesse de l&apos;analyse corpus
           (SERP, concurrents, NLP, scoring détaillé, Haloscan) sur des endpoints séparés
           pour ne charger que ce dont tu as besoin. Auth identique à la V1, même clé.
         </p>
@@ -594,7 +594,7 @@ GET /api/v2/briefs/{id}/competitors/3/download?format=docx
         <p className="mb-2 text-[var(--text-muted)]">
           Embed un paragraphe via Workers AI bge-m3 et retourne le cosinus vs le centroïde
           sémantique top 10 du brief. Sert à scorer chaque paragraphe individuellement et
-          identifier ceux qui dévient du sujet. Utilisé en live par l&apos;éditeur
+          identifier ceux qui dévient du sujet. Utilisé en live par l&apos;éditeur corpus
           (debounce 2s par paragraphe modifié).
         </p>
         <Pre>{`POST /api/v2/briefs/{id}/semantic-paragraph

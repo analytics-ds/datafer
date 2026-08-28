@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
 import { getAuth } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
-import type { DataferEnv } from "@/lib/datafer-env";
+import type { CorpusEnv } from "@/lib/corpus-env";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,7 @@ type Body = {
 };
 
 const DEFAULT_TO = "pierre@datashake.fr";
-const DEFAULT_FROM = "datashake Feedback <onboarding@resend.dev>";
+const DEFAULT_FROM = "corpus Feedback <onboarding@resend.dev>";
 
 export async function POST(req: Request) {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
   }
 
   const { env } = getCloudflareContext();
-  const e = env as DataferEnv;
+  const e = env as CorpusEnv;
   const db = drizzle(e.DB, { schema });
 
   const id = crypto.randomUUID();
@@ -112,7 +112,7 @@ export async function POST(req: Request) {
       screenshotsCount: screenshots.length,
     });
 
-    const subject = `${categoryTag(category)} feedback de ${session.user.name}`;
+    const subject = `${categoryTag(category)} corpus feedback de ${session.user.name}`;
 
     const result = await sendEmail({
       apiKey: e.RESEND_API_KEY,
@@ -162,7 +162,7 @@ function renderFeedbackEmail(p: {
   <div style="max-width:560px;margin:0 auto;background:#FFFFFF;border:1px solid #E8E8E8;border-radius:14px;overflow:hidden">
     <div style="padding:20px 24px;border-bottom:1px solid #E8E8E8;background:#F5F5F5;">
       <div style="font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:rgba(16,16,16,0.45);margin-bottom:4px">
-        datashake · Nouveau feedback
+        corpus · Nouveau feedback
       </div>
       <div style="font-size:22px;font-weight:700;letter-spacing:-0.5px">${categoryTag(p.category)} ${label}</div>
     </div>

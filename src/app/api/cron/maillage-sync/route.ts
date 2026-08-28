@@ -13,7 +13,7 @@ import { asc, isNotNull, eq, sql } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/db";
 import { client, clientUrlIndex } from "@/db/schema";
-import type { DataferEnv } from "@/lib/datafer-env";
+import type { CorpusEnv } from "@/lib/corpus-env";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ const MAX_CLIENTS_PER_TICK = 10;
 
 export async function POST(req: Request) {
   const { env } = getCloudflareContext();
-  const e = env as unknown as DataferEnv;
+  const e = env as unknown as CorpusEnv;
   const expected = e.CRON_SECRET;
   if (!expected) {
     return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });

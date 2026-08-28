@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getAuth } from "@/lib/auth";
 import { createPendingBrief } from "@/lib/briefs-service";
 import { awardBriefXp } from "@/lib/xp";
-import type { DataferEnv } from "@/lib/datafer-env";
+import type { CorpusEnv } from "@/lib/corpus-env";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   const created = await createPendingBrief(session.user.id, input);
   if (!created.ok) return NextResponse.json({ error: created.error }, { status: created.status });
 
-  const env = getCloudflareContext().env as unknown as DataferEnv;
+  const env = getCloudflareContext().env as unknown as CorpusEnv;
   if (!env.ANALYSIS_QUEUE) {
     return NextResponse.json(
       { error: "ANALYSIS_QUEUE binding missing" },

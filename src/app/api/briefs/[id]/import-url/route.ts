@@ -6,7 +6,7 @@ import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
 import { crawlPage } from "@/lib/analysis";
-import type { DataferEnv } from "@/lib/datafer-env";
+import type { CorpusEnv } from "@/lib/corpus-env";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +44,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "brief not ready" }, { status: 409 });
   }
 
-  const env = getCloudflareContext().env as unknown as DataferEnv;
+  const env = getCloudflareContext().env as unknown as CorpusEnv;
   const page = await Promise.race([
     crawlPage(url, env).catch(() => null),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), IMPORT_TIMEOUT_MS)),

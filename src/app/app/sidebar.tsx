@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth-client";
 import { faviconUrl } from "@/lib/favicon";
-import { LogoApp } from "@/components/brand";
+import { LogoAppCompact } from "@/components/brand";
 import {
   SidebarIcon,
   CaretRightIcon,
@@ -39,11 +39,11 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
     // on ne peut pas le lire dans l'initializer du useState sans provoquer un
     // mismatch d'hydratation (le serveur rend toujours "ouverte").
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (localStorage.getItem("rs-sidebar") === "closed") setCollapsed(true);
+    if (localStorage.getItem("corpus-sidebar") === "closed") setCollapsed(true);
   }, []);
   const toggleCollapsed = () =>
     setCollapsed((c) => {
-      localStorage.setItem("rs-sidebar", c ? "open" : "closed");
+      localStorage.setItem("corpus-sidebar", c ? "open" : "closed");
       return !c;
     });
 
@@ -86,7 +86,7 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
   return (
     <aside className="w-[260px] shrink-0 h-screen sticky top-0 bg-[var(--bg-card)] border-r border-[var(--border)] flex flex-col">
       <div className="pl-5 pr-3 h-[68px] flex items-center justify-between border-b border-[var(--border)]">
-        <LogoApp height={24} />
+        <LogoAppCompact height={22} />
         <button
           onClick={toggleCollapsed}
           title="Masquer le menu"

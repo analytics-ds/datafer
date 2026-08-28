@@ -102,9 +102,58 @@ export function LogoWordmark({ height = 20, className }: LogoProps) {
   );
 }
 
-/** Marque du chrome interne (sidebar, en-têtes d'écrans partagés).
-    L'outil n'affiche aucun nom de produit : seul le bloc-marque datashake
-    identifie l'interface. */
+/** Nom du produit. Il s'écrit « corpus », en minuscules, comme « datashake ».
+    En Season Sans, la typographie de titre de la charte, et en noir ou blanc
+    selon le fond, jamais en couleur secondaire. */
+export function ProductName({
+  size = 15,
+  className,
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`df-title ${className ?? ""}`}
+      style={{ fontSize: size, lineHeight: 1 }}
+    >
+      corpus
+    </span>
+  );
+}
+
+/** Verrou complet : bloc-marque datashake, filet de séparation, nom du
+    produit. À utiliser partout où la marque n'est pas encore posée, donc sur
+    l'écran de connexion et sur les vues partagées au client.
+    Le nom est juxtaposé au logo, jamais accolé : la charte interdit de
+    modifier le bloc-marque, pas de le poser à côté d'un autre élément. */
 export function LogoApp({ height = 22, className }: LogoProps) {
-  return <LogoDatashake height={height} className={className} />;
+  return (
+    <span
+      className={`inline-flex items-center text-current ${className ?? ""}`}
+      style={{ gap: height * 0.5 }}
+    >
+      <LogoDatashake height={height} />
+      <span
+        aria-hidden
+        style={{ width: 1, height: height * 1.1, background: "currentColor", opacity: 0.2 }}
+      />
+      <ProductName size={height * 0.78} />
+    </span>
+  );
+}
+
+/** Verrou compact : symbole seul + nom du produit. Réservé au chrome interne
+    (sidebar), où la marque est déjà identifiée — c'est exactement l'usage que
+    la charte prévoit pour le symbole seul. */
+export function LogoAppCompact({ height = 22, className }: LogoProps) {
+  return (
+    <span
+      className={`inline-flex items-center text-current ${className ?? ""}`}
+      style={{ gap: height * 0.42 }}
+    >
+      <LogoMark size={height} />
+      <ProductName size={height * 0.86} />
+    </span>
+  );
 }

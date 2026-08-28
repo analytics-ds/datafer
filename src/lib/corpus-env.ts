@@ -1,5 +1,5 @@
 /**
- * Type de l'env Cloudflare consommé par le code Datafer (briefs-service,
+ * Type de l'env Cloudflare consommé par le code corpus (briefs-service,
  * analysis, etc.). Définition centralisée pour pouvoir l'utiliser depuis
  * 2 contextes différents :
  *   - le worker Next.js (OpenNext) via getCloudflareContext().env
@@ -20,7 +20,7 @@ export type AnalysisMessage = {
   input: CreateBriefInput;
 };
 
-export type DataferEnv = {
+export type CorpusEnv = {
   // Bindings
   DB: D1Database;
   AI?: Ai;

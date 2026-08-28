@@ -1,7 +1,7 @@
-import { LogoDatashake, LogoMark } from "@/components/brand";
+import { LogoApp, LogoMark } from "@/components/brand";
 
 /**
- * Aperçu stylisé de l'outil affiché à gauche de l'écran de login.
+ * Aperçu stylisé de corpus affiché à gauche de l'écran de login.
  * Reproduit en HTML/CSS une "photo" de l'outil (score ring, éditeur,
  * sidebar NLP) pour donner envie avant la connexion.
  *
@@ -24,7 +24,7 @@ export function LoginPreview() {
 
       {/* Header brand */}
       <div className="relative z-10 flex items-center gap-3 text-[var(--text)]">
-        <LogoDatashake height={22} />
+        <LogoApp height={22} />
       </div>
 
       {/* Mock de l'interface */}
