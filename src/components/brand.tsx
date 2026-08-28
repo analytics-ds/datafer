@@ -143,9 +143,9 @@ export function LogoApp({ height = 22, className }: LogoProps) {
       <LogoDatashake height={height} />
       <span
         aria-hidden
-        style={{ width: 1, height: height * 1.25, background: "currentColor", opacity: 0.2 }}
+        style={{ width: 1, height: height * 1.5, background: "currentColor", opacity: 0.2 }}
       />
-      <ProductName size={height * 1.05} />
+      <ProductName size={height * 1.4} />
     </span>
   );
 }
@@ -160,7 +160,7 @@ export function LogoAppCompact({ height = 22, className }: LogoProps) {
       style={{ gap: height * 0.42 }}
     >
       <LogoMark size={height} />
-      <ProductName size={height * 1.1} />
+      <ProductName size={height * 1.55} />
     </span>
   );
 }
