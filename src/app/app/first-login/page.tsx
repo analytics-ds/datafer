@@ -25,7 +25,7 @@ export default async function FirstLoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-[var(--bg)] px-4 py-12">
       <div className="w-full max-w-[460px]">
-        <span className="inline-flex items-center px-3 py-1 bg-[var(--orange-bg)] text-[var(--text)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.6px] uppercase mb-5">
+        <span className="inline-flex items-center px-3 py-1 bg-[var(--orange-bg)] text-[var(--text)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px] uppercase mb-5">
           Premier login
         </span>
         <h1 className="df-title text-[40px] leading-[1.05] tracking-[-1px] mb-2">

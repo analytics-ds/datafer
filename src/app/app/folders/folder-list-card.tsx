@@ -85,7 +85,7 @@ export function FolderListCard({ folder }: { folder: Folder }) {
                 className="inline-flex items-center gap-[5px] px-[8px] py-[2px] rounded-full text-[11px] font-medium border bg-[var(--bg-warm)] text-[var(--text-secondary)]"
                 style={{ borderColor: "var(--border)" }}
               >
-                <span className="text-[9px] uppercase tracking-[0.5px] opacity-75">Vol</span>
+                <span className="text-[9px] uppercase tracking-[0.2px] opacity-75">Vol</span>
                 <span className="font-mono font-semibold">
                   {fmtNum(folder.totalVolume)}
                 </span>

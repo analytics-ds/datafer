@@ -46,7 +46,7 @@ export function LevelCard({
       <div className="flex items-center gap-4">
         <div className="shrink-0 w-16 h-16 rounded-full bg-[var(--bg-olive-light)] flex items-center justify-center border-2 border-[var(--accent-dark)]">
           <div className="flex flex-col items-center leading-none">
-            <span className="text-[8px] font-semibold uppercase tracking-[0.5px] text-[var(--text)]">
+            <span className="text-[8px] font-semibold uppercase tracking-[0.2px] text-[var(--text)]">
               Lv
             </span>
             <span className="df-title text-[24px] text-[var(--text)] leading-none">
@@ -115,7 +115,7 @@ export function LevelCard({
       {/* Top 5 lifetime */}
       {topUsers.length > 0 && (
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-2">
             Top 5 de l&apos;équipe (cumul lifetime)
           </div>
           <div className="flex flex-col">
@@ -181,7 +181,7 @@ function RuleCard({
     <div className="border border-[var(--border)] rounded-[var(--radius-xs)] p-3 flex flex-col gap-1">
       <div className="flex items-center gap-1.5">
         <span className="w-[5px] h-[5px] rounded-full" style={{ background: color }} />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)]">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
           {label}
         </span>
       </div>

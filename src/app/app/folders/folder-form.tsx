@@ -10,7 +10,7 @@ export function FolderForm({ scope }: { scope: "personal" | "agency" }) {
     >
       <input type="hidden" name="scope" value={scope} />
 
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
         Nom du client
       </label>
       <input
@@ -22,7 +22,7 @@ export function FolderForm({ scope }: { scope: "personal" | "agency" }) {
         className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-5 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
 
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
         Site web <span className="text-[var(--text-muted)] font-normal normal-case tracking-normal">(favicon auto)</span>
       </label>
       <input

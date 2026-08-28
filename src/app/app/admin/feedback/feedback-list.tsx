@@ -168,7 +168,7 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
           <div className="flex items-center gap-2 mb-[2px]">
             <span className="font-semibold text-[13px]">{feedback.userName}</span>
             <span
-              className="px-[7px] py-[1px] rounded-[var(--radius-pill)] text-[9px] font-bold uppercase tracking-[0.5px]"
+              className="px-[7px] py-[1px] rounded-[var(--radius-pill)] text-[9px] font-bold uppercase tracking-[0.2px]"
               style={{ color: status.color, background: `${status.color}1A` }}
             >
               {status.label}
@@ -202,7 +202,7 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
             {feedback.userAgent && <Meta label="User-Agent" value={feedback.userAgent} mono small />}
           </div>
 
-          <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[5px]">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[5px]">
             Message
           </div>
           <div className="bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] px-4 py-3 text-[13px] leading-[1.55] whitespace-pre-wrap mb-4">
@@ -211,7 +211,7 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
 
           {feedback.screenshots.length > 0 && (
             <>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[5px]">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[5px]">
                 Captures d&apos;écran ({feedback.screenshots.length})
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
@@ -272,7 +272,7 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
 function Meta({ label, value, mono, small }: { label: string; value: React.ReactNode; mono?: boolean; small?: boolean }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[2px]">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[2px]">
         {label}
       </div>
       <div

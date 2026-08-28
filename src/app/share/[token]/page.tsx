@@ -94,7 +94,7 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
           ) : (
             <span className="w-10 h-10 rounded-[var(--radius-xs)] bg-[var(--bg-warm)]" />
           )}
-          <span className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
             Client
           </span>
         </div>

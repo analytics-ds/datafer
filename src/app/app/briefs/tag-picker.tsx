@@ -238,7 +238,7 @@ export function TagPicker({
 
             {canCreate && (
               <div className="border-t border-[var(--border)] mt-1 pt-2 px-2">
-                <div className="text-[10px] uppercase tracking-[0.4px] text-[var(--text-muted)] mb-1 px-1">
+                <div className="text-[10px] uppercase tracking-[0.2px] text-[var(--text-muted)] mb-1 px-1">
                   Nouveau tag
                 </div>
                 <div className="flex items-center gap-1 px-1 mb-2">

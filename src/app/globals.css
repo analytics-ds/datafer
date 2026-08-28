@@ -217,6 +217,17 @@ body {
     letter-spacing: 0;
   }
 
+  /* Micro-libellés de section et de métrique (SCORE, MOTS, TES CLIENTS…).
+     Ils sont en Inter, comme tout ce qui n'est pas un titre, et gardent un
+     interlettrage quasi nul : la version très espacée donnait un rendu de
+     maquette générique plutôt qu'une interface tenue. */
+  .df-label {
+    font-family: var(--font-body), -apple-system, sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+  }
+
   /* Code réel uniquement (documentation API, clés, extraits JSON). */
   .font-code,
   pre,

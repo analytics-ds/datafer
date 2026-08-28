@@ -284,7 +284,7 @@ function Pill({
         borderColor: tone === "best" ? p.border : `${p.border}40`,
       }}
     >
-      <span className="text-[9px] uppercase tracking-[0.5px] opacity-75">{label}</span>
+      <span className="text-[9px] uppercase tracking-[0.2px] opacity-75">{label}</span>
       <span className="font-mono font-semibold">{value}</span>
     </span>
   );

@@ -271,7 +271,7 @@ function DateRangeFilter({
     <FilterDropdown label="Date" count={count}>
       {() => (
         <div className="px-3 py-2 space-y-2 w-[230px]">
-          <label className="block text-[11px] uppercase tracking-[0.4px] text-[var(--text-muted)]">
+          <label className="block text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)]">
             Du
             <input
               type="date"
@@ -280,7 +280,7 @@ function DateRangeFilter({
               className="block w-full mt-1 px-2 py-[6px] text-[12px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)]"
             />
           </label>
-          <label className="block text-[11px] uppercase tracking-[0.4px] text-[var(--text-muted)]">
+          <label className="block text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)]">
             Au
             <input
               type="date"
@@ -324,7 +324,7 @@ function ScoreRangeFilter({
     <FilterDropdown label="Score" count={count}>
       {() => (
         <div className="px-3 py-2 space-y-2 w-[230px]">
-          <label className="block text-[11px] uppercase tracking-[0.4px] text-[var(--text-muted)]">
+          <label className="block text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)]">
             Min
             <input
               type="number"
@@ -336,7 +336,7 @@ function ScoreRangeFilter({
               className="block w-full mt-1 px-2 py-[6px] text-[12px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)]"
             />
           </label>
-          <label className="block text-[11px] uppercase tracking-[0.4px] text-[var(--text-muted)]">
+          <label className="block text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)]">
             Max
             <input
               type="number"

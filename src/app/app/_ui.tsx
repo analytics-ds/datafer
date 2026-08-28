@@ -28,7 +28,7 @@ export function PageHeader({
 
 export function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
+    <h2 className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
       <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent)]" />
       {children}
     </h2>
@@ -89,7 +89,7 @@ export function PrimaryButton({
 
 export function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+    <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
       {children}
     </label>
   );
