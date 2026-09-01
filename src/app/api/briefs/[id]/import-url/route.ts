@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
-import { crawlPage } from "@/lib/analysis";
+import { crawlPage, type CrawlDiag } from "@/lib/analysis";
 import type { CorpusEnv } from "@/lib/corpus-env";
 
 export const dynamic = "force-dynamic";
@@ -45,14 +45,29 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   const env = getCloudflareContext().env as unknown as CorpusEnv;
+  const diag: CrawlDiag = {};
   const page = await Promise.race([
-    crawlPage(url, env).catch(() => null),
+    crawlPage(url, env, diag).catch(() => null),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), IMPORT_TIMEOUT_MS)),
   ]);
 
   if (!page || page.wordCount < 30) {
+    // Un 401/402/403 renvoyé par Bright Data n'est pas un problème de page :
+    // c'est le filet anti-bot qui est hors service (compte suspendu pour
+    // solde, ou token périmé). Vu le 2026-09-01 : Web Unlocker 401 + Scraping
+    // Browser 403 sur 100% des URLs, alors que la page cible était lisible en
+    // navigateur. Le message générique envoyait chercher la cause du mauvais
+    // côté, on nomme donc la vraie.
+    const providerStatus = [diag.level2Status, diag.level3Status].find(
+      (s) => s === 401 || s === 402 || s === 403,
+    );
     return NextResponse.json(
-      { error: "Impossible de récupérer un contenu exploitable sur cette URL (page vide, bloquée ou rendue côté client)." },
+      {
+        error: providerStatus
+          ? `Le service de déblocage anti-bot ne répond plus (Bright Data HTTP ${providerStatus}) : compte à vérifier. La page est protégée, pas vide.`
+          : "Impossible de récupérer un contenu exploitable sur cette URL (page vide, bloquée ou rendue côté client).",
+        diag,
+      },
       { status: 502 },
     );
   }

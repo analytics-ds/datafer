@@ -825,6 +825,18 @@ const GOOGLEBOT_UA =
  *   - ~3 sites en Bright Data, dont 1 premium = ~$0.0055/brief
  *   - 200 briefs/mois ≈ $1.10
  */
+/**
+ * Diagnostic optionnel rempli par crawlPage : statut HTTP renvoyé par chaque
+ * niveau de la cascade. Permet à l'appelant (import-url) de distinguer « page
+ * vraiment vide » de « notre filet anti-bot est HS » — un 401/402/403 côté
+ * Bright Data veut dire compte suspendu ou token périmé, pas page illisible.
+ */
+export type CrawlDiag = {
+  level1Status?: number;
+  level2Status?: number;
+  level3Status?: number;
+};
+
 export async function crawlPage(
   url: string,
   env: {
@@ -832,6 +844,7 @@ export async function crawlPage(
     BRIGHTDATA_ZONE?: string;
     BRIGHTDATA_BROWSER_WSS?: string;
   },
+  diag?: CrawlDiag,
 ): Promise<PageContent | null> {
   // Logs structurés `[crawl]` : permettent d'agréger en prod le taux de
   // réussite par niveau et de comprendre pourquoi une page fallback. Format
@@ -867,6 +880,7 @@ export async function crawlPage(
         console.log(`[crawl] niveau=1 fallback raison=wc_faible(${parsed.wordCount}) url=${url}`);
       }
     } else {
+      if (diag) diag.level1Status = r.status;
       console.log(`[crawl] niveau=1 fallback raison=http_${r.status} url=${url}`);
     }
   } catch {
@@ -879,7 +893,7 @@ export async function crawlPage(
   let partial: PageContent | null = null;
 
   // 2. Bright Data Web Unlocker (zone web_unlocker1, Premium domains activé)
-  const fullHtml = await crawlWithBrightData(url, env);
+  const fullHtml = await crawlWithBrightData(url, env, diag);
   if (fullHtml && !looksLikeChallengePage(fullHtml)) {
     const parsed = parseHTML(fullHtml);
     // Seuil 400 mots : sous ce seuil, le Web Unlocker a probablement servi
@@ -901,7 +915,7 @@ export async function crawlPage(
   // Pour les SPAs ultra-blindées (Nike, Zalando, etc.) qui retournent un
   // rendu partiel via Web Unlocker. Plus cher, donc utilisé uniquement
   // quand les niveaux 1+2 n'ont pas ramené assez de contenu.
-  const browserHtml = await crawlWithBrightDataBrowser(url, env);
+  const browserHtml = await crawlWithBrightDataBrowser(url, env, diag);
   if (browserHtml && !looksLikeChallengePage(browserHtml)) {
     const parsed = parseHTML(browserHtml);
     // On garde le niveau 3 seulement s'il dépasse le seuil minimal absolu
@@ -949,6 +963,7 @@ export async function crawlPage(
 async function crawlWithBrightDataBrowser(
   url: string,
   env: { BRIGHTDATA_BROWSER_WSS?: string },
+  diag?: CrawlDiag,
 ): Promise<string | null> {
   const wssUrl = env.BRIGHTDATA_BROWSER_WSS;
   if (!wssUrl) return null;
@@ -983,6 +998,7 @@ async function crawlWithBrightDataBrowser(
     return null;
   }
   if (wsResp.status !== 101 || !wsResp.webSocket) {
+    if (diag) diag.level3Status = wsResp.status;
     console.log("[bd-browser] no websocket on response", { url, status: wsResp.status });
     return null;
   }
@@ -1166,6 +1182,7 @@ async function crawlWithBrightDataBrowser(
 async function crawlWithBrightData(
   url: string,
   env: { BRIGHTDATA_TOKEN?: string; BRIGHTDATA_ZONE?: string },
+  diag?: CrawlDiag,
 ): Promise<string | null> {
   try {
     const token = env.BRIGHTDATA_TOKEN;
@@ -1185,6 +1202,7 @@ async function crawlWithBrightData(
       signal: AbortSignal.timeout(50000),
     });
     if (!r.ok) {
+      if (diag) diag.level2Status = r.status;
       console.log("[brightdata] http error", { url, status: r.status });
       return null;
     }
@@ -1251,6 +1269,13 @@ function looksLikeChallengePage(html: string): boolean {
     sample.includes("checking your browser") ||
     sample.includes("challenge-platform") ||
     sample.includes("just a moment") ||
+    // Vercel Attack Challenge Mode : renvoie un 429 + une page « Vercel
+    // Security Checkpoint » à tout client HTTP, même avec un UA Googlebot.
+    // Vu le 2026-09-01 sur formation.atelierdeschefs.fr. Sans cette
+    // détection, un rendu du checkpoint remonté par un provider passerait
+    // pour du contenu (≈300 mots de boilerplate).
+    sample.includes("vercel security checkpoint") ||
+    sample.includes("_vercel/protection") ||
     sample.includes("ray id") ||
     (sample.includes("cloudflare") && html.length < 5000)
   );
