@@ -1133,6 +1133,26 @@ async function crawlWithBrightDataBrowser(
             "*.mp4*", "*.webm*", "*.mov*", "*.m4v*", "*.avi*", "*.mkv*",
             "*.mp3*", "*.wav*", "*.ogg*", "*.m4a*",
             "*.pdf*", "*.zip*",
+            // Scripts tiers : ils pesent souvent 30 a 50% du poids d'une page
+            // et n'ont aucun effet sur le texte qu'on extrait. On garde en
+            // revanche le CSS et le JS du site lui-meme : sans CSS le contenu
+            // masque redeviendrait visible et gonflerait le wordCount, et sans
+            // JS le niveau 3 n'aurait plus de raison d'etre (il n'existe que
+            // pour rendre les SPA).
+            "*googletagmanager.com*", "*google-analytics.com*",
+            "*analytics.google.com*", "*doubleclick.net*",
+            "*googlesyndication.com*", "*googleadservices.com*",
+            "*facebook.net*", "*facebook.com/tr*", "*connect.facebook*",
+            "*hotjar.com*", "*clarity.ms*", "*segment.io*", "*segment.com*",
+            "*criteo.com*", "*criteo.net*", "*taboola.com*", "*outbrain.com*",
+            "*adnxs.com*", "*rubiconproject.com*", "*pubmatic.com*",
+            "*bing.com/bat*", "*clarity.microsoft.com*",
+            "*intercom.io*", "*intercomcdn.com*", "*crisp.chat*",
+            "*zdassets.com*", "*zendesk.com/embeddable*", "*tawk.to*",
+            "*cookielaw.org*", "*onetrust.com*", "*cookiebot.com*",
+            "*axeptio.eu*", "*didomi.io*", "*trustcommander.net*",
+            "*hs-scripts.com*", "*hubspot.com/__ptq*", "*matomo*",
+            "*newrelic.com*", "*nr-data.net*", "*sentry.io*", "*datadoghq*",
           ],
         },
         sid,
