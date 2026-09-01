@@ -47,7 +47,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const env = getCloudflareContext().env as unknown as CorpusEnv;
   const diag: CrawlDiag = {};
   const page = await Promise.race([
-    crawlPage(url, env, diag).catch(() => null),
+    crawlPage(url, env, { diag }).catch(() => null),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), IMPORT_TIMEOUT_MS)),
   ]);
 

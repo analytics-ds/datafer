@@ -2892,6 +2892,7 @@ function InsightsPane({
       <div className="col-span-full">
         <SerpAnalyticsCharts
           serp={serp}
+          myUrl={myUrl}
           userScore={userScore}
           userSeoScore={userSeoScore}
           userWordCount={userWordCount}
@@ -2912,6 +2913,7 @@ function InsightsPane({
  */
 function SerpAnalyticsCharts({
   serp,
+  myUrl,
   userScore,
   userSeoScore,
   userWordCount,
@@ -2919,22 +2921,36 @@ function SerpAnalyticsCharts({
   userH3Count,
 }: {
   serp: SerpResult[];
+  myUrl?: string | null;
   userScore: number;
   userSeoScore: number;
   userWordCount: number;
   userH2Count: number;
   userH3Count: number;
 }) {
-  const vp = serp.filter((r) => (r.wordCount ?? 0) > 0);
+  const crawled = serp.filter((r) => (r.wordCount ?? 0) > 0);
+  // Si la page analysee ressort elle-meme dans le SERP, on la retire du panel
+  // concurrent : sinon elle apparait deux fois dans le graphique, et elle se
+  // compte dans sa propre moyenne SERP.
+  const vp = myUrl ? crawled.filter((r) => !sameHost(r.link, myUrl)) : crawled;
   if (vp.length === 0) return null;
+
+  // La page analysee porte son propre domaine plutot qu'un « Toi » : ces
+  // graphiques partent en capture chez le client, ou « Toi » ne veut rien
+  // dire. Repli sur « Ta page » quand aucune URL n'est renseignee.
+  const myLabel = myHostOf(myUrl);
+  // Si la page est elle-meme dans le SERP, on affiche sa position Google.
+  const myPosition = myUrl
+    ? (crawled.find((r) => sameHost(r.link, myUrl))?.position ?? null)
+    : null;
 
   const scoreSeries = buildSeries(
     vp.map((r) => ({ label: hostOf(r.link, r.position), value: r.score ?? 0, position: r.position })),
-    { label: "Toi", value: userSeoScore, position: -1 },
+    { label: myLabel, value: userSeoScore, position: -1 },
   );
   const wcSeries = buildSeries(
     vp.map((r) => ({ label: hostOf(r.link, r.position), value: r.wordCount ?? 0, position: r.position })),
-    { label: "Toi", value: userWordCount, position: -1 },
+    { label: myLabel, value: userWordCount, position: -1 },
   );
   const headingSeries = buildSeries(
     vp.map((r) => ({
@@ -2945,7 +2961,7 @@ function SerpAnalyticsCharts({
       position: r.position,
     })),
     {
-      label: "Toi",
+      label: myLabel,
       value: userH2Count + userH3Count,
       h2: userH2Count,
       h3: userH3Count,
@@ -2960,26 +2976,27 @@ function SerpAnalyticsCharts({
       label: hostOf(r.link, r.position),
       isMe: false,
     })),
-    { x: userWordCount, y: userSeoScore, label: "Toi", isMe: true },
+    { x: userWordCount, y: userSeoScore, label: myLabel, isMe: true },
   ];
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <ChartCard title="Score SEO concurrents vs toi" dotColor="var(--accent)" subtitle={`Moyenne SERP : ${avg(scoreSeries.competitors.map((c) => c.value))}/100 — Toi : ${userSeoScore}/100`}>
-        <BarChartHorizontal series={scoreSeries} max={100} suffix="/100" />
+      <ChartCard title="Score SEO vs concurrents" dotColor="var(--accent)" subtitle={`Moyenne SERP : ${avg(scoreSeries.competitors.map((c) => c.value))}/100 — ${myLabel} : ${userSeoScore}/100`}>
+        <BarChartVertical series={scoreSeries} max={100} suffix="/100" myPosition={myPosition} />
       </ChartCard>
 
-      <ChartCard title="Volume de contenu" dotColor="var(--green)" subtitle={`Moyenne SERP : ${avg(wcSeries.competitors.map((c) => c.value)).toLocaleString("fr-FR")} mots — Toi : ${userWordCount.toLocaleString("fr-FR")} mots`}>
-        <BarChartHorizontal
+      <ChartCard title="Volume de contenu" dotColor="var(--green)" subtitle={`Moyenne SERP : ${avg(wcSeries.competitors.map((c) => c.value)).toLocaleString("fr-FR")} mots — ${myLabel} : ${userWordCount.toLocaleString("fr-FR")} mots`}>
+        <BarChartVertical
           series={wcSeries}
           max={Math.max(userWordCount, ...wcSeries.competitors.map((c) => c.value))}
           suffix=" mots"
           colorMode="goldilocks"
+          myPosition={myPosition}
         />
       </ChartCard>
 
-      <ChartCard title="Sous-titres (H2 + H3)" dotColor="var(--brand-yellow)" subtitle={`Moyenne SERP : ${avg(headingSeries.competitors.map((c) => c.value))} — Toi : ${userH2Count + userH3Count}`}>
-        <BarChartHorizontalStacked series={headingSeries} />
+      <ChartCard title="Sous-titres (H2 + H3)" dotColor="var(--brand-yellow)" subtitle={`Moyenne SERP : ${avg(headingSeries.competitors.map((c) => c.value))} — ${myLabel} : ${userH2Count + userH3Count}`}>
+        <BarChartVerticalStacked series={headingSeries} myPosition={myPosition} />
       </ChartCard>
 
       <ChartCard title="Score vs Volume" dotColor="var(--purple)" subtitle="Plus en haut à droite = mieux">
@@ -2987,8 +3004,8 @@ function SerpAnalyticsCharts({
       </ChartCard>
 
       <div className="lg:col-span-2">
-        <ChartCard title="Ton positionnement" dotColor={userScore >= avg(scoreSeries.competitors.map((c) => c.value)) ? "var(--green)" : "var(--orange)"} subtitle={positioningSubtitle(userSeoScore, scoreSeries.competitors.map((c) => c.value))}>
-          <PositioningGauge userScore={userSeoScore} competitors={scoreSeries.competitors.map((c) => c.value)} />
+        <ChartCard title="Positionnement" dotColor={userScore >= avg(scoreSeries.competitors.map((c) => c.value)) ? "var(--green)" : "var(--orange)"} subtitle={positioningSubtitle(userSeoScore, scoreSeries.competitors.map((c) => c.value))}>
+          <PositioningGauge userScore={userSeoScore} competitors={scoreSeries.competitors.map((c) => c.value)} myLabel={myLabel} />
         </ChartCard>
       </div>
     </div>
@@ -3016,11 +3033,35 @@ function hostOf(url: string, fallbackPosition: number): string {
   }
 }
 
+/**
+ * Libelle de la page analysee dans les graphiques comparatifs : son domaine,
+ * comme les concurrents, plutot qu'un « Toi » qui ne veut rien dire une fois
+ * la capture envoyee au client.
+ */
+function myHostOf(url?: string | null): string {
+  if (!url) return "Ta page";
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "Ta page";
+  }
+}
+
+function sameHost(a: string, b: string): boolean {
+  try {
+    return (
+      new URL(a).hostname.replace(/^www\./, "") === new URL(b).hostname.replace(/^www\./, "")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function positioningSubtitle(userScore: number, competitors: number[]): string {
   if (competitors.length === 0) return "";
   const sorted = [...competitors, userScore].sort((a, b) => b - a);
   const rank = sorted.indexOf(userScore) + 1;
-  return `Tu es classé #${rank} sur ${sorted.length} (avec ${userScore}/100)`;
+  return `Classé #${rank} sur ${sorted.length} (avec ${userScore}/100)`;
 }
 
 function ChartCard({
@@ -3051,95 +3092,167 @@ function ChartCard({
 type BarPoint = { label: string; value: number; position: number };
 type StackedBarPoint = BarPoint & { h2: number; h3: number };
 
-function BarChartHorizontal<T extends BarPoint>({
+
+
+/**
+ * Barres verticales facon Surfer : une colonne par page, valeur au-dessus,
+ * domaine et rang Google en dessous, la page analysee en dernier et en blanc.
+ * Format demande par Pierre le 2026-09-01 : il se lit d'un coup d'oeil dans
+ * une capture envoyee au client, la ou les barres horizontales demandaient de
+ * suivre une ligne. Les couleurs restent celles des barres horizontales
+ * (ecart a la moyenne SERP).
+ */
+function BarChartVertical<T extends BarPoint>({
   series,
   max,
   suffix = "",
   colorMode = "higher",
+  myPosition,
 }: {
   series: { competitors: T[]; me: T; max: number };
   max: number;
   suffix?: string;
-  /**
-   * "higher" : plus c'est haut mieux c'est (score SEO).
-   * "goldilocks" : autour de la moyenne = idéal (volume de mots, sous-titres).
-   */
   colorMode?: "higher" | "goldilocks";
+  myPosition?: number | null;
 }) {
-  const all = [...series.competitors.sort((a, b) => a.position - b.position), series.me];
+  const all = [...series.competitors].sort((a, b) => a.position - b.position);
   const localMax = Math.max(max, series.max, 1);
   const competitorValues = series.competitors.map((c) => c.value);
   const mean = competitorValues.length
     ? competitorValues.reduce((s, v) => s + v, 0) / competitorValues.length
     : 0;
+  const meanPct = (mean / localMax) * 100;
+
   return (
-    <div className="flex flex-col gap-[6px]">
-      {all.map((p, i) => {
-        const pct = (p.value / localMax) * 100;
-        const isMe = p.position === -1;
-        const color = isMe
-          ? "var(--brand-white)"
-          : colorMode === "higher"
-            ? colorByScoreDeviation(p.value, mean)
-            : colorByVolumeDeviation(p.value, mean);
-        return (
-          <div key={i} className="flex items-center gap-2 text-[11px]">
-            <div className={`w-[100px] truncate ${isMe ? "font-bold text-[var(--text-inverse)]" : "text-[var(--text-inverse-secondary)]"}`} title={p.label}>
-              {isMe ? "★ Toi" : p.label}
-            </div>
-            <div className="flex-1 h-[14px] bg-[var(--score-track)] rounded-[var(--radius-xs)] overflow-hidden relative">
+    <div className="relative">
+      {/* Ligne de moyenne SERP, reperee sur toute la largeur */}
+      <div className="relative h-[150px] flex items-end gap-[3px]">
+        {mean > 0 && (
+          <div
+            className="absolute inset-x-0 border-t border-dashed border-[var(--text-inverse-muted)] opacity-40 pointer-events-none"
+            style={{ bottom: `${Math.min(meanPct, 100)}%` }}
+            title={`Moyenne SERP : ${Math.round(mean).toLocaleString("fr-FR")}${suffix}`}
+          />
+        )}
+        {[...all, series.me].map((p, i) => {
+          const isMe = p.position === -1;
+          const pct = (p.value / localMax) * 100;
+          const color = isMe
+            ? "var(--brand-white)"
+            : colorMode === "higher"
+              ? colorByScoreDeviation(p.value, mean)
+              : colorByVolumeDeviation(p.value, mean);
+          return (
+            <div key={i} className="flex-1 min-w-0 flex flex-col justify-end items-center h-full gap-1">
+              <div className={`font-mono text-[9px] leading-none whitespace-nowrap ${isMe ? "font-bold text-[var(--text-inverse)]" : "text-[var(--text-inverse-muted)]"}`}>
+                {p.value.toLocaleString("fr-FR")}
+              </div>
               <div
-                className="h-full rounded-[var(--radius-xs)] transition-all"
-                style={{ width: `${Math.max(pct, 2)}%`, background: color, opacity: isMe ? 1 : 0.85 }}
+                className="w-full rounded-t-[var(--radius-xs)] transition-all"
+                style={{
+                  height: `${Math.max(pct, 2)}%`,
+                  background: color,
+                  opacity: isMe ? 1 : 0.85,
+                }}
+                title={`${p.label} : ${p.value.toLocaleString("fr-FR")}${suffix}`}
               />
             </div>
-            <div className={`font-mono text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text-inverse)]" : "text-[var(--text-inverse-muted)]"}`}>
-              {p.value.toLocaleString("fr-FR")}{suffix}
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      <BarAxisLabels competitors={all} me={series.me} myPosition={myPosition} />
     </div>
   );
 }
 
-function BarChartHorizontalStacked({
+function BarChartVerticalStacked({
   series,
+  myPosition,
 }: {
   series: { competitors: StackedBarPoint[]; me: StackedBarPoint; max: number };
+  myPosition?: number | null;
 }) {
-  const all = [...series.competitors.sort((a, b) => a.position - b.position), series.me];
+  const all = [...series.competitors].sort((a, b) => a.position - b.position);
   const localMax = Math.max(series.max, 1);
   const competitorTotals = series.competitors.map((c) => c.value);
   const mean = competitorTotals.length
     ? competitorTotals.reduce((s, v) => s + v, 0) / competitorTotals.length
     : 0;
+
   return (
-    <div className="flex flex-col gap-[6px]">
-      {all.map((p, i) => {
-        const isMe = p.position === -1;
-        const h2Pct = (p.h2 / localMax) * 100;
-        const h3Pct = (p.h3 / localMax) * 100;
-        const baseColor = isMe ? "var(--brand-white)" : colorByVolumeDeviation(p.value, mean);
-        return (
-          <div key={i} className="flex items-center gap-2 text-[11px]">
-            <div className={`w-[100px] truncate ${isMe ? "font-bold text-[var(--text-inverse)]" : "text-[var(--text-inverse-secondary)]"}`} title={p.label}>
-              {isMe ? "★ Toi" : p.label}
+    <div className="relative">
+      <div className="h-[150px] flex items-end gap-[3px]">
+        {[...all, series.me].map((p, i) => {
+          const isMe = p.position === -1;
+          const h2Pct = (p.h2 / localMax) * 100;
+          const h3Pct = (p.h3 / localMax) * 100;
+          const baseColor = isMe ? "var(--brand-white)" : colorByVolumeDeviation(p.value, mean);
+          return (
+            <div key={i} className="flex-1 min-w-0 flex flex-col justify-end items-center h-full gap-1">
+              <div className={`font-mono text-[9px] leading-none whitespace-nowrap ${isMe ? "font-bold text-[var(--text-inverse)]" : "text-[var(--text-inverse-muted)]"}`}>
+                {p.value}
+              </div>
+              {/* H3 en bas (teinte tamisee), H2 empile dessus : meme code
+                  couleur que la version horizontale qu'on remplace. */}
+              <div
+                className="w-full flex flex-col justify-end"
+                style={{ height: `${Math.max(h2Pct + h3Pct, 2)}%` }}
+                title={`${p.label} : ${p.h2} H2 · ${p.h3} H3`}
+              >
+                <div
+                  className="w-full rounded-t-[var(--radius-xs)]"
+                  style={{ height: `${(h2Pct / Math.max(h2Pct + h3Pct, 0.01)) * 100}%`, background: baseColor, opacity: isMe ? 1 : 0.9 }}
+                />
+                <div
+                  className="w-full"
+                  style={{ height: `${(h3Pct / Math.max(h2Pct + h3Pct, 0.01)) * 100}%`, background: baseColor, opacity: isMe ? 0.55 : 0.45 }}
+                />
+              </div>
             </div>
-            <div className="flex-1 h-[14px] bg-[var(--score-track)] rounded-[var(--radius-xs)] overflow-hidden flex">
-              <div className="h-full" style={{ width: `${h2Pct}%`, background: baseColor, opacity: isMe ? 1 : 0.9 }} />
-              <div className="h-full" style={{ width: `${h3Pct}%`, background: baseColor, opacity: isMe ? 0.55 : 0.45 }} />
-            </div>
-            <div className={`font-mono text-[10px] w-[80px] text-right ${isMe ? "font-bold text-[var(--text-inverse)]" : "text-[var(--text-inverse-muted)]"}`}>
-              {p.h2}H2 · {p.h3}H3
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      <BarAxisLabels competitors={all} me={series.me} myPosition={myPosition} />
       <div className="flex gap-3 mt-2 text-[10px] text-[var(--text-inverse-muted)]">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--brand-blue)]" /> H2 (couleur pleine)</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--brand-blue)] opacity-50" /> H3 (couleur tamisée)</span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Pied de graphique commun aux deux barres verticales : domaine tronque puis
+ * rang Google. Le domaine complet reste accessible au survol, parce qu'a 10
+ * colonnes aucune largeur ne suffit a l'afficher en entier.
+ */
+function BarAxisLabels({
+  competitors,
+  me,
+  myPosition,
+}: {
+  competitors: BarPoint[];
+  me: BarPoint;
+  myPosition?: number | null;
+}) {
+  return (
+    <div className="flex gap-[3px] mt-2 pt-2 border-t border-[var(--score-track)]">
+      {[...competitors, me].map((p, i) => {
+        const isMe = p.position === -1;
+        return (
+          <div key={i} className="flex-1 min-w-0 text-center" title={p.label}>
+            <div
+              className={`text-[9px] leading-[1.15] break-all overflow-hidden ${isMe ? "font-bold text-[var(--text-inverse)]" : "text-[var(--text-inverse-secondary)]"}`}
+              style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
+            >
+              {p.label}
+            </div>
+            <div className="text-[9px] leading-tight text-[var(--text-inverse-muted)]">
+              {isMe ? (myPosition ? `#${myPosition} Google` : "ta page") : `#${p.position} Google`}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -3197,15 +3310,17 @@ function ScatterChart({
 function PositioningGauge({
   userScore,
   competitors,
+  myLabel = "Ta page",
 }: {
   userScore: number;
   competitors: number[];
+  myLabel?: string;
 }) {
   const all = [...competitors, userScore].sort((a, b) => a - b);
   const min = Math.min(...all);
   const max = Math.max(...all);
   const range = max - min || 1;
-  /* Trois bandes empilées : le badge « Toi » en haut, la règle au milieu, les
+  /* Trois bandes empilées : le badge du domaine en haut, la règle au milieu, les
      bornes en bas. Le badge vivait auparavant hors du cadre et recouvrait le
      sous-titre de la carte. */
   const userLeft = `${((userScore - min) / range) * 100}%`;
@@ -3216,7 +3331,7 @@ function PositioningGauge({
         className="absolute top-0 -translate-x-1/2 px-2 py-1 bg-[var(--brand-white)] text-[var(--text)] text-[10px] font-bold rounded whitespace-nowrap"
         style={{ left: userLeft }}
       >
-        ★ Toi : {userScore}
+        ★ {myLabel} : {userScore}
       </div>
 
       {/* Règle : dégradé de l'échelle de score, repères concurrents, jalon utilisateur */}

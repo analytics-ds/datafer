@@ -837,6 +837,18 @@ export type CrawlDiag = {
   level3Status?: number;
 };
 
+/**
+ * Budget partage d'appels au niveau 3 (Scraping Browser) pour une meme
+ * analyse. Le niveau 3 est facture a la bande passante ($8/GB) : sur un SERP
+ * de 10 SPAs lourdes, laisser chaque site y monter librement coutait ~10$ sur
+ * le seul mois d'aout 2026, contre 2,21$ de Web Unlocker depuis juin. On
+ * plafonne donc le nombre de pages autorisees a payer ce niveau ; les autres
+ * se contentent du rendu partiel du niveau 2, qui reste exploitable.
+ */
+export type CrawlBudget = { level3Remaining: number };
+
+export type CrawlOptions = { diag?: CrawlDiag; budget?: CrawlBudget };
+
 export async function crawlPage(
   url: string,
   env: {
@@ -844,8 +856,10 @@ export async function crawlPage(
     BRIGHTDATA_ZONE?: string;
     BRIGHTDATA_BROWSER_WSS?: string;
   },
-  diag?: CrawlDiag,
+  opts?: CrawlOptions,
 ): Promise<PageContent | null> {
+  const diag = opts?.diag;
+  const budget = opts?.budget;
   // Logs structurés `[crawl]` : permettent d'agréger en prod le taux de
   // réussite par niveau et de comprendre pourquoi une page fallback. Format
   // parsable (clé=valeur), url en dernier car potentiellement longue.
@@ -909,6 +923,22 @@ export async function crawlPage(
     console.log(`[crawl] niveau=2 fallback raison=wc_partiel(${parsed.wordCount}) url=${url}`);
   } else {
     console.log(`[crawl] niveau=2 fallback raison=${fullHtml ? "challenge_page" : "pas_de_html"} url=${url}`);
+  }
+
+  // Garde-fou de cout : le niveau 3 est le poste de depense (bande passante
+  // a $8/GB). Si le budget partage de l'analyse est epuise, on s'arrete au
+  // rendu partiel du niveau 2 plutot que de payer une page de plus.
+  if (budget) {
+    if (budget.level3Remaining <= 0) {
+      console.log(`[crawl] niveau=3 saute raison=budget_epuise url=${url}`);
+      if (partial && partial.wordCount >= 100) {
+        console.log(`[crawl] niveau=2 retombee wc=${partial.wordCount} url=${url}`);
+        return partial;
+      }
+      console.log(`[crawl] ECHEC tous_niveaux url=${url}`);
+      return null;
+    }
+    budget.level3Remaining -= 1;
   }
 
   // 3. Bright Data Scraping Browser via CDP raw (vrai Chromium headless).
@@ -1083,6 +1113,33 @@ async function crawlWithBrightDataBrowser(
 
     // 3. Active Page domain pour recevoir loadEventFired
     await send("Page.enable", {}, sid);
+
+    // 3b. Coupe le poids inutile. Le Scraping Browser est facture a la bande
+    // passante ($8/GB) : chaque image, police et video chargee par la page
+    // est payee, alors qu'on n'extrait que du texte. Aout 2026 : 1,25 GB pour
+    // 10$, contre 0,11 GB en juillet. On bloque donc les binaires lourds.
+    // CSS et JS restent charges : les couper changerait le DOM rendu (du
+    // texte masque redeviendrait visible) et fausserait le wordCount.
+    // Best-effort : si la commande echoue, on crawle quand meme.
+    try {
+      await send("Network.enable", {}, sid);
+      await send(
+        "Network.setBlockedURLs",
+        {
+          urls: [
+            "*.jpg*", "*.jpeg*", "*.png*", "*.gif*", "*.webp*", "*.avif*",
+            "*.bmp*", "*.ico*", "*.tiff*",
+            "*.woff*", "*.woff2*", "*.ttf*", "*.otf*", "*.eot*",
+            "*.mp4*", "*.webm*", "*.mov*", "*.m4v*", "*.avi*", "*.mkv*",
+            "*.mp3*", "*.wav*", "*.ogg*", "*.m4a*",
+            "*.pdf*", "*.zip*",
+          ],
+        },
+        sid,
+      );
+    } catch (e) {
+      console.log("[bd-browser] blocage assets indisponible", { err: String(e) });
+    }
 
     // 4. Navigue vers l'URL cible
     await send("Page.navigate", { url }, sid);
