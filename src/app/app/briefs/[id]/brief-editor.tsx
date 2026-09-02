@@ -101,6 +101,12 @@ type BriefEditorProps = {
   hideNewAnalysis?: boolean;
   /** URL du contenu utilisateur (saisie à la création ou importée ensuite). */
   myUrl?: string | null;
+  /**
+   * Prénom du consultant connecté. Sert d'étiquette de « notre » page dans les
+   * graphiques d'Insights côté back-office. Absent en mode partage : la vue
+   * client s'identifie par le nom du client, jamais par un prénom datashake.
+   */
+  consultantFirstName?: string | null;
   /** Token de partage déjà actif sur le brief (mode consultant uniquement). */
   shareToken?: string | null;
   /**
@@ -155,6 +161,13 @@ export function BriefEditor(props: BriefEditorProps) {
   // "Charger cette page" de la stat Position (URL du dossier qui ranke).
   const [importPrefill, setImportPrefill] = useState<string | null>(null);
   const [myUrl, setMyUrl] = useState<string | null>(props.myUrl ?? null);
+  // Étiquette de « notre » page dans les graphiques d'Insights. Elle change
+  // selon qui regarde : le client se reconnaît à son nom ou à son domaine, le
+  // consultant à son prénom. Repli commun sur le domaine de la page analysée
+  // (recalculé après un import d'URL), puis sur un libellé neutre.
+  const selfLabel = isShareMode
+    ? (folder?.name?.trim() || myHostOf(myUrl))
+    : (props.consultantFirstName?.trim() || myHostOf(myUrl));
   // Modal Paramètres back-office (icône ⚙️). Affichée uniquement quand le
   // brief est ouvert depuis la session authentifiée (pas en mode partage).
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -355,33 +368,29 @@ export function BriefEditor(props: BriefEditorProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorData.text, id, nlp?.semanticCentroid, paragraphScores]);
 
-  // Applique la bordure colorée gauche sur chaque <p> en fonction de son
-  // score sémantique en cache. Vert > 0.75, jaune 0.55-0.75, rouge < 0.55
-  // (seuils validés Pierre 2026-05-06).
+  // La proximité sémantique par paragraphe ne se voit plus dans l'éditeur.
+  // Elle continue d'être calculée et de peser dans le score (arbitrage Pierre
+  // 2026-09-02 : on ne s'en sert pas visuellement, seulement dans le calcul) :
+  // seul l'affichage est retiré. Le filet coloré à gauche du paragraphe
+  // hachurait le texte de bleu et de jaune sans que personne ne s'en serve, et
+  // il partait dans les captures envoyées au client.
+  //
+  // Cet effet nettoie donc au lieu de peindre. Le style était appliqué en
+  // inline sur les <p>, et l'éditeur sérialise son innerHTML : les briefs
+  // écrits avant cet arbitrage portent le filet dans `editorHtml` en base. On
+  // le retire à l'ouverture, et le prochain save enregistre le HTML propre.
   useEffect(() => {
     if (!editorRef.current) return;
-    // Échelle de la charte, adaptée au fond clair de l'éditeur : kaki (bon),
-    // bleu (moyen), noir (faible). Le jaune de la charte est fait pour les
-    // fonds noirs ; sur du blanc il ne signalerait plus rien.
-    // Les clés restent nommées green/yellow/red côté scoring.
-    const colorMap = { green: "#ADAC2F", yellow: "#77B0ED", red: "#101010" } as const;
     const paragraphs = editorRef.current.querySelectorAll("p, ul, ol");
     for (const p of paragraphs) {
-      const text = (p.textContent || "").trim();
-      const hash = paragraphCacheKey(text);
-      const s = paragraphScores.get(hash);
       const el = p as HTMLElement;
-      if (s) {
-        el.style.borderLeft = `3px solid ${colorMap[s.color]}`;
-        el.style.paddingLeft = "12px";
-        el.title = `Proximité sémantique : ${Math.round(s.score * 100)} / 100 (${s.color})`;
-      } else {
-        el.style.borderLeft = "";
-        el.style.paddingLeft = "";
-        el.removeAttribute("title");
-      }
+      if (el.style.borderLeft) el.style.borderLeft = "";
+      if (el.style.paddingLeft) el.style.paddingLeft = "";
+      // On ne retire que le title de proximité sémantique : un title posé par
+      // autre chose (un lien, par exemple) n'a pas à sauter.
+      if (el.title.startsWith("Proximité sémantique")) el.removeAttribute("title");
     }
-  }, [paragraphScores, editorData.text, paragraphCacheKey]);
+  }, [paragraphScores, editorData.text]);
 
   // Tableau plat des scores sémantiques pour computeDetailedScore. Review
   // 2026-05-08 (M3) : on filtre les scores en croisant avec les paragraphes
@@ -862,7 +871,7 @@ export function BriefEditor(props: BriefEditorProps) {
                   spellCheck={false}
                   className="block min-h-full w-full resize-none border-0 bg-[var(--bg-card)] px-8 py-7 font-mono text-[13px] leading-[1.6] text-[var(--text)] outline-none"
                   style={{ fontFamily: "var(--font-mono)" }}
-                  placeholder="Colle ton HTML ici. Reclique sur <> pour repasser en mode visuel."
+                  placeholder="Collez le HTML ici. Recliquez sur <> pour repasser en mode visuel."
                 />
               )}
             </div>
@@ -936,7 +945,7 @@ export function BriefEditor(props: BriefEditorProps) {
             <SerpCard key={r.position} r={r} briefId={id} />
           ))}
         </div>
-        <SerpScoreChart serp={serp} myScore={score.total} className="mt-6 max-w-[880px]" />
+        <SerpScoreChart serp={serp} myScore={score.total} selfLabel={selfLabel} className="mt-6 max-w-[880px]" />
       </div>
 
       <div className={tab === "insights" ? "flex-1 overflow-y-auto px-7 py-6" : "hidden"}>
@@ -951,6 +960,7 @@ export function BriefEditor(props: BriefEditorProps) {
           userH2Count={editorData.h2s.length}
           userH3Count={editorData.h3s.length}
           myUrl={myUrl}
+          selfLabel={selfLabel}
         />
       </div>
 
@@ -1144,7 +1154,7 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
     { name: "Mot-clé principal", pts: 15, hint: "Couverture des tokens + bonus correspondance exacte" },
     { name: "Titres (H1/H2/H3)", pts: 13, hint: "H1 unique, KW dans H1, nombre de H2, KW dans H2, au moins 2 H3" },
     { name: "Placement du mot-clé", pts: 13, hint: "KW dans les 100 premiers mots, 1re phrase, 100 derniers mots, distribution" },
-    { name: "Sémantique paragraphe (IA)", pts: 15, hint: "Cosinus moyen de tes paragraphes vs centroïde sémantique top 10 (embeddings bge-m3). Poids renforcé itération 12 au détriment du BM25" },
+    { name: "Sémantique paragraphe (IA)", pts: 15, hint: "Cosinus moyen des paragraphes vs centroïde sémantique top 10 (embeddings bge-m3). Poids renforcé itération 12 au détriment du BM25" },
     { name: "Longueur de contenu", pts: 7, hint: "wc dans la fourchette concurrents, ±20 % de la moyenne, au-dessus de la moyenne" },
     { name: "Structure", pts: 6, hint: "Ratio paragraphes, longueur des paragraphes, contenu ≥ 500 mots" },
     { name: "Qualité rédactionnelle", pts: 5, hint: "Longueur moyenne des phrases, densité du KW, diversité lexicale ≥ 0,55" },
@@ -1174,10 +1184,10 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
         </button>
         <h3 className="df-title text-[20px] mb-3">Comment est calculé le score ?</h3>
         <p className="text-[13px] leading-[1.55] text-[var(--text-secondary)] mb-5">
-          Le score corpus est <strong>calibré sur tes concurrents</strong> du top 10 Google.
+          Le score corpus est <strong>calibré sur les concurrents</strong> du top 10 Google.
           La médiane des scores bruts concurrents = 50, médiane × 1,5 = 100. Sur les requêtes
           à concurrence faible, on remonte la médiane à 60 pour rester ambitieux. Ce n&apos;est
-          pas une note absolue : un score de 70 signifie que ton contenu fait ~40 % de mieux
+          pas une note absolue : un score de 70 signifie que le contenu fait ~40 % de mieux
           que la médiane des concurrents qui rankent déjà.
         </p>
         <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-3">
@@ -1326,7 +1336,7 @@ function EditorSidebar({
       ? [{
           label: "Différenciation", s: score.differentiation, color: "var(--text)",
           tip: score.differentiation.score >= 3
-            ? "✓ Tu couvres des angles que le top 10 sous-traite (apport)"
+            ? "✓ Le contenu couvre des angles que le top 10 sous-traite (apport)"
             : "↑ Couvre des termes « Opportunité » que les concurrents oublient pour te différencier du top 10",
         }]
       : []),
@@ -1371,7 +1381,7 @@ function EditorSidebar({
           label: "Saillance entité", s: score.salience, color: "var(--text)",
           tip: score.salience.score > 0
             ? "✓ Mot-clé mis en avant (gras) à sa première mention"
-            : "↑ Mets ton mot-clé exact en gras à sa première mention dans le texte",
+            : "↑ Mettre le mot-clé exact en gras à sa première mention dans le texte",
         }]
       : []),
   ];
@@ -1590,7 +1600,7 @@ function EditorSidebar({
             kwTerms={showHeadings ? undefined : (nlp.keywordTerms ?? []).filter((k) => k.kind === "exact")}
             lower={lower}
             onInsert={insertTermAtCursor}
-            info="Le mot-clé principal du brief + les termes présents chez ≥70% des concurrents top 10. Considérés comme obligatoires : tu dois tous les couvrir pour avoir le score NLP max (17/27 pts)."
+            info="Le mot-clé principal du brief + les termes présents chez ≥70% des concurrents top 10. Considérés comme obligatoires : tous à couvrir pour avoir le score NLP max (17/27 pts)."
           />
           <TierTags
             label="Importants"
@@ -1602,7 +1612,7 @@ function EditorSidebar({
             label="Opportunité"
             color="var(--text)" bg="var(--state-info-bg)" border="var(--brand-blue)"
             terms={opportunityView} lower={lower} onInsert={insertTermAtCursor}
-            info="Termes présents chez moins de 40% des concurrents. Ignorés du scoring (zéro pénalité). À ajouter en bonus si pertinent pour différencier ton contenu."
+            info="Termes présents chez moins de 40% des concurrents. Ignorés du scoring (zéro pénalité). À ajouter en bonus si pertinent pour différencier le contenu."
           />
         </Section>
       )}
@@ -1610,7 +1620,7 @@ function EditorSidebar({
       {/* Checklist GEO : 5 patterns appréciés par les LLMs. Pèse 10 pts. */}
       <Section title="Optimisation GEO" dotColor="var(--purple)">
         <p className="text-[11px] text-[var(--text-muted)] mb-[10px] leading-[1.4]">
-          Patterns appréciés par les moteurs génératifs (Perplexity, ChatGPT…) pour citer ton contenu.
+          Patterns appréciés par les moteurs génératifs (Perplexity, ChatGPT…) pour citer le contenu.
         </p>
         <GeoChecklistItem label={GEO_LABELS.table} ok={score.geo.table.ok} />
         <GeoChecklistItem label={GEO_LABELS.bulletList} ok={score.geo.bulletList.ok} />
@@ -1690,7 +1700,7 @@ function EditorSidebar({
         <Section
           title="People Also Ask"
           dotColor="var(--blue)"
-          info="Questions affichées par Google dans le bloc 'Autres questions posées' sur ce KW. Couvrir ces questions dans tes H2 améliore la pertinence et peut déclencher un rich snippet."
+          info="Questions affichées par Google dans le bloc 'Autres questions posées' sur ce KW. Couvrir ces questions dans les H2 améliore la pertinence et peut déclencher un rich snippet."
         >
           <PaaCoverageList paa={paa} editorText={editorText} keyword={ek?.keyword ?? ""} onInsert={insertPaaAsH2} />
         </Section>
@@ -1700,7 +1710,7 @@ function EditorSidebar({
         <Section
           title="Benchmarks SERP"
           dotColor="var(--green)"
-          info="Statistiques calculées sur les 10 premières pages Google (concurrents). Sert de référence pour calibrer ton contenu : viser dans la fourchette est généralement bon, viser la moyenne est sûr."
+          info="Statistiques calculées sur les 10 premières pages Google (concurrents). Sert de référence pour calibrer le contenu : viser dans la fourchette est généralement bon, viser la moyenne est sûr."
         >
           <BenchRow label="Plage de mots" value={`${nlp.minWordCount} à ${nlp.maxWordCount}`} />
           <BenchRow label="Moyenne" value={String(nlp.avgWordCount)} />
@@ -2779,6 +2789,7 @@ function InsightsPane({
   userH2Count,
   userH3Count,
   myUrl,
+  selfLabel,
 }: {
   nlp: NlpResult | null;
   halo: HaloscanOverview | null;
@@ -2790,6 +2801,9 @@ function InsightsPane({
   userH2Count: number;
   userH3Count: number;
   myUrl?: string | null;
+  /** Étiquette de « notre » page : prénom côté consultant, nom du client ou
+   *  domaine côté client. Calculée par BriefEditor. */
+  selfLabel: string;
 }) {
   const vp = serp.filter((r) => (r.wordCount ?? 0) > 0);
   const aW = vp.length ? Math.round(vp.reduce((s, r) => s + (r.wordCount ?? 0), 0) / vp.length) : 0;
@@ -2813,7 +2827,7 @@ function InsightsPane({
               <InsightMetric
                 label="Volume mensuel"
                 value={halo.search_volume.toLocaleString("fr-FR")}
-                tooltip="Volume mensuel moyen de recherches Google France sur ce mot-clé exact (source Haloscan, moyenne sur les 12 derniers mois). C'est la demande potentielle : si tu te positionnes en top 3, tu peux espérer capter ~30% à 40% de ce volume."
+                tooltip="Volume mensuel moyen de recherches Google France sur ce mot-clé exact (source Haloscan, moyenne sur les 12 derniers mois). C'est la demande potentielle : en top 3, on peut espérer capter ~30% à 40% de ce volume."
               />
             )}
             {halo?.cpc != null && (
@@ -2898,6 +2912,7 @@ function InsightsPane({
           userWordCount={userWordCount}
           userH2Count={userH2Count}
           userH3Count={userH3Count}
+          selfLabel={selfLabel}
         />
       </div>
     </div>
@@ -2919,6 +2934,7 @@ function SerpAnalyticsCharts({
   userWordCount,
   userH2Count,
   userH3Count,
+  selfLabel,
 }: {
   serp: SerpResult[];
   myUrl?: string | null;
@@ -2927,6 +2943,7 @@ function SerpAnalyticsCharts({
   userWordCount: number;
   userH2Count: number;
   userH3Count: number;
+  selfLabel: string;
 }) {
   const crawled = serp.filter((r) => (r.wordCount ?? 0) > 0);
   // Si la page analysee ressort elle-meme dans le SERP, on la retire du panel
@@ -2935,10 +2952,10 @@ function SerpAnalyticsCharts({
   const vp = myUrl ? crawled.filter((r) => !sameHost(r.link, myUrl)) : crawled;
   if (vp.length === 0) return null;
 
-  // La page analysee porte son propre domaine plutot qu'un « Toi » : ces
-  // graphiques partent en capture chez le client, ou « Toi » ne veut rien
-  // dire. Repli sur « Ta page » quand aucune URL n'est renseignee.
-  const myLabel = myHostOf(myUrl);
+  // « Notre » page ne porte jamais un « Toi » : ces graphiques partent en
+  // capture chez le client, ou « Toi » ne veut rien dire. Le client se
+  // reconnait a son nom ou a son domaine, le consultant a son prenom.
+  const myLabel = selfLabel;
   // Si la page est elle-meme dans le SERP, on affiche sa position Google.
   const myPosition = myUrl
     ? (crawled.find((r) => sameHost(r.link, myUrl))?.position ?? null)
@@ -3039,11 +3056,11 @@ function hostOf(url: string, fallbackPosition: number): string {
  * la capture envoyee au client.
  */
 function myHostOf(url?: string | null): string {
-  if (!url) return "Ta page";
+  if (!url) return "Cette page";
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
-    return "Ta page";
+    return "Cette page";
   }
 }
 
@@ -3310,7 +3327,7 @@ function ScatterChart({
 function PositioningGauge({
   userScore,
   competitors,
-  myLabel = "Ta page",
+  myLabel = "Cette page",
 }: {
   userScore: number;
   competitors: number[];
@@ -3652,10 +3669,14 @@ function FolderFavicon({ website, size }: { website: string | null; size: number
 function SerpScoreChart({
   serp,
   myScore,
+  selfLabel,
   className = "",
 }: {
   serp: SerpResult[];
   myScore: number;
+  /** Étiquette de « notre » page : prénom côté consultant, nom du client ou
+   *  domaine côté client. Jamais « Toi » : ce graphique part chez le client. */
+  selfLabel: string;
   className?: string;
 }) {
   const scored = serp.filter((r): r is SerpResult & { score: number } => typeof r.score === "number");
@@ -3663,9 +3684,9 @@ function SerpScoreChart({
   const avg = Math.round(scored.reduce((s, r) => s + r.score, 0) / scored.length);
   const maxValue = Math.max(100, ...scored.map((r) => r.score), myScore);
 
-  // Bar "Toi" en première position pour bien la voir, puis les concurrents par position SERP.
+  // Notre barre en première position pour bien la voir, puis les concurrents par position SERP.
   const bars: Array<{ key: string; label: string; score: number; isMe: boolean; position?: number }> = [
-    { key: "me", label: "Toi", score: myScore, isMe: true },
+    { key: "me", label: selfLabel, score: myScore, isMe: true },
     ...scored.map((r) => {
       let host = "";
       try {
@@ -3693,7 +3714,7 @@ function SerpScoreChart({
             Score SEO/GEO concurrents
           </div>
           <div className="text-[12px] text-[var(--text-inverse-secondary)] mt-[2px]">
-            Moyenne SERP <strong>{avg}/100</strong> · ton score <strong>{myScore}/100</strong>
+            Moyenne SERP <strong>{avg}/100</strong> · score <strong>{myScore}/100</strong>
           </div>
         </div>
       </div>
@@ -3738,7 +3759,7 @@ function SerpScoreChart({
               className="flex-1 text-[9px] text-center text-[var(--text-inverse-muted)] font-mono truncate"
               title={b.label}
             >
-              {b.isMe ? "Toi" : `#${b.position}`}
+              {b.isMe ? selfLabel : `#${b.position}`}
             </div>
           ))}
         </div>
@@ -4033,7 +4054,7 @@ function ImportUrlModal({
         </h3>
         <p className="text-[12px] text-[var(--text-muted)] mb-4">
           On récupère la page (rendu JS inclus) et on injecte ses titres et
-          paragraphes dans l&apos;éditeur pour scorer ton contenu existant.
+          paragraphes dans l&apos;éditeur pour scorer le contenu existant.
         </p>
         <input
           type="url"

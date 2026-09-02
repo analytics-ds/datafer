@@ -23,14 +23,14 @@ export default function ApiDocsPage() {
       <Section title="Vue d'ensemble" dot="var(--accent)">
         <p className="mb-3">
           L&apos;API corpus expose deux familles d&apos;endpoints pour piloter les briefs depuis l&apos;extérieur
-          (script, N8N, Make, Postman, Zapier, etc.). Le modèle est asynchrone : tu crées un brief,
-          tu interroges son statut jusqu&apos;à ce qu&apos;il soit prêt, puis tu peux soumettre ton contenu
+          (script, N8N, Make, Postman, Zapier, etc.). Le modèle est asynchrone : on crée un brief,
+          on interroge son statut jusqu&apos;à ce qu&apos;il soit prêt, puis on soumet le contenu
           pour récupérer un score comparé à celui de la concurrence SERP.
         </p>
         <H4>API V1 (création + scoring)</H4>
         <ul className="list-disc pl-5 text-[var(--text-muted)] mb-3">
           <li><Code>POST /api/v1/briefs</Code>, crée un brief et lance l&apos;analyse (anti-doublon intégré)</li>
-          <li><Code>GET /api/v1/briefs</Code>, liste tes briefs, filtrable par <Code>keyword</Code> / <Code>folderId</Code> / <Code>status</Code></li>
+          <li><Code>GET /api/v1/briefs</Code>, liste les briefs, filtrable par <Code>keyword</Code> / <Code>folderId</Code> / <Code>status</Code></li>
           <li><Code>GET /api/v1/briefs/&#123;id&#125;</Code>, lit le brief, renvoie <Code>pending</Code> / <Code>ready</Code> / <Code>failed</Code></li>
           <li><Code>POST /api/v1/briefs/&#123;id&#125;/content</Code>, soumet du contenu HTML et reçoit le score détaillé</li>
         </ul>
@@ -61,8 +61,8 @@ export default function ApiDocsPage() {
         </p>
         <Pre>{`Authorization: Bearer dfk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`}</Pre>
         <p className="text-[var(--text-muted)]">
-          Une clé révoquée renvoie <Code>401 unauthorized</Code> immédiatement. Tu peux en avoir autant que
-          tu veux, nomme-les pour savoir qui utilise quoi (« script N8N », « collègue X »,
+          Une clé révoquée renvoie <Code>401 unauthorized</Code> immédiatement. On peut en avoir autant que
+          nécessaire, à nommer pour savoir qui utilise quoi (« script N8N », « collègue X »,
           « intégration Make », etc.).
         </p>
       </Section>
@@ -157,7 +157,7 @@ export default function ApiDocsPage() {
 
       <Section title="2. Lister / retrouver ses briefs (GET)" dot="var(--accent)">
         <p className="mb-3">
-          Liste les briefs de ton compte, du plus récent au plus ancien. Sert à vérifier qu&apos;un brief
+          Liste les briefs du compte, du plus récent au plus ancien. Sert à vérifier qu&apos;un brief
           n&apos;existe pas déjà avant d&apos;en créer un, ou à retrouver l&apos;id d&apos;un brief dont la réponse
           du POST s&apos;est perdue.
         </p>
@@ -263,7 +263,7 @@ export default function ApiDocsPage() {
           Les champs clés :
         </p>
         <ul className="list-disc pl-5 mb-3 text-[var(--text-muted)]">
-          <li><Code>score</Code> — note /100 de ton contenu actuel (ou 0 si pas de contenu soumis)</li>
+          <li><Code>score</Code> — note /100 du contenu actuel (ou 0 si pas de contenu soumis)</li>
           <li><Code>competitors.avg</Code> — moyenne du score SEO calculée sur les pages du top 10 crawlées, avec le même algorithme que le tien. Objectif minimum.</li>
           <li><Code>competitors.best</Code> — score de la meilleure page de la SERP. Objectif haut.</li>
           <li><Code>competitors.bestUrl</Code> — URL de cette meilleure page (pour inspiration)</li>
@@ -285,7 +285,7 @@ export default function ApiDocsPage() {
 
       <Section title="4. Soumettre du contenu et récupérer le score" dot="var(--accent)">
         <p className="mb-3">
-          Envoie ton contenu en HTML léger (balises <Code>&lt;h1&gt;</Code>, <Code>&lt;h2&gt;</Code>, <Code>&lt;h3&gt;</Code>, <Code>&lt;p&gt;</Code>).
+          Envoie le contenu en HTML léger (balises <Code>&lt;h1&gt;</Code>, <Code>&lt;h2&gt;</Code>, <Code>&lt;h3&gt;</Code>, <Code>&lt;p&gt;</Code>).
           Le texte est stocké sur le brief et le score est recalculé côté serveur, avec comparaison directe
           aux concurrents SERP.
         </p>
@@ -330,7 +330,7 @@ export default function ApiDocsPage() {
           <li><Code>score</Code> et <Code>breakdown.total</Code> : score affiché 0-100, <strong>relatif à la médiane des concurrents top 10</strong>. Médiane top 10 = 50, médiane × 1.5 = 100. Floor médiane à 60 (si concu faible, on calibre comme si la médiane était 60).</li>
           <li><Code>rawTotal</Code> : score absolu sur 100 (sans relativisation), pour debug ou comparaison cross-KW.</li>
           <li><Code>competitorMedian</Code> : médiane des scores bruts du top 10, sert de référence pour la relativisation.</li>
-          <li>Compare <Code>score</Code> à <Code>competitors.avg</Code> : si tu es au-dessus, tu fais mieux que la moyenne SERP.</li>
+          <li>Compare <Code>score</Code> à <Code>competitors.avg</Code> : au-dessus, le contenu fait mieux que la moyenne SERP.</li>
           <li>Pondération SEO : keyword 15 + nlpCoverage 27 + contentLength 7 + headings 13 + placement 13 + structure 6 + quality 5 + semantic 10 = 96, renormalisé sur 100. Le critère images est neutralisé (max 0) depuis l'itération 9 mais reste présent dans le breakdown pour compatibilité. SEO_WEIGHT 0.92, GEO_WEIGHT 0.08.</li>
           <li><Code>breakdown.semantic</Code> : critère sémantique paragraphe (cosinus moyen vs centroïde top 10 via bge-m3). Calculé côté éditeur via l&apos;endpoint <Code>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</Code>. Neutralisé (max=0) si pas de paragraphes scorés.</li>
           <li>Regarde <Code>breakdown</Code> pour identifier les axes faibles (mot-clé, couverture NLP, structure…) et itérer.</li>
@@ -378,7 +378,7 @@ async function run(keyword: string, editorHtml: string) {
         <p className="mb-3">
           La V2 est en lecture seule. Elle expose toute la richesse de l&apos;analyse corpus
           (SERP, concurrents, NLP, scoring détaillé, Haloscan) sur des endpoints séparés
-          pour ne charger que ce dont tu as besoin. Auth identique à la V1, même clé.
+          pour ne charger que le nécessaire. Auth identique à la V1, même clé.
         </p>
         <p className="mb-3 text-[var(--text-muted)]">
           La V2 ne crée pas de brief. Pour ça, utilise <Code>POST /api/v1/briefs</Code> puis
@@ -667,9 +667,9 @@ Content-Type: application/json
           <li>Chaque brief consomme un appel SerpAPI + un appel Haloscan + 10 crawls HTTP. Évite de relancer le même mot-clé plusieurs fois.</li>
           <li>Sur erreur ou timeout d&apos;un POST, ne re-POST pas en boucle : le brief a souvent été créé quand même. Vérifie via <Code>GET /api/v1/briefs?keyword=…</Code>, l&apos;anti-doublon (section 1) sert de filet de sécurité.</li>
           <li>Le scoring est déterministe : même contenu, même brief → même score.</li>
-          <li>Les appels sont rattachés à ton user ; tous tes collègues voient le brief dans l'interface (workspace partagé).</li>
+          <li>Les appels sont rattachés au user appelant ; tous les collègues voient le brief dans l'interface (workspace partagé).</li>
           <li>Pas de rate limit pour l'instant (usage interne). Sois raisonnable.</li>
-          <li>Tes clés peuvent être révoquées à tout moment depuis <Link href="/app/settings" className="underline font-semibold">Paramètres</Link>, l'effet est immédiat.</li>
+          <li>Les clés peuvent être révoquées à tout moment depuis <Link href="/app/settings" className="underline font-semibold">Paramètres</Link>, l'effet est immédiat.</li>
         </ul>
       </Section>
     </div>

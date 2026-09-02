@@ -44,7 +44,7 @@ export function LoginForm() {
         Bon retour<em className="df-accent">.</em>
       </h1>
       <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-10">
-        Connecte-toi à ton espace corpus pour générer tes briefs et accéder à tes clients.
+        Connectez-vous à votre espace corpus pour générer vos briefs et accéder à vos clients.
       </p>
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
@@ -56,7 +56,7 @@ export function LoginForm() {
         autoComplete="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        placeholder="toi@datashake.fr"
+        placeholder="prenom@datashake.fr"
         className="w-full px-4 py-[12px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-4 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
 
@@ -90,7 +90,7 @@ export function LoginForm() {
       <p className="text-[11px] text-[var(--text-muted)] mt-10 text-center leading-[1.5]">
         Accès sur invitation uniquement.
         <br />
-        Contacte ton admin pour obtenir un compte.
+        Contactez votre admin pour obtenir un compte.
       </p>
     </form>
   );

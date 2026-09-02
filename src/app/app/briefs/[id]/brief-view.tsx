@@ -280,7 +280,7 @@ export function BriefView({
           <SectionTitle>Opportunités de différentiation</SectionTitle>
           <p className="text-[12px] text-[var(--text-muted)] mb-3 -mt-2">
             Questions PAA peu couvertes par les concurrents — angles d&apos;attaque
-            uniques pour ton article.
+            uniques pour l&apos;article.
           </p>
           <div className="grid gap-2">
             {nlp.opportunities.map((o, i) => (

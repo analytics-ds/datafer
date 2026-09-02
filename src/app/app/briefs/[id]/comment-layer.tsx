@@ -421,7 +421,7 @@ function NewCommentPopover({
         autoFocus
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        placeholder="Ton commentaire…"
+        placeholder="Votre commentaire…"
         rows={3}
         className="df-comment-textarea"
       />

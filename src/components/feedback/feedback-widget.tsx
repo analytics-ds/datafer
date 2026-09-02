@@ -27,7 +27,7 @@ type Category = "bug" | "suggestion" | "question";
 const CATEGORIES: Array<{ value: Category; label: string; emoji: string; hint: string }> = [
   { value: "bug", label: "Bug", emoji: "🐛", hint: "Quelque chose ne fonctionne pas comme attendu" },
   { value: "suggestion", label: "Suggestion", emoji: "💡", hint: "Une idée pour améliorer l'outil" },
-  { value: "question", label: "Question", emoji: "❓", hint: "Tu veux savoir comment faire quelque chose" },
+  { value: "question", label: "Question", emoji: "❓", hint: "Savoir comment faire quelque chose" },
 ];
 
 export function FeedbackWidget() {
@@ -216,10 +216,10 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
               ✓
             </div>
             <div className="df-title text-[20px] font-semibold mt-2">
-              Merci pour ton retour !
+              Merci pour votre retour !
             </div>
             <p className="text-[13px] text-[var(--text-secondary)] leading-[1.5] max-w-[300px]">
-              Pierre a reçu un mail avec tes infos. On revient vers toi si on a besoin de précisions.
+              Pierre a reçu un mail avec vos infos. On revient vers vous si on a besoin de précisions.
             </p>
           </div>
         ) : (
@@ -254,7 +254,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
             {/* Message */}
             <div className="mb-4">
               <label className="block text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-                Ton message
+                Votre message
               </label>
               <textarea
                 ref={textareaRef}
@@ -263,9 +263,9 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
                 rows={5}
                 placeholder={
                   category === "bug"
-                    ? "Décris ce que tu as essayé de faire et ce qui s'est passé à la place…"
+                    ? "Décrivez ce que vous avez essayé de faire et ce qui s'est passé à la place…"
                     : category === "suggestion"
-                      ? "Quelle idée tu veux nous partager ?"
+                      ? "Quelle idée souhaitez-vous nous partager ?"
                       : "Pose ta question ici…"
                 }
                 className="w-full px-3 py-[9px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] outline-none focus:border-[var(--bg-black)] transition-colors text-[13px] resize-none leading-[1.5]"
@@ -342,7 +342,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
                 <span className="font-mono break-all">{shortPath(currentUrl)}</span>
               </div>
               <div className="text-[10px] text-[var(--text-muted)]">
-                Ton nom, ton email et l&apos;URL ci-dessus seront envoyés avec ton message.
+                Votre nom, votre email et l&apos;URL ci-dessus seront envoyés avec votre message.
               </div>
             </div>
 

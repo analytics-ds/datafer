@@ -62,6 +62,10 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
   ]);
   const consultantName =
     me?.firstName?.trim() || me?.name?.trim() || me?.email?.split("@")[0] || "Consultant";
+  // Les graphiques d'Insights identifient « notre » page par le prénom seul :
+  // « Pierre » et non « Pierre Gaudard ». firstName peut être vide sur les
+  // comptes anciens, auquel cas on prend le premier mot du nom complet.
+  const consultantFirstName = consultantName.split(/\s+/)[0] || consultantName;
 
   return (
     <BriefEditor
@@ -94,6 +98,7 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
       initialTags={initialTags}
       availableTags={availableTags}
       commentAuthor={{ type: "user", name: consultantName }}
+      consultantFirstName={consultantFirstName}
     />
   );
 }

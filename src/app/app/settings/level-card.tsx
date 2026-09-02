@@ -146,7 +146,7 @@ export function LevelCard({
                     </span>
                   )}
                   <span className="flex-1 text-[12px] truncate">
-                    {u.name} {isMe && <span className="text-[var(--text-muted)] font-normal">(toi)</span>}
+                    {u.name} {isMe && <span className="text-[var(--text-muted)] font-normal">(vous)</span>}
                   </span>
                   <span className="text-[10px] text-[var(--text-muted)] font-mono">
                     Lv {u.level}

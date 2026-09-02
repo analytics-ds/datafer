@@ -54,7 +54,7 @@ export default async function FoldersPage() {
       {rows.length === 0 ? (
         <EmptyState
           title="Aucun client"
-          description="Crée un client pour regrouper tes briefs."
+          description="Créez un client pour regrouper les briefs."
           ctaLabel="Créer un client"
           ctaHref="/app/folders/new"
         />
