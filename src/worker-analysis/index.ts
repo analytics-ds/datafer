@@ -38,7 +38,11 @@ export default {
   ): Promise<void> {
     // Dispatch selon la queue source : ce worker écoute 2 queues, une pour
     // les analyses de briefs et une pour la sync sitemap maillage.
-    if (batch.queue === "datafer-sitemap-sync") {
+    // Le nom de queue est comparé en préfixe pour rester valide après la
+    // migration du 2026-09-02 (`datafer-sitemap-sync` -> `-v2`). Les
+    // anciennes queues gardent une souscription tant que Cloudflare refuse
+    // de la supprimer, donc ce worker doit router correctement les deux.
+    if (batch.queue.startsWith("datafer-sitemap-sync")) {
       await handleSitemapSyncBatch(batch as MessageBatch<SitemapSyncMessage>, env);
       return;
     }
