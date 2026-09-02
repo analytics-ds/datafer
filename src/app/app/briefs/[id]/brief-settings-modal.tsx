@@ -218,7 +218,7 @@ export function BriefSettingsModal({
         <div className="overflow-y-auto p-5 flex flex-col gap-6">
           {/* Position */}
           <section>
-            <h3 className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[var(--text-secondary)] mb-2">
+            <h3 className="text-[12px] font-semibold uppercase tracking-[0.2px] text-[var(--text-secondary)] mb-2">
               Position SERP
               <InfoBubble text="Position du domaine du client dans Google (top 100). Override la valeur récupérée automatiquement via Haloscan/CrazySerp. Vider le champ pour revenir à la position d'origine." />
             </h3>
@@ -238,7 +238,7 @@ export function BriefSettingsModal({
 
           {/* Word count */}
           <section>
-            <h3 className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[var(--text-secondary)] mb-2">
+            <h3 className="text-[12px] font-semibold uppercase tracking-[0.2px] text-[var(--text-secondary)] mb-2">
               Nombre de mots de référence
               <InfoBubble text={`Sert au scoring du critère "Longueur" et à l'affichage du benchmark concurrents. Valeurs auto issues du crawl du top 10 : ${rawMinWordCount} à ${rawMaxWordCount} mots, moyenne ${rawAvgWordCount}.`} />
             </h3>
@@ -254,7 +254,7 @@ export function BriefSettingsModal({
 
           {/* Concurrents */}
           <section>
-            <h3 className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[var(--text-secondary)] mb-2">
+            <h3 className="text-[12px] font-semibold uppercase tracking-[0.2px] text-[var(--text-secondary)] mb-2">
               Concurrents top {rawSerp.length}
               <InfoBubble text="Décocher un concurrent le retire des calculs (médiane des scores, benchmarks word count) et de l'affichage SERP. Le centroïde sémantique paragraphe reste figé sur le top 10 d'origine." />
             </h3>
@@ -311,7 +311,7 @@ export function BriefSettingsModal({
 
           {/* Termes NLP */}
           <section>
-            <h3 className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[var(--text-secondary)] mb-2">
+            <h3 className="text-[12px] font-semibold uppercase tracking-[0.2px] text-[var(--text-secondary)] mb-2">
               Termes NLP à masquer
               <InfoBubble text="Sur les 40 termes top, décocher pour retirer un terme du brief (chips dans l'éditeur, scoring couverture NLP). Utile pour cacher du bruit (cookie, newsletter, footer…) qui n'a rien à voir avec le sujet du KW." />
             </h3>
@@ -347,7 +347,7 @@ export function BriefSettingsModal({
 
           {/* Ajout de termes NLP custom */}
           <section>
-            <h3 className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[var(--text-secondary)] mb-2">
+            <h3 className="text-[12px] font-semibold uppercase tracking-[0.2px] text-[var(--text-secondary)] mb-2">
               Termes NLP à ajouter
               <InfoBubble text="Ajoute un terme que l'analyse automatique n'a pas remonté mais que tu veux voir apparaître dans les chips de l'éditeur et compter dans le scoring couverture NLP. Ajouté au tier 'Essentiels' (presence 70%) : compté comme obligatoire dans la couverture NLP. Retire-le ici si tu ne veux plus qu'il soit exigé. Les mots-clés secondaires saisis à la création du brief arrivent aussi dans cette liste." />
             </h3>
@@ -447,7 +447,7 @@ function WcInput({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)]">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
         {label}
       </span>
       <input

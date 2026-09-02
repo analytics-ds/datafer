@@ -92,7 +92,7 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
     <div className="px-10 py-10 max-w-[1100px]">
       <div className="flex items-center gap-2 mb-3">
         <FolderFavicon website={folder.website} size={24} />
-        <span className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)]">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
           Client
         </span>
       </div>

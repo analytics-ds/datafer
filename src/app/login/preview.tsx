@@ -64,7 +64,7 @@ function MockInterface() {
           <span className="df-title text-[18px] leading-none">
             chaussures running homme
           </span>
-          <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px]">
+          <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px]">
             FR
           </span>
         </div>
@@ -98,7 +98,7 @@ function MockInterface() {
             </div>
           </div>
           <div className="flex flex-col gap-[2px]">
-            <span className="text-[12px] font-semibold">Score SEO</span>
+            <span className="text-[12px] font-semibold">Score SEO/GEO</span>
             <span className="text-[11px] text-[var(--text-inverse-muted)]">Bien optimisé</span>
           </div>
         </div>
@@ -135,7 +135,7 @@ function MockInterface() {
 
         {/* Mini sidebar NLP */}
         <div className="p-4 bg-[var(--bg-warm)] border-l border-[var(--border)] overflow-hidden">
-          <div className="text-[9px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-2 flex items-center gap-[5px]">
+          <div className="text-[9px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-2 flex items-center gap-[5px]">
             <span className="w-[6px] h-[6px] rounded-full bg-[var(--accent)]" />
             Champ sémantique
           </div>

@@ -9,7 +9,7 @@ export default function ApiDocsPage() {
       <div className="mb-4">
         <Link
           href="/app/settings"
-          className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] font-semibold uppercase tracking-[0.8px]"
+          className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] font-semibold uppercase tracking-[0.2px]"
         >
           ← Retour aux paramètres
         </Link>
@@ -76,7 +76,7 @@ export default function ApiDocsPage() {
         <H4>Paramètres du body (JSON)</H4>
         <table className="w-full text-[12px] mb-4 border-collapse">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-[0.8px] text-[var(--text-muted)]">
+            <tr className="text-left text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)]">
               <th className="pb-2 pr-4 font-semibold">Champ</th>
               <th className="pb-2 pr-4 font-semibold">Type</th>
               <th className="pb-2 pr-4 font-semibold">Requis</th>
@@ -164,7 +164,7 @@ export default function ApiDocsPage() {
         <H4>Query params (tous optionnels)</H4>
         <table className="w-full text-[12px] mb-4 border-collapse">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-[0.8px] text-[var(--text-muted)]">
+            <tr className="text-left text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)]">
               <th className="pb-2 pr-4 font-semibold">Param</th>
               <th className="pb-2 pr-4 font-semibold">Type</th>
               <th className="pb-2 font-semibold">Description</th>
@@ -638,7 +638,7 @@ Content-Type: application/json
       <Section title="Codes d'erreur" dot="var(--red)">
         <table className="w-full text-[12px] border-collapse">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-[0.8px] text-[var(--text-muted)]">
+            <tr className="text-left text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)]">
               <th className="pb-2 pr-4 font-semibold">Code</th>
               <th className="pb-2 pr-4 font-semibold">Message</th>
               <th className="pb-2 font-semibold">Cause</th>
@@ -679,7 +679,7 @@ Content-Type: application/json
 function Section({ title, children, dot }: { title: string; children: React.ReactNode; dot: string }) {
   return (
     <section className="mb-10">
-      <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
+      <h2 className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
         <span className="w-[5px] h-[5px] rounded-full" style={{ background: dot }} />
         {title}
       </h2>

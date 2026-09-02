@@ -108,7 +108,7 @@ export default async function AppHome() {
           className="group flex items-center justify-between bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius)] px-7 py-6 hover:bg-[var(--bg-dark)] transition-colors"
         >
           <div>
-            <div className="text-[11px] font-semibold tracking-[0.8px] uppercase text-[var(--text-inverse-muted)] mb-[2px]">
+            <div className="text-[11px] font-semibold tracking-[0.2px] uppercase text-[var(--text-inverse-muted)] mb-[2px]">
               Nouvelle analyse
             </div>
             <div className="df-title text-[28px] leading-tight">
@@ -122,7 +122,7 @@ export default async function AppHome() {
           className="group flex items-center justify-between bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] px-7 py-6 hover:border-[var(--border-strong)] hover:bg-[var(--bg-warm)] transition-colors"
         >
           <div>
-            <div className="text-[11px] font-semibold tracking-[0.8px] uppercase text-[var(--text-muted)] mb-[2px]">
+            <div className="text-[11px] font-semibold tracking-[0.2px] uppercase text-[var(--text-muted)] mb-[2px]">
               Dossier client
             </div>
             <div className="df-title text-[24px] leading-tight">
@@ -178,7 +178,7 @@ export default async function AppHome() {
                   <div className="font-semibold text-[13px] truncate flex items-center gap-2">
                     {f.name}
                     {f.scope === "agency" && (
-                      <span className="text-[9px] uppercase tracking-[0.5px] px-[5px] py-[1px] rounded-[var(--radius-pill)] bg-[var(--bg-olive-light)] text-[var(--text)]">
+                      <span className="text-[9px] uppercase tracking-[0.2px] px-[5px] py-[1px] rounded-[var(--radius-pill)] bg-[var(--bg-olive-light)] text-[var(--text)]">
                         agence
                       </span>
                     )}
@@ -254,7 +254,7 @@ function ShareDonut({ share, myBriefs, totalBriefs }: { share: number; myBriefs:
   const pct = Math.round(share * 100);
   return (
     <div className="bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius)] p-7 flex flex-col">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-inverse-muted)] mb-1">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-inverse-muted)] mb-1">
         Ta part ce mois
       </div>
       <div className="text-[12px] text-[var(--text-inverse-secondary)] mb-6 leading-[1.4]">
@@ -293,7 +293,7 @@ function ShareDonut({ share, myBriefs, totalBriefs }: { share: number; myBriefs:
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-2 pb-2 border-b border-[rgba(255,255,255,0.16)] last:border-0 last:pb-0">
-      <span className="text-[11px] uppercase tracking-[0.6px] font-semibold opacity-45">{label}</span>
+      <span className="text-[11px] uppercase tracking-[0.2px] font-semibold opacity-45">{label}</span>
       <span
         className="df-title text-[22px] leading-none tabular-nums tracking-[-0.5px]"
         /* Mise en avant par le niveau d'opacité : la charte réserve le texte
@@ -316,7 +316,7 @@ function Leaderboard({
   const max = Math.max(1, ...top.map((u) => u.count));
   return (
     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-6">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-4">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-4">
         Classement de l&apos;équipe ce mois
       </div>
       {top.length === 0 || top.every((u) => u.count === 0) ? (

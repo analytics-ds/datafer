@@ -466,7 +466,7 @@ function ImageInsertModal({
         {tab === "url" && (
           <div className="space-y-3">
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[5px] block">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[5px] block">
                 URL de l&apos;image
               </label>
               <input
@@ -523,7 +523,7 @@ function ImageInsertModal({
 
         {preview && (
           <div className="mt-4">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[5px]">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[5px]">
               Aperçu
             </div>
             <div className="border border-[var(--border)] rounded-[var(--radius-xs)] bg-[var(--bg)] p-2 max-h-[200px] overflow-hidden flex items-center justify-center">
@@ -534,7 +534,7 @@ function ImageInsertModal({
         )}
 
         <div className="mt-4">
-          <label className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-[5px] block">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[5px] block">
             Texte alternatif (alt) <span className="text-[var(--text-muted)] normal-case font-normal">— recommandé pour le SEO</span>
           </label>
           <input

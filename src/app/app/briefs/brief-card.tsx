@@ -395,7 +395,7 @@ function InlineMetric({
       className="inline-flex items-baseline gap-[5px]"
       style={{ cursor: tooltip ? "help" : "default" }}
     >
-      <span className="text-[10px] uppercase tracking-[0.5px] text-[var(--text-muted)] font-medium">
+      <span className="text-[10px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-medium">
         {label}
       </span>
       <span
@@ -588,7 +588,7 @@ function ScoreGauge({ score }: { score: number }) {
   const offset = ARC_LENGTH - (Math.max(0, Math.min(100, score)) / 100) * ARC_LENGTH;
   return (
     <GaugeTile
-      title={`Score SEO : ${score}/100`}
+      title={`Score SEO/GEO : ${score}/100`}
       value={score}
       valueClass="text-[14px] text-[var(--text-inverse)]"
     >

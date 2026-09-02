@@ -191,7 +191,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)]">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
               Feedback
             </div>
             <div className="df-title text-[18px] tracking-[-0.4px] font-semibold">
@@ -226,7 +226,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
           <div className="flex-1 overflow-y-auto px-5 py-5">
             {/* Catégorie */}
             <div className="mb-4">
-              <label className="block text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+              <label className="block text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
                 Type
               </label>
               <div className="grid grid-cols-3 gap-2">
@@ -253,7 +253,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
 
             {/* Message */}
             <div className="mb-4">
-              <label className="block text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+              <label className="block text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
                 Ton message
               </label>
               <textarea
@@ -277,7 +277,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
 
             {/* Screenshots */}
             <div className="mb-4">
-              <label className="block text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+              <label className="block text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
                 Captures d&apos;écran
                 <span className="ml-[5px] font-normal normal-case text-[var(--text-muted)]">
                   (facultatif, {screenshots.length}/{MAX_SCREENSHOTS})

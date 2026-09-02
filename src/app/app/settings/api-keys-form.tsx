@@ -46,7 +46,7 @@ export function ApiKeysForm({ keys }: { keys: ApiKeyRow[] }) {
     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-8 shadow-[var(--shadow-sm)]">
       <form onSubmit={onCreate} className="flex items-end gap-3 mb-6">
         <div className="flex-1">
-          <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+          <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
             Nom de la clé
           </label>
           <input
@@ -103,7 +103,7 @@ export function ApiKeysForm({ keys }: { keys: ApiKeyRow[] }) {
       ) : (
         <table className="w-full text-[13px]">
           <thead>
-            <tr className="text-[11px] uppercase tracking-[0.8px] text-[var(--text-muted)] text-left">
+            <tr className="text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)] text-left">
               <th className="pb-2 font-semibold">Nom</th>
               <th className="pb-2 font-semibold">Préfixe</th>
               <th className="pb-2 font-semibold">Créée</th>

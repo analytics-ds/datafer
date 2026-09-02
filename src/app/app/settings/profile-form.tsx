@@ -36,7 +36,7 @@ export function ProfileForm({
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
         <div>
-          <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+          <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
             Prénom
           </label>
           <input
@@ -48,7 +48,7 @@ export function ProfileForm({
           />
         </div>
         <div>
-          <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+          <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
             Nom
           </label>
           <input
@@ -61,7 +61,7 @@ export function ProfileForm({
         </div>
       </div>
 
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
         Email
       </label>
       <input

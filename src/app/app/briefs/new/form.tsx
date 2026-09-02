@@ -405,7 +405,7 @@ function SimpleSection({
 }) {
   return (
     <>
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
         Mot-clé cible
       </label>
       <input
@@ -418,7 +418,7 @@ function SimpleSection({
         className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-5 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
 
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
         Mots-clés secondaires (optionnel)
       </label>
       <input
@@ -433,7 +433,7 @@ function SimpleSection({
         Ajoutés au champ sémantique du brief (termes essentiels) : leur usage est suivi dans l&apos;éditeur et compté dans le score.
       </p>
 
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
         Marché
       </label>
       <div className="grid grid-cols-3 gap-2 mb-5">
@@ -456,7 +456,7 @@ function SimpleSection({
         ))}
       </div>
 
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
         Client (optionnel)
       </label>
       <div className="mb-5">
@@ -468,7 +468,7 @@ function SimpleSection({
         />
       </div>
 
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-[6px]">
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
         Mon URL existante (optionnel)
       </label>
       <input
@@ -503,7 +503,7 @@ function BulkSection({
   return (
     <div className="flex flex-col gap-3 mb-5">
       <div className="flex items-baseline justify-between">
-        <label className="block text-[11px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)]">
+        <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
           Briefs à lancer
         </label>
         <span className="text-[11px] text-[var(--text-muted)]">

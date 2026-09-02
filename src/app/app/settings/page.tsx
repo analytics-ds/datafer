@@ -90,7 +90,7 @@ export default async function SettingsPage() {
       />
 
       <section className="mb-10">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
           <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent-dark)]" />
           Mon niveau
         </h2>
@@ -121,7 +121,7 @@ export default async function SettingsPage() {
       </section>
 
       <section className="mb-10">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
           <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent)]" />
           Profil
         </h2>
@@ -129,7 +129,7 @@ export default async function SettingsPage() {
       </section>
 
       <section className="mb-10">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
           <span className="w-[5px] h-[5px] rounded-full bg-[var(--brand-blue)]" />
           Sécurité
         </h2>
@@ -138,7 +138,7 @@ export default async function SettingsPage() {
 
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] flex items-center gap-2">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] flex items-center gap-2">
             <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent)]" />
             Clés API
           </h2>

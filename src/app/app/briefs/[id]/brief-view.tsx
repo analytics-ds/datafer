@@ -73,12 +73,12 @@ export function BriefView({
       {/* En-tête */}
       <header className="mb-10">
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase">
+          <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px] uppercase">
             {country}
           </span>
           {nlp?.intent && (
             <span
-              className="px-[10px] py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase"
+              className="px-[10px] py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px] uppercase"
               style={getIntentStyle(nlp.intent)}
               title={getIntentDescription(nlp.intent)}
             >
@@ -93,7 +93,7 @@ export function BriefView({
               · {folder.name}
             </Link>
           )}
-          <span className="inline-flex items-center gap-[5px] px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.5px] uppercase bg-[var(--state-ok-bg)] text-[var(--text)]">
+          <span className="inline-flex items-center gap-[5px] px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px] uppercase bg-[var(--state-ok-bg)] text-[var(--text)]">
             <span className="w-[5px] h-[5px] rounded-full bg-[var(--brand-kaki)]" />
             {crawledCount}/{serp.length} pages crawlées
           </span>
@@ -207,7 +207,7 @@ export function BriefView({
                 key={c.label}
                 className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] p-3"
               >
-                <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[var(--text-muted)] mb-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-2">
                   {c.label}
                   <span className="ml-2 font-mono font-normal opacity-70">
                     {c.terms.length}
@@ -350,7 +350,7 @@ export function BriefView({
                   <div className="font-mono text-[13px] font-semibold">
                     {r.wordCount ? fmtNum(r.wordCount) : "N/A"}
                   </div>
-                  <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
+                  <div className="text-[9px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-semibold">
                     mots
                   </div>
                 </div>
@@ -358,7 +358,7 @@ export function BriefView({
                   <div className="font-mono text-[13px] font-semibold">
                     {r.headings ?? "N/A"}
                   </div>
-                  <div className="text-[9px] uppercase tracking-[0.4px] text-[var(--text-muted)] font-semibold">
+                  <div className="text-[9px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-semibold">
                     titres
                   </div>
                 </div>
@@ -381,7 +381,7 @@ export function BriefView({
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-[11px] font-semibold uppercase tracking-[1px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
+    <h2 className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
       <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent)]" />
       {children}
     </h2>
@@ -391,7 +391,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[var(--text-muted)] mb-1">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-1">
         {label}
       </div>
       <div className="df-title text-[24px] tracking-[-0.5px]">
@@ -429,7 +429,7 @@ function KwTier({
     <div className="mb-4">
       <div className="flex items-center gap-2 mb-2">
         <span className="w-[6px] h-[6px] rounded-full" style={{ background: color }} />
-        <span className="text-[11px] font-semibold uppercase tracking-[0.8px]">{label}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.2px]">{label}</span>
         <span className="text-[11px] text-[var(--text-muted)] font-mono">
           {terms.length}
         </span>
