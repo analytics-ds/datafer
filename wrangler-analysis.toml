@@ -27,7 +27,7 @@ database_id = "52061f81-b4f5-4b32-9685-a015b0981a29"
 binding = "AI"
 
 [[queues.consumers]]
-queue = "datafer-analysis"
+queue = "datafer-analysis-v2"
 # 1 brief à la fois DANS un worker : chaque analyse prend 30-60s CPU + 60-90s
 # wall, on ne veut pas paralléliser dans le même worker (sinon retour au
 # problème de budget Cloudflare).
@@ -42,7 +42,7 @@ max_concurrency = 3
 # retries = on laisse le brief en pending visiblement plus longtemps côté
 # user, alors qu'il faut vite faillir et laisser le cron cleanup ramasser.
 max_retries = 1
-dead_letter_queue = "datafer-analysis-dlq"
+dead_letter_queue = "datafer-analysis-v2-dlq"
 
 # Queue sitemap maillage interne : un message par client à sync. Le handler
 # tourne syncClientSitemap avec budget ~280s CPU. Si hasMore=true, on
@@ -50,12 +50,12 @@ dead_letter_queue = "datafer-analysis-dlq"
 # d'indexer un gros e-com protégé (Celio, etc.) progressivement sans
 # bloquer le worker HTTP.
 [[queues.consumers]]
-queue = "datafer-sitemap-sync"
+queue = "datafer-sitemap-sync-v2"
 max_batch_size = 1
 max_batch_timeout = 5
 max_concurrency = 2
 max_retries = 1
-dead_letter_queue = "datafer-sitemap-sync-dlq"
+dead_letter_queue = "datafer-sitemap-sync-v2-dlq"
 
 [vars]
 SERP_PROVIDER = "crazyserp"

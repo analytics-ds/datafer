@@ -17,7 +17,7 @@ migrations_dir = "drizzle"
 # dans son propre budget CPU/wall, isolé du worker HTTP.
 [[queues.producers]]
 binding = "ANALYSIS_QUEUE"
-queue = "datafer-analysis"
+queue = "datafer-analysis-v2"
 
 # Queue dédiée au maillage interne : le bouton "Lancer l'index" / "Resync"
 # côté UI enqueue un message {clientId, mode} au lieu de faire la sync
@@ -26,7 +26,7 @@ queue = "datafer-analysis"
 # par invocation et ré-enqueue un follow-up si hasMore=true.
 [[queues.producers]]
 binding = "SITEMAP_SYNC_QUEUE"
-queue = "datafer-sitemap-sync"
+queue = "datafer-sitemap-sync-v2"
 
 # Cloudflare Workers AI : utilisé pour générer les embeddings sémantiques
 # (modèle bge-m3 multilingue) qui permettent de calculer la similarité entre
