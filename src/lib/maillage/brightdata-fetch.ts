@@ -72,6 +72,8 @@ export function looksLikeChallengePage(body: string): boolean {
     lower.includes("perimeterx") ||
     lower.includes("__cf_chl") ||
     lower.includes("just a moment...") ||
+    lower.includes("vercel security checkpoint") ||
+    lower.includes("_vercel/protection") ||
     lower.includes("checking your browser") ||
     lower.includes("incapsula")
   );
