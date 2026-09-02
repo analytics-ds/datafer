@@ -62,7 +62,7 @@ export function TagsPanel({
           <h3 className="font-semibold text-[14px]">Tags du dossier</h3>
           <p className="text-[12px] text-[var(--text-muted)] mt-[2px]">
             Les tags créés ici n&apos;existent que dans l&apos;écosystème <strong>{folderName}</strong>. Ils restent
-            sauvegardés tant que tu ne les supprimes pas.
+            sauvegardés tant qu&apos;ils ne sont pas supprimés.
           </p>
         </div>
       </div>

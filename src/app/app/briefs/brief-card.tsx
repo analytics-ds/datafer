@@ -260,7 +260,7 @@ export function BriefCard({
             <ProgressBar step={liveStep} />
           ) : isFailed ? (
             <div className="text-[12px] text-[var(--red)] leading-[1.4]">
-              {liveError ?? "Analyse échouée. Tu peux supprimer ce brief et le relancer."}
+              {liveError ?? "Analyse échouée. Relancez le brief, puis supprimez celui-ci."}
             </div>
           ) : (
             <div className="flex items-center gap-[10px] text-[12px] flex-wrap">

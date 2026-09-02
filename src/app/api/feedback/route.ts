@@ -177,7 +177,7 @@ function renderFeedbackEmail(p: {
       ${p.screenshotsCount > 0 ? `<div style="margin-top:14px;font-size:12px;color:rgba(16,16,16,0.7)">📎 ${p.screenshotsCount} capture${p.screenshotsCount > 1 ? "s" : ""} d'écran en pièce jointe.</div>` : ""}
     </div>
     <div style="padding:14px 24px;border-top:1px solid #E8E8E8;background:#F5F5F5;font-size:11px;color:rgba(16,16,16,0.45);text-align:center">
-      Tu peux répondre à cet email pour échanger directement avec ${escapeHtml(p.userName.split(" ")[0])}.
+      Vous pouvez répondre à cet email pour échanger directement avec ${escapeHtml(p.userName.split(" ")[0])}.
     </div>
   </div>
 </body></html>`;

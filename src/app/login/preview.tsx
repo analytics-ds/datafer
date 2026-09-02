@@ -41,7 +41,7 @@ export function LoginPreview() {
         </h2>
         <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] max-w-[380px]">
           Analyse les top résultats Google, extrait les patterns NLP et score
-          ton contenu en temps réel. Au cœur de la stack SEO datashake.
+          le contenu en temps réel. Au cœur de la stack SEO datashake.
         </p>
       </div>
     </div>

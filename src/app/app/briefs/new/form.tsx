@@ -298,7 +298,7 @@ export function NewBriefForm({
                 Création de {validRows.length} briefs…
               </div>
               <p className="text-[13px] text-[var(--text-muted)] max-w-[340px] text-center">
-                Tu vas être redirigé vers la liste pour suivre la progression individuelle de chaque brief.
+                Redirection vers la liste pour suivre la progression individuelle de chaque brief.
               </p>
             </>
           ) : (
@@ -479,7 +479,7 @@ function SimpleSection({
         className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-[6px] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
       <p className="text-[11px] text-[var(--text-muted)] mb-8">
-        Si tu colles une URL, on récupère le contenu pour l&apos;injecter dans l&apos;éditeur et te donner ton score initial face à la SERP.
+        Avec une URL, on récupère le contenu pour l&apos;injecter dans l&apos;éditeur et donner le score initial face à la SERP.
       </p>
     </>
   );

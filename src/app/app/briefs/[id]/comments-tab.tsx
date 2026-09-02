@@ -235,7 +235,7 @@ export function CommentsTab({
                     autoFocus
                     value={replyBody}
                     onChange={(e) => setReplyBody(e.target.value)}
-                    placeholder="Ta réponse…"
+                    placeholder="Votre réponse…"
                     rows={2}
                     className="w-full rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-[13px] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--accent)_20%,transparent)]"
                   />

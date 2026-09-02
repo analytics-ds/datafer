@@ -148,10 +148,10 @@ export default async function AppHome() {
         />
       </section>
 
-      {/* Tes clients */}
+      {/* Clients */}
       <section className="mb-12">
         <div className="flex items-center justify-between mb-4">
-          <SectionTitle>Tes clients</SectionTitle>
+          <SectionTitle>Clients</SectionTitle>
           {foldersWithCount.length > 0 && (
             <Link href="/app/folders" className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] font-semibold">
               Voir tous →
@@ -161,7 +161,7 @@ export default async function AppHome() {
         {foldersWithCount.length === 0 ? (
           <EmptyState
             title="Aucun client pour l'instant"
-            description="Crée ton premier dossier client pour organiser tes briefs."
+            description="Créez un premier dossier client pour organiser les briefs."
             ctaLabel="Nouveau client"
             ctaHref="/app/folders/new"
           />
@@ -207,7 +207,7 @@ export default async function AppHome() {
         {recentBriefs.length === 0 ? (
           <EmptyState
             title="Aucun brief pour l'instant"
-            description="Ton premier brief apparaîtra ici. Lance une analyse pour commencer."
+            description="Le premier brief apparaîtra ici. Lancez une analyse pour commencer."
             ctaLabel="Créer un brief"
             ctaHref="/app/briefs/new"
           />
@@ -255,10 +255,10 @@ function ShareDonut({ share, myBriefs, totalBriefs }: { share: number; myBriefs:
   return (
     <div className="bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius)] p-7 flex flex-col">
       <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-inverse-muted)] mb-1">
-        Ta part ce mois
+        Votre part ce mois
       </div>
       <div className="text-[12px] text-[var(--text-inverse-secondary)] mb-6 leading-[1.4]">
-        Briefs créés par toi vs reste de l&apos;équipe.
+        Briefs que vous avez créés vs reste de l&apos;équipe.
       </div>
       <div className="flex items-center gap-5">
         <div className="relative w-[140px] h-[140px] shrink-0">
@@ -282,7 +282,7 @@ function ShareDonut({ share, myBriefs, totalBriefs }: { share: number; myBriefs:
           </div>
         </div>
         <div className="flex-1 min-w-0 flex flex-col gap-3">
-          <Stat label="Tes briefs" value={String(myBriefs)} accent />
+          <Stat label="Vos briefs" value={String(myBriefs)} accent />
           <Stat label="Équipe" value={String(totalBriefs)} />
         </div>
       </div>
@@ -337,7 +337,7 @@ function Leaderboard({
                 <Avatar image={u.image} name={display} isMe={u.isMe} />
                 <div className="flex-1 min-w-0">
                   <div className={`text-[12px] truncate ${u.isMe ? "font-bold" : "font-medium"}`}>
-                    {display}{u.isMe ? " (toi)" : ""}
+                    {display}{u.isMe ? " (vous)" : ""}
                   </div>
                   <div className="h-[4px] bg-[var(--bg)] rounded-full mt-[3px] overflow-hidden">
                     <div

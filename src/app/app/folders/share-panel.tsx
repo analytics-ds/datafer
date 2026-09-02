@@ -85,7 +85,7 @@ export function SharePanel({
           </button>
           <div className="font-semibold text-[14px] mb-1">Partager ce client</div>
           <p className="text-[12px] text-[var(--text-secondary)] leading-[1.5] mb-4">
-            Génère un lien public que tu peux envoyer à ton client. Il pourra consulter
+            Génère un lien public à envoyer au client. Il pourra consulter
             tous les briefs du client en lecture seule, sans compte.
           </p>
 

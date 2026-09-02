@@ -74,7 +74,7 @@ export default async function BriefsPage({
     <div className="px-10 py-10 max-w-[1100px]">
       <PageHeader
         title={<>Tous les briefs<span className="df-accent">.</span></>}
-        subtitle="Historique complet de tes analyses sémantiques."
+        subtitle="Historique complet des analyses sémantiques."
         action={
           <Link
             href="/app/briefs/new"
@@ -88,7 +88,7 @@ export default async function BriefsPage({
       {total === 0 ? (
         <EmptyState
           title="Aucun brief"
-          description="Crée ton premier brief pour démarrer une analyse sémantique."
+          description="Créez un premier brief pour démarrer une analyse sémantique."
           ctaLabel="Nouveau brief"
           ctaHref="/app/briefs/new"
         />

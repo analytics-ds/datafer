@@ -37,7 +37,7 @@ export function FirstLoginForm() {
         name="currentPassword"
         required
         autoComplete="current-password"
-        placeholder="Le mdp temporaire fourni par ton admin"
+        placeholder="Le mdp temporaire fourni par votre admin"
         className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-5 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
 

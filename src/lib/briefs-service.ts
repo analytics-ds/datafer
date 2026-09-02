@@ -13,6 +13,7 @@ import {
   findDomainHit,
   filterPaaByLanguage,
   crawlPage,
+  type CrawlBudget,
   runNLP,
   detectIntent,
   detectOpportunities,
@@ -533,9 +534,15 @@ async function createBriefAnalysisPayload(
   // Retry une fois en cas d'erreur transitoire BD (5xx/429), car myUrl
   // est critique : sans elle l'éditeur démarre vide. Pour les concurrents,
   // on s'en fiche d'en perdre 1 sur 10 dans le NLP.
+  // Budget niveau 3 (Scraping Browser, facture a la bande passante). Les 10
+  // concurrents se partagent 3 montees ; myUrl a la sienne, parce qu'elle est
+  // critique (sans elle l'editeur demarre vide) et qu'elle est unique.
+  const competitorBudget: CrawlBudget = { level3Remaining: 3 };
+  const myUrlBudget: CrawlBudget = { level3Remaining: 1 };
+
   const crawlMyUrlOnce = async (): Promise<PageContent | null> => {
     try {
-      const r = await crawlPage(myUrl!, env);
+      const r = await crawlPage(myUrl!, env, { budget: myUrlBudget });
       if (r && r.wordCount > 50) return r;
       return null;
     } catch {
@@ -567,7 +574,7 @@ async function createBriefAnalysisPayload(
       let finished = false;
       try {
         c = await Promise.race([
-          crawlPage(r.link, env).then((v) => {
+          crawlPage(r.link, env, { budget: competitorBudget }).then((v) => {
             finished = true;
             return v;
           }),

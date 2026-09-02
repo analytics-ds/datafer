@@ -86,7 +86,7 @@ export default async function SettingsPage() {
     <div className="px-10 py-10 max-w-[720px]">
       <PageHeader
         title={<>Paramètres<span className="df-accent">.</span></>}
-        subtitle="Gère ton profil, tes identifiants et tes clés API."
+        subtitle="Profil, identifiants et clés API."
       />
 
       <section className="mb-10">
