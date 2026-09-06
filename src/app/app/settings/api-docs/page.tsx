@@ -33,6 +33,10 @@ export default function ApiDocsPage() {
           <li><Code>GET /api/v1/briefs</Code>, liste les briefs, filtrable par <Code>keyword</Code> / <Code>folderId</Code> / <Code>status</Code></li>
           <li><Code>GET /api/v1/briefs/&#123;id&#125;</Code>, lit le brief, renvoie <Code>pending</Code> / <Code>ready</Code> / <Code>failed</Code></li>
           <li><Code>POST /api/v1/briefs/&#123;id&#125;/content</Code>, soumet du contenu HTML et reçoit le score détaillé</li>
+          <li><Code>GET /api/v1/folders</Code>, liste les dossiers clients, filtrable par <Code>name</Code> / <Code>q</Code></li>
+          <li><Code>POST /api/v1/folders</Code>, crée un dossier client (anti-doublon sur le nom)</li>
+          <li><Code>GET /api/v1/folders/&#123;id&#125;</Code>, détail d&apos;un dossier</li>
+          <li><Code>PATCH /api/v1/folders/&#123;id&#125;</Code>, renomme un dossier ou met à jour son site / ses notes / son sitemap</li>
         </ul>
         <H4>API V2 (lecture étendue, granulaire)</H4>
         <ul className="list-disc pl-5 text-[var(--text-muted)] mb-3">
@@ -335,6 +339,81 @@ export default function ApiDocsPage() {
           <li><Code>breakdown.semantic</Code> : critère sémantique paragraphe (cosinus moyen vs centroïde top 10 via bge-m3). Calculé côté éditeur via l&apos;endpoint <Code>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</Code>. Neutralisé (max=0) si pas de paragraphes scorés.</li>
           <li>Regarde <Code>breakdown</Code> pour identifier les axes faibles (mot-clé, couverture NLP, structure…) et itérer.</li>
         </ul>
+      </Section>
+
+      <Section title="Dossiers clients (folders)" dot="var(--brand-blue)">
+        <p className="mb-3">
+          Un brief se range dans un dossier client via son <Code>folderId</Code>. Ces endpoints
+          permettent de créer le dossier depuis un script, sans passer par l&apos;interface, puis
+          d&apos;enchaîner directement sur la création des briefs.
+        </p>
+
+        <H4>GET /api/v1/folders</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Liste les dossiers visibles (tous les dossiers d&apos;agence + les dossiers personnels du
+          compte), triés par nom. Params : <Code>name</Code> (égalité insensible à la casse),
+          <Code>q</Code> (recherche partielle), <Code>limit</Code> (défaut 100, max 500).
+        </p>
+        <Pre>{`curl "${BASE}/api/v1/folders?q=celio" \\
+  -H "Authorization: Bearer dfk_..."
+
+{
+  "folders": [
+    {
+      "id": "f1a2b3c4-…",
+      "name": "Celio",
+      "website": "https://www.celio.com",
+      "scope": "agency",
+      "notes": null,
+      "sitemapUrl": null,
+      "shared": false,
+      "createdAt": "2026-09-06T09:12:04.000Z",
+      "updatedAt": "2026-09-06T09:12:04.000Z"
+    }
+  ]
+}`}</Pre>
+
+        <H4>POST /api/v1/folders</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Crée un dossier. Seul <Code>name</Code> est obligatoire. Champs optionnels :
+          <Code>website</Code>, <Code>notes</Code>, <Code>sitemapUrl</Code>, <Code>scope</Code>
+          (<Code>agency</Code> par défaut, comme dans l&apos;interface).
+        </p>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Anti-doublon : si un dossier visible porte déjà ce nom (à la casse près), il est renvoyé
+          tel quel avec <Code>created: false</Code> en HTTP 200. Rejouer le même POST ne crée donc
+          jamais deux dossiers identiques. Une création réelle renvoie un HTTP 201 avec
+          <Code>created: true</Code>.
+        </p>
+        <Pre>{`curl -X POST ${BASE}/api/v1/folders \\
+  -H "Authorization: Bearer dfk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Celio","website":"https://www.celio.com"}'
+
+{
+  "folder": { "id": "f1a2b3c4-…", "name": "Celio", … },
+  "created": true
+}`}</Pre>
+
+        <H4>PATCH /api/v1/folders/&#123;id&#125;</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Met à jour un dossier. Tous les champs sont optionnels, seuls ceux présents dans le body
+          sont écrits : <Code>name</Code>, <Code>website</Code>, <Code>notes</Code>,
+          <Code>sitemapUrl</Code>. Passer <Code>null</Code> vide le champ. Un nom déjà utilisé par
+          un autre dossier renvoie un HTTP 409.
+        </p>
+        <Pre>{`curl -X PATCH ${BASE}/api/v1/folders/f1a2b3c4-… \\
+  -H "Authorization: Bearer dfk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Celio FR"}'
+
+{ "folder": { "id": "f1a2b3c4-…", "name": "Celio FR", … } }`}</Pre>
+        <p className="text-[var(--text-muted)]">
+          Pas de <Code>DELETE</Code> : supprimer un dossier détruit en cascade tous les briefs
+          qu&apos;il contient. Ce geste reste dans l&apos;interface, derrière la confirmation à
+          retaper. Le renommage, lui, est aussi disponible sur la fiche client (bouton
+          <strong> Renommer</strong>).
+        </p>
       </Section>
 
       <Section title="Exemple d'intégration Node.js" dot="var(--accent)">
