@@ -13,7 +13,7 @@ import type {
   Section as NlpSection,
   Entity,
 } from "@/lib/analysis";
-import { buildKeywordRegex, computeDetailedScore, isJunkNlpTerm, MIN_VALID_COMPETITOR_SCORE, normalize, type DetailedScore, type ParagraphSemanticScore } from "@/lib/scoring";
+import { buildKeywordRegex, computeDetailedScore, htmlToBlockTexts, isJunkNlpTerm, MIN_VALID_COMPETITOR_SCORE, normalize, type DetailedScore, type ParagraphSemanticScore } from "@/lib/scoring";
 import {
   extractGeoSignals,
   EMPTY_GEO_SIGNALS,
@@ -229,7 +229,7 @@ export function BriefEditor(props: BriefEditorProps) {
 
   const editorRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("editor");
-  const [editorData, setEditorData] = useState({ text: "", h1s: [] as string[], h2s: [] as string[], h3s: [] as string[], imageCount: 0 });
+  const [editorData, setEditorData] = useState({ text: "", h1s: [] as string[], h2s: [] as string[], h3s: [] as string[], imageCount: 0, blockCount: 0 });
   const [geoSignals, setGeoSignals] = useState<GeoSignals>(EMPTY_GEO_SIGNALS);
   const [currentTag, setCurrentTag] = useState<BlockTag | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -276,7 +276,13 @@ export function BriefEditor(props: BriefEditorProps) {
     const h2s = [...el.querySelectorAll("h2")].map((h) => (h.textContent || "").trim()).filter(Boolean);
     const h3s = [...el.querySelectorAll("h3")].map((h) => (h.textContent || "").trim()).filter(Boolean);
     const imageCount = el.querySelectorAll("img").length;
-    setEditorData({ text, h1s, h2s, h3s, imageCount });
+    // Comptage de blocs par la primitive partagée avec le scoring serveur et
+    // le scoring concurrent. Avant, le critère structure devinait les blocs en
+    // splittant `innerText` sur `\n\n` : le navigateur n'insère une ligne vide
+    // qu'autour des <p>, donc les titres, items de liste et lignes de tableau
+    // n'étaient pas comptés pareil qu'côté serveur.
+    const blockCount = htmlToBlockTexts(el.innerHTML).length;
+    setEditorData({ text, h1s, h2s, h3s, imageCount, blockCount });
     setGeoSignals(extractGeoSignals(el));
     updateCurrentTag();
   }, []);

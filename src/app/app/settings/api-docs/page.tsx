@@ -330,14 +330,15 @@ export default function ApiDocsPage() {
   }
 }`}</Pre>
 
-        <H4>Lecture du résultat (itération 8, 2026-05-08)</H4>
+        <H4>Lecture du résultat (formule 13, 2026-09-06)</H4>
         <ul className="list-disc pl-5 mb-3 text-[var(--text-muted)]">
-          <li><Code>score</Code> et <Code>breakdown.total</Code> : score affiché 0-100, <strong>relatif à la médiane des concurrents top 10</strong>. Médiane top 10 = 50, médiane × 1.5 = 100. Floor médiane à 60 (si concu faible, on calibre comme si la médiane était 60).</li>
-          <li><Code>rawTotal</Code> : score absolu sur 100 (sans relativisation), pour debug ou comparaison cross-KW.</li>
-          <li><Code>competitorMedian</Code> : médiane des scores bruts du top 10, sert de référence pour la relativisation.</li>
-          <li>Compare <Code>score</Code> à <Code>competitors.avg</Code> : au-dessus, le contenu fait mieux que la moyenne SERP.</li>
-          <li>Pondération SEO : keyword 15 + nlpCoverage 27 + contentLength 7 + headings 13 + placement 13 + structure 6 + quality 5 + semantic 10 = 96, renormalisé sur 100. Le critère images est neutralisé (max 0) depuis l'itération 9 mais reste présent dans le breakdown pour compatibilité. SEO_WEIGHT 0.92, GEO_WEIGHT 0.08.</li>
-          <li><Code>breakdown.semantic</Code> : critère sémantique paragraphe (cosinus moyen vs centroïde top 10 via bge-m3). Calculé côté éditeur via l&apos;endpoint <Code>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</Code>. Neutralisé (max=0) si pas de paragraphes scorés.</li>
+          <li><Code>score</Code>, <Code>breakdown.total</Code> et <Code>rawTotal</Code> : le même score absolu 0-100. La relativisation à la médiane des concurrents n&apos;est plus appliquée depuis le 2026-05-16, le score du contenu rédigé est directement comparable aux scores des concurrents. <Code>competitorMedian</Code> reste donc à 0 sur ce chemin.</li>
+          <li>Compare <Code>score</Code> à <Code>competitors.avg</Code> et <Code>competitors.best</Code> : c&apos;est <Code>best</Code> qui sert d&apos;objectif.</li>
+          <li>Pondération SEO : keyword 15 + nlpCoverage 22 + differentiation 4 + contentLength 7 + headings 13 + placement 13 + structure 6 + quality 5 + salience 4 + semantic 15 = 104, renormalisé sur 100. SEO_WEIGHT 0.92, GEO_WEIGHT 0.08.</li>
+          <li><strong>Critères neutralisables</strong> : un critère non applicable passe à <Code>max: 0</Code> et sort de la renormalisation, il ne coûte ni ne rapporte rien. C&apos;est le cas d&apos;<Code>images</Code> (retiré depuis l&apos;itération 9, conservé pour compatibilité), de <Code>differentiation</Code> quand le mot-clé n&apos;a aucune opportunité, de <Code>semantic</Code> sans centroïde, et de <Code>nlpCoverage</Code> quand un palier est vide : <Code>max</Code> tombe à 14 s&apos;il n&apos;y a aucun terme important, à 8 s&apos;il n&apos;y a aucun essentiel, à 0 si le mot-clé n&apos;a que des opportunités. Lis toujours <Code>score</Code> rapporté à <Code>max</Code>, jamais le score seul.</li>
+          <li><Code>breakdown.semantic</Code> : cosinus moyen des paragraphes rédigés vs le centroïde du top 10 (bge-m3). Depuis le 2026-09-06 il est calculé aussi côté serveur, sur les mêmes blocs que l&apos;éditeur (p / ul / ol d&apos;au moins 5 mots, 40 blocs au maximum) : le score renvoyé par l&apos;API est donc celui qu&apos;affiche l&apos;éditeur. Neutralisé sur les briefs analysés avant l&apos;introduction du centroïde.</li>
+          <li><Code>breakdown.salience</Code> : la première mention du mot-clé dans le corps est-elle en gras ou en emphase. Détectée côté serveur depuis le HTML transmis, plus besoin de passer par l&apos;éditeur.</li>
+          <li><Code>breakdown.structure.target</Code> : nombre moyen de blocs de contenu chez les concurrents (titres, paragraphes, items de liste, lignes de tableau). Le ratio visé est entre 0,7 et 1,4 fois cette référence.</li>
           <li>Regarde <Code>breakdown</Code> pour identifier les axes faibles (mot-clé, couverture NLP, structure…) et itérer.</li>
         </ul>
       </Section>
