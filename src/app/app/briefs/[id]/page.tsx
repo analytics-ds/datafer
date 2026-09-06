@@ -47,11 +47,11 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
   // invalidé par applyBriefOverrides).
   if (nlp) {
     const serpJson = JSON.stringify(serp);
-    ensureCompetitorScores(nlp, serpJson);
-    // Même backfill pour la référence de structure (avgBlocks), sinon le
-    // critère structure de l'éditeur comparerait des blocs à un décompte de
-    // <p> sur les briefs analysés avant le 2026-09-06.
+    // Référence de structure d'abord : les scores concurrents en dépendent
+    // (critère structure), donc l'ordre inverse les recalculerait sur
+    // l'ancienne référence (le décompte de <p> au lieu des blocs).
     ensureAvgBlocks(nlp, serpJson);
+    ensureCompetitorScores(nlp, serpJson);
   }
   const paa = b.paaJson ? (JSON.parse(b.paaJson) as Paa[]) : [];
   const haloscan = b.haloscanJson ? (JSON.parse(b.haloscanJson) as HaloscanOverview) : null;

@@ -30,6 +30,7 @@ import {
   ensureCompetitorScores,
   htmlToBlockTexts,
   kwEmphasizedFromHtml,
+  refreshCompetitorScores,
   SCORING_VERSION,
   type DetailedScore,
   type EditorData,
@@ -250,10 +251,17 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
   // 2026-05-16). On garde quand même ensureCompetitorScores pour persister
   // nlp.competitorScores (utilisé par computeCompetitorStats côté UI pour
   // afficher concurrence avg/best).
-  ensureCompetitorScores(nlp, row.serpJson);
-  // Référence de structure : backfill pour les briefs analysés avant que
-  // avgBlocks n'existe (cf. ensureAvgBlocks).
+  // refreshCompetitorScores plutôt qu'ensureCompetitorScores : il renvoie
+  // aussi les rows du SERP avec leur `score` à jour, qu'on persiste plus bas.
+  // Chaque row porte sa propre copie du score, et c'est celle-là que lit
+  // computeCompetitorStats pour l'avg / le best affichés et renvoyés par
+  // l'API : sans réécriture, le `best` à battre restait figé sur l'ancienne
+  // formule alors que nlp.competitorScores, lui, était recalculé.
+  // ORDRE IMPORTANT : la référence de structure d'abord. Les scores
+  // concurrents dépendent d'avgBlocks (critère structure), donc les
+  // rafraîchir avant le backfill les recalculerait sur l'ancienne référence.
   ensureAvgBlocks(nlp, row.serpJson);
+  const refreshedSerp = refreshCompetitorScores(nlp, row.serpJson);
   // Scoring sur le NLP overridé (mots-clés secondaires / termes custom,
   // concurrents désactivés, wordCount), comme l'éditeur via page.tsx. Sans
   // ça, le score persisté par POST /api/v1/briefs/{id}/content ignorait les
@@ -262,15 +270,19 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
   // seraient bakés et impossibles à retirer via la modal Paramètres) ;
   // applyBriefOverrides travaille sur une copie, le backfill ci-dessus reste
   // sur le nlp brut.
-  const rawSerp = row.serpJson ? (JSON.parse(row.serpJson) as SerpResult[]) : [];
+  // Les rows rafraîchies servent de base au scoring overridé, sinon on
+  // repart du serpJson persisté.
+  const rawSerp =
+    refreshedSerp?.serp ?? (row.serpJson ? (JSON.parse(row.serpJson) as SerpResult[]) : []);
   const overrides = parseBriefOverrides(row.overridesJson);
   const overridden = applyBriefOverrides({ nlp, serp: rawSerp, position: null }, overrides);
   const scoringNlp = overridden.nlp ?? nlp;
   // Si des concurrents sont désactivés, applyBriefOverrides a invalidé
   // competitorScores sur la copie : re-scoring sur le SERP filtré.
   const overriddenSerpJson = JSON.stringify(overridden.serp);
-  ensureCompetitorScores(scoringNlp, overriddenSerpJson);
+  // Même ordre que ci-dessus : avgBlocks avant les scores concurrents.
   ensureAvgBlocks(scoringNlp, overriddenSerpJson);
+  ensureCompetitorScores(scoringNlp, overriddenSerpJson);
   const geoSignals = geoSignalsFromHtml(editorHtml);
   // Saillance et sémantique : sans ces deux critères, le scoring serveur
   // tournait sur 85 points quand l'éditeur tournait sur 104, et le même HTML
@@ -302,6 +314,9 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
       editorHtml,
       score: breakdown.total,
       nlpJson: nlpJsonToWrite,
+      // Écrit seulement quand les scores concurrents ont été recalculés : on
+      // ne réécrit pas serpJson (payload lourd) à chaque rescore.
+      ...(refreshedSerp ? { serpJson: JSON.stringify(refreshedSerp.serp) } : {}),
       updatedAt: new Date(),
     })
     .where(eq(brief.id, briefId));
@@ -310,7 +325,11 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
     ok: true,
     total: breakdown.total,
     breakdown,
-    competitors: computeCompetitorStats(row.serpJson),
+    // Stats calculées sur les rows rafraîchies quand il y en a : le `best`
+    // renvoyé au client doit venir de la même formule que son score.
+    competitors: computeCompetitorStats(
+      refreshedSerp ? JSON.stringify(refreshedSerp.serp) : row.serpJson,
+    ),
   };
 }
 

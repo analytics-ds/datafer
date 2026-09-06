@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
-import { computeDetailedScore } from "@/lib/scoring";
+import { competitorEditorData, computeDetailedScore } from "@/lib/scoring";
 import { geoSignalsFromHtml } from "@/lib/geo-scoring";
 import { CONTENT_CAP_CHARS } from "@/lib/competitor-content";
 import { htmlToMarkdown } from "@/lib/export-markdown";
@@ -41,14 +41,12 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
     // Pas de competitorScores ici : on veut le score brut absolu du
     // concurrent, pas un score relatif (n'aurait pas de sens : un
     // concurrent comparé à lui-même).
+    // competitorEditorData : mêmes règles de mesure que le score persisté du
+    // concurrent (comptage de blocs, saillance). Sans lui, ce breakdown
+    // affichait une structure à 1/6 pour toutes les pages, le texte crawlé
+    // étant aplati sur une seule ligne.
     breakdown = computeDetailedScore(
-      {
-        text: competitor.text,
-        h1s: competitor.h1 ?? [],
-        h2s: competitor.h2 ?? [],
-        h3s: competitor.h3 ?? [],
-        imageCount: competitor.imageCount ?? 0,
-      },
+      competitorEditorData(competitor, nlp.exactKeyword.keyword),
       nlp,
       geoSignals,
     );

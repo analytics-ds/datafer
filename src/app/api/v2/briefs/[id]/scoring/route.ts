@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
 import { htmlToEditorData, computeCompetitorStats } from "@/lib/briefs-service";
-import { computeDetailedScore } from "@/lib/scoring";
+import {
+  computeDetailedScore,
+  ensureAvgBlocks,
+  kwEmphasizedFromHtml,
+} from "@/lib/scoring";
 import { geoSignalsFromHtml } from "@/lib/geo-scoring";
+import { scoreParagraphsAgainstCentroid } from "@/lib/semantic-paragraphs";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const dynamic = "force-dynamic";
 
@@ -23,17 +29,33 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   const editorHtml = row.editorHtml ?? "";
   const ed = htmlToEditorData(editorHtml);
   const geoSignals = geoSignalsFromHtml(editorHtml);
+  // Référence de structure pour les briefs analysés avant avgBlocks.
+  ensureAvgBlocks(nlp, row.serpJson);
+  // Sémantique et saillance calculées ici aussi (2026-09-06) : ce breakdown
+  // était auparavant recalculé sans elles, donc il ne pouvait pas coïncider
+  // avec le score persisté et une note expliquait l'écart. Les deux sont
+  // désormais calculables côté serveur, le breakdown est donc complet.
+  const kwEmphasized = kwEmphasizedFromHtml(editorHtml, nlp.exactKeyword?.keyword ?? "");
+  const ai = (getCloudflareContext().env as unknown as { AI?: Ai }).AI;
+  const semanticScores = await scoreParagraphsAgainstCentroid(
+    editorHtml,
+    nlp.semanticCentroid,
+    ai,
+  );
   // Score brut (rawTotal) directement, plus de relativisation vs médiane
   // concurrents (décision 2026-05-16 : aligner user vs SERP sur même échelle).
-  const breakdown = computeDetailedScore(ed, nlp, geoSignals);
+  const breakdown = computeDetailedScore(
+    { ...ed, kwEmphasized },
+    nlp,
+    geoSignals,
+    undefined,
+    semanticScores ?? undefined,
+  );
 
-  // Le critère sémantique paragraphe est calculé côté client (live editor)
-  // car il nécessite des appels bge-m3 par paragraphe. Côté serveur on
-  // n'a pas les scores → critère neutralisé. Mais l'utilisateur a sauvegardé
-  // un score qui les inclut. On retourne donc :
-  //   - total = brief.score (le vrai score affiché dans l'éditeur, persisté)
-  //   - breakdown = recalculé sans sémantique (info pédagogique)
-  // Sans persistance (`row.score == null`), on retombe sur le breakdown.
+  // `total` reste le score persisté quand il existe (c'est celui qu'affichent
+  // la liste et l'éditeur) ; `breakdownTotal` est le recalcul de cette
+  // requête. Les deux doivent maintenant coïncider, un écart signale un
+  // score persisté par une formule antérieure.
   const displayedTotal = row.score ?? breakdown.total;
 
   return NextResponse.json({
@@ -48,12 +70,15 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
     breakdown: {
       keyword: breakdown.keyword,
       nlpCoverage: breakdown.nlpCoverage,
+      differentiation: breakdown.differentiation,
       contentLength: breakdown.contentLength,
       headings: breakdown.headings,
       placement: breakdown.placement,
       structure: breakdown.structure,
       quality: breakdown.quality,
       images: breakdown.images,
+      semantic: breakdown.semantic,
+      salience: breakdown.salience,
       geo: breakdown.geo,
     },
     competitors: computeCompetitorStats(row.serpJson),

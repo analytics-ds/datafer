@@ -49,7 +49,7 @@ export default function ApiDocsPage() {
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/print</Code>, page imprimable d&apos;un concurrent (Save as PDF côté navigateur)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/nlp</Code>, NLP complet (termes, clusters, sections, entités, opportunités, intent)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/paa</Code>, People Also Ask seuls</li>
-          <li><Code>GET /api/v2/briefs/&#123;id&#125;/scoring</Code>, breakdown détaillé du score (8 critères SEO + sémantique + GEO, scoring relatif vs concu)</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/scoring</Code>, breakdown détaillé du score (10 critères SEO dont sémantique et saillance, + bloc GEO)</li>
           <li><Code>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</Code>, embed un paragraphe et retourne sa proximité sémantique vs le centroïde top 10</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/haloscan</Code>, payload Haloscan brut + summary</li>
         </ul>
@@ -312,7 +312,7 @@ export default function ApiDocsPage() {
     "rawTotal": 78,
     "competitorMedian": 62,
     "keyword":      { "score": 12, "max": 15, "details": { "count": 6,  "density": 1.24 } },
-    "nlpCoverage":  { "score": 22, "max": 27, "details": { "essentialsUsed": 14, "essentialsTotal": 14, "essentialsCoverage": 100, "essentialsScore": 17, "importantsUsed": 6, "importantsTotal": 18, "importantsScore": 5 } },
+    "nlpCoverage":  { "score": 18, "max": 22, "details": { "essentialsUsed": 14, "essentialsTotal": 14, "essentialsCoverage": 100, "essentialsScore": 14, "importantsUsed": 6, "importantsTotal": 18, "importantsScore": 4 } },
     "contentLength":{ "score":  6, "max":  7, "details": { "wc": 1083, "target": 1450 } },
     "headings":     { "score": 11, "max": 13, "details": { "h1": 1, "h2": 6, "h3": 3, "h1HasKw": true } },
     "placement":    { "score": 11, "max": 13, "details": { "distribution": "3/4 exact, 1/4 soft" } },
@@ -680,9 +680,10 @@ GET /api/v2/briefs/{id}/competitors/3/download?format=docx
         <H4>GET /api/v2/briefs/&#123;id&#125;/scoring</H4>
         <p className="mb-2 text-[var(--text-muted)]">
           Breakdown détaillé du score, recalculé sur le HTML actuellement stocké dans le brief
-          (mis à jour par chaque <Code>POST /content</Code>). 8 critères SEO + sémantique + bloc GEO.
-          Le <Code>total</Code> est <strong>relatif à la médiane des concurrents top 10</strong>
-          (médiane = 50, médiane × 1.5 = 100, floor médiane à 60).
+          (mis à jour par chaque <Code>POST /content</Code>). 10 critères SEO, dont sémantique et saillance, plus le bloc GEO.
+          Le <Code>total</Code> est le score persisté du brief, <Code>breakdownTotal</Code> le
+          recalcul de la requête : les deux doivent coïncider, un écart signale un score
+          enregistré par une formule antérieure.
         </p>
         <Pre>{`{
   "id": "...", "keyword": "...",
@@ -693,9 +694,9 @@ GET /api/v2/briefs/{id}/competitors/3/download?format=docx
   "seoTotal": 82, "geoTotal": 70,
   "breakdown": {
     "keyword":      { "score": 13, "max": 15, "details": { ... } },
-    "nlpCoverage":  { "score": 22, "max": 27, "details": {
-      "essentialsUsed": 14, "essentialsTotal": 14, "essentialsScore": 17,
-      "importantsUsed": 7, "importantsTotal": 18, "importantsScore": 5
+    "nlpCoverage":  { "score": 18, "max": 22, "details": {
+      "essentialsUsed": 14, "essentialsTotal": 14, "essentialsScore": 14,
+      "importantsUsed": 7, "importantsTotal": 18, "importantsScore": 4
     } },
     "contentLength":{ "score":  6, "max":  7, "details": { "wc": 1840, "target": 2100 } },
     "headings":     { "score": 11, "max": 13, "details": { ... } },
@@ -703,19 +704,20 @@ GET /api/v2/briefs/{id}/competitors/3/download?format=docx
     "structure":    { "score":  4, "max":  6, "details": { ... } },
     "quality":      { "score":  4, "max":  5, "details": { ... } },
     "images":       { "score":  0, "max":  0, "details": { "count": 4, "target": 5 } },
+    "differentiation": { "score": 3, "max": 4, "details": { ... } },
+    "semantic":     { "score": 11, "max": 15, "details": { "paragraphsScored": 12, "avgCosine": 0.712 } },
+    "salience":     { "score":  4, "max":  4, "details": { "emphasized": true } },
     "geo":          { "total": 70, ... }
   },
   "competitors": { "avg": 71, "best": 85, "bestUrl": "...", "count": 9 },
   "editorWordCount": 1840
 }`}</Pre>
         <p className="text-[var(--text-muted)] mb-2 text-[12px]">
-          <strong>Notes :</strong> <Code>total</Code> est le score affiché à l&apos;utilisateur
-          (préserve le score persisté côté éditeur incluant le critère sémantique calculé
-          live). <Code>breakdownTotal</Code> est le total recalculé côté serveur sans le
-          sémantique (ce critère étant calculé côté client via l&apos;endpoint
-          <Code>/semantic-paragraph</Code>). Pour des consommateurs API qui veulent inclure
-          le sémantique programmatiquement, embedder leurs paragraphes via cet endpoint et
-          appliquer la formule cosinus → score (0.85 → 10, 0.65 → 5, 0.45 → 2).
+          <strong>Notes :</strong> depuis le 2026-09-06, le serveur calcule lui-même la
+          sémantique (embeddings des paragraphes) et la saillance : plus besoin d&apos;appeler
+          <Code>/semantic-paragraph</Code> paragraphe par paragraphe ni de rejouer la formule
+          cosinus à la main pour obtenir un score complet. <Code>total</Code> reste le score
+          persisté, <Code>breakdownTotal</Code> le recalcul de la requête.
         </p>
 
         <H4>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</H4>

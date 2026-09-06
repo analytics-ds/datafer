@@ -455,6 +455,72 @@ export function ensureAvgBlocks(nlp: NlpResult, serpJson: string | null): number
   return nlp.avgBlocks;
 }
 
+/** Score brut d'un concurrent, ou `null` s'il n'est pas exploitable. */
+export function scoreCompetitorRow(r: SerpResult, nlp: NlpResult): number | null {
+  if (!r || !r.text || (r.wordCount ?? 0) < 50) return null;
+  const geoSignals = r.structuredHtml ? geoSignalsFromHtml(r.structuredHtml) : undefined;
+  return computeDetailedScore(
+    competitorEditorData(r, nlp.exactKeyword.keyword),
+    nlp,
+    geoSignals,
+    // Pas de competitorScores ici : on calcule le score brut absolu.
+  ).rawTotal;
+}
+
+/** Rows du SERP, que serpJson soit un tableau ou un objet indexé (legacy). */
+function parseSerpRows(serpJson: string): SerpResult[] | null {
+  try {
+    const parsed = JSON.parse(serpJson);
+    if (Array.isArray(parsed)) return parsed;
+    return Object.keys(parsed as Record<string, SerpResult>)
+      .sort((a, b) => Number(a) - Number(b))
+      .map((k) => (parsed as Record<string, SerpResult>)[k]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Recalcule les scores concurrents ET les réécrit sur chaque row.
+ *
+ * `nlp.competitorScores` n'est pas la seule copie de ces scores : chaque row
+ * de `serpJson` porte son propre `score`, et c'est celui-là que lit
+ * `computeCompetitorStats` pour produire le `avg` / `best` affichés et
+ * renvoyés par l'API. Rafraîchir seulement le tableau laissait donc le `best`
+ * — l'objectif à battre — figé sur l'ancienne formule.
+ *
+ * Renvoie `null` si rien n'était à rafraîchir (formule déjà à jour, SERP
+ * illisible ou aucun concurrent exploitable).
+ */
+export function refreshCompetitorScores(
+  nlp: NlpResult,
+  serpJson: string | null,
+): { serp: SerpResult[]; scores: number[] } | null {
+  if (!serpJson) return null;
+  if (
+    nlp.competitorScores &&
+    nlp.competitorScores.length > 0 &&
+    nlp.scoringVersion === SCORING_VERSION
+  ) {
+    return null;
+  }
+  const rows = parseSerpRows(serpJson);
+  if (!rows) return null;
+
+  const scores: number[] = [];
+  for (const r of rows) {
+    const score = scoreCompetitorRow(r, nlp);
+    if (score === null) continue;
+    r.score = score;
+    scores.push(score);
+  }
+  if (scores.length === 0) return null;
+
+  nlp.competitorScores = scores;
+  nlp.scoringVersion = SCORING_VERSION;
+  return { serp: rows, scores };
+}
+
 export function ensureCompetitorScores(
   nlp: NlpResult,
   serpJson: string | null,
@@ -470,38 +536,13 @@ export function ensureCompetitorScores(
   ) {
     return nlp.competitorScores;
   }
-  if (!serpJson) return nlp.competitorScores ?? [];
-  let serp: Record<string, SerpResult> | SerpResult[];
-  try {
-    serp = JSON.parse(serpJson);
-  } catch {
-    return [];
-  }
-  const results = Array.isArray(serp)
-    ? serp
-    : Object.keys(serp)
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => (serp as Record<string, SerpResult>)[k]);
-  const scores: number[] = [];
-  for (const r of results) {
-    if (!r || !r.text || (r.wordCount ?? 0) < 50) continue;
-    const geoSignals = r.structuredHtml ? geoSignalsFromHtml(r.structuredHtml) : undefined;
-    const breakdown = computeDetailedScore(
-      competitorEditorData(r, nlp.exactKeyword.keyword),
-      nlp,
-      geoSignals,
-      // Pas de competitorScores ici : on calcule le score brut absolu.
-    );
-    scores.push(breakdown.rawTotal);
-  }
   // Cache en mémoire sur l'objet nlp pour les appels suivants dans la même
-  // requête (évite de re-scorer 10 concurrents pour chaque computeDetailedScore).
-  // Rien n'est écrit en base ici : la persistance suit à la prochaine
-  // sauvegarde du brief.
-  if (scores.length === 0) return nlp.competitorScores ?? [];
-  nlp.competitorScores = scores;
-  nlp.scoringVersion = SCORING_VERSION;
-  return scores;
+  // requête (évite de re-scorer 10 concurrents pour chaque
+  // computeDetailedScore). Rien n'est écrit en base ici : la persistance suit
+  // à la prochaine sauvegarde du brief (cf. refreshCompetitorScores, qui
+  // renvoie aussi les rows à réécrire dans serpJson).
+  const refreshed = refreshCompetitorScores(nlp, serpJson);
+  return refreshed ? refreshed.scores : (nlp.competitorScores ?? []);
 }
 
 /**

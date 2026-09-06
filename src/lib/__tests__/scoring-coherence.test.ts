@@ -12,6 +12,7 @@ import {
   ensureCompetitorScores,
   htmlToBlockTexts,
   kwEmphasizedFromHtml,
+  refreshCompetitorScores,
   SCORING_VERSION,
   type EditorData,
 } from "@/lib/scoring";
@@ -245,6 +246,50 @@ describe("3. référence de structure et estampille de formule", () => {
     nlp.competitorScores = [42];
     nlp.scoringVersion = SCORING_VERSION;
     expect(ensureCompetitorScores(nlp, serpJson())).toEqual([42]);
+  });
+
+  it("réécrit le score sur chaque row du SERP, pas seulement dans nlp", () => {
+    // computeCompetitorStats lit le `score` des rows : sans réécriture, le
+    // `best` à battre restait figé sur l'ancienne formule.
+    const nlp = makeNlp([{ term: "amorti", presence: 90 }]);
+    nlp.competitorScores = [42];
+    nlp.scoringVersion = SCORING_VERSION - 1;
+    const refreshed = refreshCompetitorScores(nlp, serpJson());
+    expect(refreshed).not.toBeNull();
+    expect(refreshed!.serp[0].score).toBe(refreshed!.scores[0]);
+    expect(refreshed!.scores[0]).not.toBe(42);
+    expect(nlp.scoringVersion).toBe(SCORING_VERSION);
+  });
+
+  it("score le concurrent sur avgBlocks quand la référence est déjà backfillée", () => {
+    // Garde-fou d'ordre d'appel : ensureAvgBlocks doit tourner AVANT le
+    // rafraîchissement, sinon les concurrents sont recalculés sur
+    // avgParagraphs (décompte de <p>) et restent sous-évalués.
+    const sansRef = makeNlp([{ term: "amorti", presence: 90 }]);
+    sansRef.scoringVersion = SCORING_VERSION - 1;
+    const scoreSansRef = refreshCompetitorScores(sansRef, serpJson())!.scores[0];
+
+    const avecRef = makeNlp([{ term: "amorti", presence: 90 }]);
+    avecRef.scoringVersion = SCORING_VERSION - 1;
+    ensureAvgBlocks(avecRef, serpJson());
+    const scoreAvecRef = refreshCompetitorScores(avecRef, serpJson())!.scores[0];
+
+    expect(scoreAvecRef).toBeGreaterThan(scoreSansRef);
+  });
+
+  it("ne rafraîchit rien quand la formule est déjà à jour", () => {
+    const nlp = makeNlp([{ term: "amorti", presence: 90 }]);
+    nlp.competitorScores = [42];
+    nlp.scoringVersion = SCORING_VERSION;
+    expect(refreshCompetitorScores(nlp, serpJson())).toBeNull();
+  });
+
+  it("ne rafraîchit rien quand aucun concurrent n'est exploitable", () => {
+    const nlp = makeNlp([{ term: "amorti", presence: 90 }]);
+    // wordCount sous le seuil de 50 : page mal crawlée, non scorable.
+    const thin = JSON.stringify([{ position: 1, text: "court", wordCount: 3 }]);
+    expect(refreshCompetitorScores(nlp, thin)).toBeNull();
+    expect(refreshCompetitorScores(nlp, "pas du json")).toBeNull();
   });
 
   it("garde les anciens scores si le SERP ne permet pas de recalculer", () => {
