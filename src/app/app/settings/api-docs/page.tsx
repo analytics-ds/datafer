@@ -42,9 +42,10 @@ export default function ApiDocsPage() {
         <ul className="list-disc pl-5 text-[var(--text-muted)] mb-3">
           <li><Code>GET /api/v2/briefs/&#123;id&#125;</Code>, résumé enrichi (intent, stats SERP, snapshot Haloscan)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/serp</Code>, top 10 brut + People Also Ask</li>
-          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors</Code>, les 10 concurrents enrichis (Hn, outline, score, wordCount)</li>
-          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;</Code>, détail d&apos;un concurrent avec son texte brut et son HTML reconstitué</li>
-          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/download?format=html|docx</Code>, télécharge le contenu d&apos;un concurrent en HTML ou Word</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors?content=text|html|markdown|all</Code>, les 10 concurrents enrichis (Hn, outline, score, wordCount) <strong>et leur contenu en un seul appel</strong></li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;</Code>, détail d&apos;un concurrent avec son texte brut, son HTML reconstitué et son Markdown</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/content?format=text|html|markdown</Code>, le contenu brut d&apos;un concurrent, sans enveloppe JSON</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/download?format=html|markdown|docx</Code>, télécharge le contenu d&apos;un concurrent en HTML, Markdown ou Word</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/print</Code>, page imprimable d&apos;un concurrent (Save as PDF côté navigateur)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/nlp</Code>, NLP complet (termes, clusters, sections, entités, opportunités, intent)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/paa</Code>, People Also Ask seuls</li>
@@ -502,9 +503,29 @@ async function run(keyword: string, editorHtml: string) {
 
         <H4>GET /api/v2/briefs/&#123;id&#125;/competitors</H4>
         <p className="mb-2 text-[var(--text-muted)]">
-          Les 10 concurrents enrichis (Hn, outline, score, wordCount). Le contenu textuel
-          n&apos;est pas inclus ici pour borner le payload, demande
-          <Code>/competitors/&#123;n&#125;</Code> pour le récupérer.
+          Les 10 concurrents enrichis (Hn, outline, score, wordCount). Par défaut sans le
+          contenu, pour borner le payload : chaque concurrent porte quand même
+          <Code>hasContent</Code>, <Code>chars</Code> et <Code>truncated</Code>.
+        </p>
+        <p className="mb-2 text-[var(--text-muted)]">
+          <Code>?content=text|html|markdown|all</Code> joint le contenu crawlé de
+          <strong> chaque</strong> concurrent à la réponse : un seul appel au lieu de dix.
+          Alias acceptés : <Code>md</Code>, <Code>structuredHtml</Code>, <Code>1</Code>.
+          <Code>?position=1,2,5</Code> restreint la réponse à certaines positions, pratique
+          pour ne tirer le contenu que des concurrents qui t&apos;intéressent.
+        </p>
+        <Pre>{`# les 10 concurrents avec leur contenu en Markdown, en un appel
+curl "${BASE}/api/v2/briefs/{id}/competitors?content=markdown" \\
+  -H "Authorization: Bearer dfk_..."
+
+# seulement les positions 1 et 2, contenu brut + HTML + Markdown
+curl "${BASE}/api/v2/briefs/{id}/competitors?content=all&position=1,2" \\
+  -H "Authorization: Bearer dfk_..."`}</Pre>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Le contenu persisté est capé à 30 000 caractères par champ et par concurrent
+          (limite de taille de row D1). <Code>truncated: true</Code> signale un contenu qui
+          a atteint ce cap, donc probablement coupé. Le cap en vigueur est renvoyé dans
+          <Code>contentCapChars</Code>.
         </p>
         <Pre>{`{
   "id": "...",
@@ -521,7 +542,11 @@ async function run(keyword: string, editorHtml: string) {
         { "level": 2, "text": "..." }
       ],
       "score": 85,
-      "hasContent": true
+      "hasContent": true,
+      "chars": 14820,
+      "truncated": false,
+      // présents selon ?content=
+      "text": "...", "structuredHtml": "<h1>…", "markdown": "# …"
     },
     ...
   ]
@@ -546,20 +571,43 @@ async function run(keyword: string, editorHtml: string) {
     "outline": [...],
     "score": 79,
     "text": "Texte brut nettoyé, sans markup, séparé par des espaces ...",
-    "structuredHtml": "<h1>...</h1><p>...</p><h2>...</h2><p>...</p>..."
+    "structuredHtml": "<h1>...</h1><p>...</p><h2>...</h2><p>...</p>...",
+    "markdown": "# Titre\\n\\nParagraphe...\\n\\n## Sous-titre...",
+    "truncated": false,
+    "breakdown": { ... }
   }
 }`}</Pre>
 
+        <H4>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/content</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Le contenu d&apos;un concurrent <strong>brut, sans enveloppe JSON</strong> : de quoi
+          l&apos;écrire directement dans un fichier ou le passer à un modèle.
+          <Code>format=text|html|markdown</Code> (Markdown par défaut, alias <Code>md</Code> et
+          <Code>txt</Code>). La réponse porte l&apos;URL et la position du concurrent dans les
+          en-têtes <Code>X-Competitor-Url</Code> et <Code>X-Competitor-Position</Code>.
+        </p>
+        <Pre>{`curl "${BASE}/api/v2/briefs/{id}/competitors/3/content?format=markdown" \\
+  -H "Authorization: Bearer dfk_..." > concurrent-3.md
+
+# le texte brut, pour compter les mots ou diffé deux versions
+curl "${BASE}/api/v2/briefs/{id}/competitors/1/content?format=text" \\
+  -H "Authorization: Bearer dfk_..."`}</Pre>
+
         <H4>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/download</H4>
         <p className="mb-2 text-[var(--text-muted)]">
-          Télécharge le contenu HTML reconstitué d&apos;un concurrent dans un format prêt
-          à publier. Query param <Code>format=html|docx</Code>. Renvoie
+          Même contenu, mais servi en pièce jointe (<Code>Content-Disposition</Code>) dans un
+          format prêt à publier. Query param <Code>format=html|markdown|docx</Code>. Renvoie
           <Code>404 competitor content not available</Code> sur les briefs
           créés avant le 2026-05-02 (le contenu n&apos;était pas persisté avant cette date).
         </p>
         <Pre>{`GET /api/v2/briefs/{id}/competitors/3/download?format=html
 → Content-Type: text/html; charset=utf-8
 → Content-Disposition: attachment; filename="comparatif-scooter-3-cleanrider-com.html"
+
+GET /api/v2/briefs/{id}/competitors/3/download?format=markdown
+→ Content-Type: text/markdown; charset=utf-8
+→ Content-Disposition: attachment; filename="comparatif-scooter-3-cleanrider-com.md"
+→ front matter YAML (keyword, position, source, title) puis le contenu
 
 GET /api/v2/briefs/{id}/competitors/3/download?format=docx
 → Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
 import { computeDetailedScore } from "@/lib/scoring";
 import { geoSignalsFromHtml } from "@/lib/geo-scoring";
+import { CONTENT_CAP_CHARS } from "@/lib/competitor-content";
+import { htmlToMarkdown } from "@/lib/export-markdown";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +76,16 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
       // antérieurs.
       text: competitor.text ?? null,
       structuredHtml: competitor.structuredHtml ?? null,
+      // Markdown dérivé du structuredHtml à la volée : format de travail
+      // pour relire un contenu ou l'envoyer à un modèle.
+      markdown: competitor.structuredHtml
+        ? htmlToMarkdown(competitor.structuredHtml)
+        : null,
+      // Le contenu persisté est capé à 30 000 caractères par champ : ce
+      // drapeau dit si on est à la limite, donc probablement coupé.
+      truncated:
+        (competitor.text?.length ?? 0) >= CONTENT_CAP_CHARS ||
+        (competitor.structuredHtml?.length ?? 0) >= CONTENT_CAP_CHARS,
       // Breakdown détaillé par critère SEO. null si pas assez de contenu
       // pour calculer (briefs anciens sans text persisté).
       breakdown: breakdown
