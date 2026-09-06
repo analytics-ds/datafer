@@ -8,6 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { client, folderFavorite } from "@/db/schema";
+import { nameTaken, normalizeUrl } from "@/lib/folders-service";
 
 export async function createFolderAction(formData: FormData) {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -30,6 +31,53 @@ export async function createFolderAction(formData: FormData) {
   });
 
   redirect(`/app/folders/${id}`);
+}
+
+/**
+ * Renomme un dossier et met à jour son site. Le nom d'un dossier n'était
+ * éditable nulle part une fois le dossier créé : une faute de frappe imposait
+ * de tout recréer et de perdre les briefs rattachés.
+ */
+export async function updateFolderAction(
+  folderId: string,
+  input: { name: string; website: string | null },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await getAuth().api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "Non authentifié" };
+
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Le nom est obligatoire" };
+  if (name.length > 120) return { ok: false, error: "Nom trop long (120 caractères max)" };
+
+  const website = normalizeUrl(input.website);
+  if (website instanceof Error) {
+    return { ok: false, error: "Site web invalide (attendu : https://exemple.com)" };
+  }
+
+  const db = getDb();
+  const [folder] = await db
+    .select({ id: client.id, scope: client.scope, ownerId: client.ownerId })
+    .from(client)
+    .where(eq(client.id, folderId))
+    .limit(1);
+  if (!folder) return { ok: false, error: "Client introuvable" };
+  if (folder.scope === "personal" && folder.ownerId !== session.user.id) {
+    return { ok: false, error: "Ce client ne vous appartient pas" };
+  }
+
+  if (await nameTaken(session.user.id, name, folderId)) {
+    return { ok: false, error: `Un client nommé « ${name} » existe déjà` };
+  }
+
+  await db
+    .update(client)
+    .set({ name, website, updatedAt: new Date() })
+    .where(eq(client.id, folderId));
+
+  // Le nom du dossier est affiché dans la sidebar, les cartes de brief et les
+  // listings : on invalide tout le layout de l'app.
+  revalidatePath("/app", "layout");
+  return { ok: true };
 }
 
 export async function toggleFavoriteAction(folderId: string): Promise<

@@ -33,18 +33,23 @@ export default function ApiDocsPage() {
           <li><Code>GET /api/v1/briefs</Code>, liste les briefs, filtrable par <Code>keyword</Code> / <Code>folderId</Code> / <Code>status</Code></li>
           <li><Code>GET /api/v1/briefs/&#123;id&#125;</Code>, lit le brief, renvoie <Code>pending</Code> / <Code>ready</Code> / <Code>failed</Code></li>
           <li><Code>POST /api/v1/briefs/&#123;id&#125;/content</Code>, soumet du contenu HTML et reçoit le score détaillé</li>
+          <li><Code>GET /api/v1/folders</Code>, liste les dossiers clients, filtrable par <Code>name</Code> / <Code>q</Code></li>
+          <li><Code>POST /api/v1/folders</Code>, crée un dossier client (anti-doublon sur le nom)</li>
+          <li><Code>GET /api/v1/folders/&#123;id&#125;</Code>, détail d&apos;un dossier</li>
+          <li><Code>PATCH /api/v1/folders/&#123;id&#125;</Code>, renomme un dossier ou met à jour son site / ses notes / son sitemap</li>
         </ul>
         <H4>API V2 (lecture étendue, granulaire)</H4>
         <ul className="list-disc pl-5 text-[var(--text-muted)] mb-3">
           <li><Code>GET /api/v2/briefs/&#123;id&#125;</Code>, résumé enrichi (intent, stats SERP, snapshot Haloscan)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/serp</Code>, top 10 brut + People Also Ask</li>
-          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors</Code>, les 10 concurrents enrichis (Hn, outline, score, wordCount)</li>
-          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;</Code>, détail d&apos;un concurrent avec son texte brut et son HTML reconstitué</li>
-          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/download?format=html|docx</Code>, télécharge le contenu d&apos;un concurrent en HTML ou Word</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors?content=text|html|markdown|all</Code>, les 10 concurrents enrichis (Hn, outline, score, wordCount) <strong>et leur contenu en un seul appel</strong></li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;</Code>, détail d&apos;un concurrent avec son texte brut, son HTML reconstitué et son Markdown</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/content?format=text|html|markdown</Code>, le contenu brut d&apos;un concurrent, sans enveloppe JSON</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/download?format=html|markdown|docx</Code>, télécharge le contenu d&apos;un concurrent en HTML, Markdown ou Word</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/print</Code>, page imprimable d&apos;un concurrent (Save as PDF côté navigateur)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/nlp</Code>, NLP complet (termes, clusters, sections, entités, opportunités, intent)</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/paa</Code>, People Also Ask seuls</li>
-          <li><Code>GET /api/v2/briefs/&#123;id&#125;/scoring</Code>, breakdown détaillé du score (8 critères SEO + sémantique + GEO, scoring relatif vs concu)</li>
+          <li><Code>GET /api/v2/briefs/&#123;id&#125;/scoring</Code>, breakdown détaillé du score (10 critères SEO dont sémantique et saillance, + bloc GEO)</li>
           <li><Code>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</Code>, embed un paragraphe et retourne sa proximité sémantique vs le centroïde top 10</li>
           <li><Code>GET /api/v2/briefs/&#123;id&#125;/haloscan</Code>, payload Haloscan brut + summary</li>
         </ul>
@@ -307,7 +312,7 @@ export default function ApiDocsPage() {
     "rawTotal": 78,
     "competitorMedian": 62,
     "keyword":      { "score": 12, "max": 15, "details": { "count": 6,  "density": 1.24 } },
-    "nlpCoverage":  { "score": 22, "max": 27, "details": { "essentialsUsed": 14, "essentialsTotal": 14, "essentialsCoverage": 100, "essentialsScore": 17, "importantsUsed": 6, "importantsTotal": 18, "importantsScore": 5 } },
+    "nlpCoverage":  { "score": 18, "max": 22, "details": { "essentialsUsed": 14, "essentialsTotal": 14, "essentialsCoverage": 100, "essentialsScore": 14, "importantsUsed": 6, "importantsTotal": 18, "importantsScore": 4 } },
     "contentLength":{ "score":  6, "max":  7, "details": { "wc": 1083, "target": 1450 } },
     "headings":     { "score": 11, "max": 13, "details": { "h1": 1, "h2": 6, "h3": 3, "h1HasKw": true } },
     "placement":    { "score": 11, "max": 13, "details": { "distribution": "3/4 exact, 1/4 soft" } },
@@ -325,16 +330,92 @@ export default function ApiDocsPage() {
   }
 }`}</Pre>
 
-        <H4>Lecture du résultat (itération 8, 2026-05-08)</H4>
+        <H4>Lecture du résultat (formule 13, 2026-09-06)</H4>
         <ul className="list-disc pl-5 mb-3 text-[var(--text-muted)]">
-          <li><Code>score</Code> et <Code>breakdown.total</Code> : score affiché 0-100, <strong>relatif à la médiane des concurrents top 10</strong>. Médiane top 10 = 50, médiane × 1.5 = 100. Floor médiane à 60 (si concu faible, on calibre comme si la médiane était 60).</li>
-          <li><Code>rawTotal</Code> : score absolu sur 100 (sans relativisation), pour debug ou comparaison cross-KW.</li>
-          <li><Code>competitorMedian</Code> : médiane des scores bruts du top 10, sert de référence pour la relativisation.</li>
-          <li>Compare <Code>score</Code> à <Code>competitors.avg</Code> : au-dessus, le contenu fait mieux que la moyenne SERP.</li>
-          <li>Pondération SEO : keyword 15 + nlpCoverage 27 + contentLength 7 + headings 13 + placement 13 + structure 6 + quality 5 + semantic 10 = 96, renormalisé sur 100. Le critère images est neutralisé (max 0) depuis l'itération 9 mais reste présent dans le breakdown pour compatibilité. SEO_WEIGHT 0.92, GEO_WEIGHT 0.08.</li>
-          <li><Code>breakdown.semantic</Code> : critère sémantique paragraphe (cosinus moyen vs centroïde top 10 via bge-m3). Calculé côté éditeur via l&apos;endpoint <Code>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</Code>. Neutralisé (max=0) si pas de paragraphes scorés.</li>
+          <li><Code>score</Code>, <Code>breakdown.total</Code> et <Code>rawTotal</Code> : le même score absolu 0-100. La relativisation à la médiane des concurrents n&apos;est plus appliquée depuis le 2026-05-16, le score du contenu rédigé est directement comparable aux scores des concurrents. <Code>competitorMedian</Code> reste donc à 0 sur ce chemin.</li>
+          <li>Compare <Code>score</Code> à <Code>competitors.avg</Code> et <Code>competitors.best</Code> : c&apos;est <Code>best</Code> qui sert d&apos;objectif.</li>
+          <li>Pondération SEO : keyword 15 + nlpCoverage 22 + differentiation 4 + contentLength 7 + headings 13 + placement 13 + structure 6 + quality 5 + salience 4 + semantic 15 = 104, renormalisé sur 100. SEO_WEIGHT 0.92, GEO_WEIGHT 0.08.</li>
+          <li><strong>Critères neutralisables</strong> : un critère non applicable passe à <Code>max: 0</Code> et sort de la renormalisation, il ne coûte ni ne rapporte rien. C&apos;est le cas d&apos;<Code>images</Code> (retiré depuis l&apos;itération 9, conservé pour compatibilité), de <Code>differentiation</Code> quand le mot-clé n&apos;a aucune opportunité, de <Code>semantic</Code> sans centroïde, et de <Code>nlpCoverage</Code> quand un palier est vide : <Code>max</Code> tombe à 14 s&apos;il n&apos;y a aucun terme important, à 8 s&apos;il n&apos;y a aucun essentiel, à 0 si le mot-clé n&apos;a que des opportunités. Lis toujours <Code>score</Code> rapporté à <Code>max</Code>, jamais le score seul.</li>
+          <li><Code>breakdown.semantic</Code> : cosinus moyen des paragraphes rédigés vs le centroïde du top 10 (bge-m3). Depuis le 2026-09-06 il est calculé aussi côté serveur, sur les mêmes blocs que l&apos;éditeur (p / ul / ol d&apos;au moins 5 mots, 40 blocs au maximum) : le score renvoyé par l&apos;API est donc celui qu&apos;affiche l&apos;éditeur. Neutralisé sur les briefs analysés avant l&apos;introduction du centroïde.</li>
+          <li><Code>breakdown.salience</Code> : la première mention du mot-clé dans le corps est-elle en gras ou en emphase. Détectée côté serveur depuis le HTML transmis, plus besoin de passer par l&apos;éditeur.</li>
+          <li><Code>breakdown.structure.target</Code> : nombre moyen de blocs de contenu chez les concurrents (titres, paragraphes, items de liste, lignes de tableau). Le ratio visé est entre 0,7 et 1,4 fois cette référence.</li>
           <li>Regarde <Code>breakdown</Code> pour identifier les axes faibles (mot-clé, couverture NLP, structure…) et itérer.</li>
         </ul>
+      </Section>
+
+      <Section title="Dossiers clients (folders)" dot="var(--brand-blue)">
+        <p className="mb-3">
+          Un brief se range dans un dossier client via son <Code>folderId</Code>. Ces endpoints
+          permettent de créer le dossier depuis un script, sans passer par l&apos;interface, puis
+          d&apos;enchaîner directement sur la création des briefs.
+        </p>
+
+        <H4>GET /api/v1/folders</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Liste les dossiers visibles (tous les dossiers d&apos;agence + les dossiers personnels du
+          compte), triés par nom. Params : <Code>name</Code> (égalité insensible à la casse),
+          <Code>q</Code> (recherche partielle), <Code>limit</Code> (défaut 100, max 500).
+        </p>
+        <Pre>{`curl "${BASE}/api/v1/folders?q=celio" \\
+  -H "Authorization: Bearer dfk_..."
+
+{
+  "folders": [
+    {
+      "id": "f1a2b3c4-…",
+      "name": "Celio",
+      "website": "https://www.celio.com",
+      "scope": "agency",
+      "notes": null,
+      "sitemapUrl": null,
+      "shared": false,
+      "createdAt": "2026-09-06T09:12:04.000Z",
+      "updatedAt": "2026-09-06T09:12:04.000Z"
+    }
+  ]
+}`}</Pre>
+
+        <H4>POST /api/v1/folders</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Crée un dossier. Seul <Code>name</Code> est obligatoire. Champs optionnels :
+          <Code>website</Code>, <Code>notes</Code>, <Code>sitemapUrl</Code>, <Code>scope</Code>
+          (<Code>agency</Code> par défaut, comme dans l&apos;interface).
+        </p>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Anti-doublon : si un dossier visible porte déjà ce nom (à la casse près), il est renvoyé
+          tel quel avec <Code>created: false</Code> en HTTP 200. Rejouer le même POST ne crée donc
+          jamais deux dossiers identiques. Une création réelle renvoie un HTTP 201 avec
+          <Code>created: true</Code>.
+        </p>
+        <Pre>{`curl -X POST ${BASE}/api/v1/folders \\
+  -H "Authorization: Bearer dfk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Celio","website":"https://www.celio.com"}'
+
+{
+  "folder": { "id": "f1a2b3c4-…", "name": "Celio", … },
+  "created": true
+}`}</Pre>
+
+        <H4>PATCH /api/v1/folders/&#123;id&#125;</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Met à jour un dossier. Tous les champs sont optionnels, seuls ceux présents dans le body
+          sont écrits : <Code>name</Code>, <Code>website</Code>, <Code>notes</Code>,
+          <Code>sitemapUrl</Code>. Passer <Code>null</Code> vide le champ. Un nom déjà utilisé par
+          un autre dossier renvoie un HTTP 409.
+        </p>
+        <Pre>{`curl -X PATCH ${BASE}/api/v1/folders/f1a2b3c4-… \\
+  -H "Authorization: Bearer dfk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Celio FR"}'
+
+{ "folder": { "id": "f1a2b3c4-…", "name": "Celio FR", … } }`}</Pre>
+        <p className="text-[var(--text-muted)]">
+          Pas de <Code>DELETE</Code> : supprimer un dossier détruit en cascade tous les briefs
+          qu&apos;il contient. Ce geste reste dans l&apos;interface, derrière la confirmation à
+          retaper. Le renommage, lui, est aussi disponible sur la fiche client (bouton
+          <strong> Renommer</strong>).
+        </p>
       </Section>
 
       <Section title="Exemple d'intégration Node.js" dot="var(--accent)">
@@ -423,9 +504,29 @@ async function run(keyword: string, editorHtml: string) {
 
         <H4>GET /api/v2/briefs/&#123;id&#125;/competitors</H4>
         <p className="mb-2 text-[var(--text-muted)]">
-          Les 10 concurrents enrichis (Hn, outline, score, wordCount). Le contenu textuel
-          n&apos;est pas inclus ici pour borner le payload, demande
-          <Code>/competitors/&#123;n&#125;</Code> pour le récupérer.
+          Les 10 concurrents enrichis (Hn, outline, score, wordCount). Par défaut sans le
+          contenu, pour borner le payload : chaque concurrent porte quand même
+          <Code>hasContent</Code>, <Code>chars</Code> et <Code>truncated</Code>.
+        </p>
+        <p className="mb-2 text-[var(--text-muted)]">
+          <Code>?content=text|html|markdown|all</Code> joint le contenu crawlé de
+          <strong> chaque</strong> concurrent à la réponse : un seul appel au lieu de dix.
+          Alias acceptés : <Code>md</Code>, <Code>structuredHtml</Code>, <Code>1</Code>.
+          <Code>?position=1,2,5</Code> restreint la réponse à certaines positions, pratique
+          pour ne tirer le contenu que des concurrents qui t&apos;intéressent.
+        </p>
+        <Pre>{`# les 10 concurrents avec leur contenu en Markdown, en un appel
+curl "${BASE}/api/v2/briefs/{id}/competitors?content=markdown" \\
+  -H "Authorization: Bearer dfk_..."
+
+# seulement les positions 1 et 2, contenu brut + HTML + Markdown
+curl "${BASE}/api/v2/briefs/{id}/competitors?content=all&position=1,2" \\
+  -H "Authorization: Bearer dfk_..."`}</Pre>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Le contenu persisté est capé à 30 000 caractères par champ et par concurrent
+          (limite de taille de row D1). <Code>truncated: true</Code> signale un contenu qui
+          a atteint ce cap, donc probablement coupé. Le cap en vigueur est renvoyé dans
+          <Code>contentCapChars</Code>.
         </p>
         <Pre>{`{
   "id": "...",
@@ -442,7 +543,11 @@ async function run(keyword: string, editorHtml: string) {
         { "level": 2, "text": "..." }
       ],
       "score": 85,
-      "hasContent": true
+      "hasContent": true,
+      "chars": 14820,
+      "truncated": false,
+      // présents selon ?content=
+      "text": "...", "structuredHtml": "<h1>…", "markdown": "# …"
     },
     ...
   ]
@@ -467,20 +572,43 @@ async function run(keyword: string, editorHtml: string) {
     "outline": [...],
     "score": 79,
     "text": "Texte brut nettoyé, sans markup, séparé par des espaces ...",
-    "structuredHtml": "<h1>...</h1><p>...</p><h2>...</h2><p>...</p>..."
+    "structuredHtml": "<h1>...</h1><p>...</p><h2>...</h2><p>...</p>...",
+    "markdown": "# Titre\\n\\nParagraphe...\\n\\n## Sous-titre...",
+    "truncated": false,
+    "breakdown": { ... }
   }
 }`}</Pre>
 
+        <H4>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/content</H4>
+        <p className="mb-2 text-[var(--text-muted)]">
+          Le contenu d&apos;un concurrent <strong>brut, sans enveloppe JSON</strong> : de quoi
+          l&apos;écrire directement dans un fichier ou le passer à un modèle.
+          <Code>format=text|html|markdown</Code> (Markdown par défaut, alias <Code>md</Code> et
+          <Code>txt</Code>). La réponse porte l&apos;URL et la position du concurrent dans les
+          en-têtes <Code>X-Competitor-Url</Code> et <Code>X-Competitor-Position</Code>.
+        </p>
+        <Pre>{`curl "${BASE}/api/v2/briefs/{id}/competitors/3/content?format=markdown" \\
+  -H "Authorization: Bearer dfk_..." > concurrent-3.md
+
+# le texte brut, pour compter les mots ou diffé deux versions
+curl "${BASE}/api/v2/briefs/{id}/competitors/1/content?format=text" \\
+  -H "Authorization: Bearer dfk_..."`}</Pre>
+
         <H4>GET /api/v2/briefs/&#123;id&#125;/competitors/&#123;n&#125;/download</H4>
         <p className="mb-2 text-[var(--text-muted)]">
-          Télécharge le contenu HTML reconstitué d&apos;un concurrent dans un format prêt
-          à publier. Query param <Code>format=html|docx</Code>. Renvoie
+          Même contenu, mais servi en pièce jointe (<Code>Content-Disposition</Code>) dans un
+          format prêt à publier. Query param <Code>format=html|markdown|docx</Code>. Renvoie
           <Code>404 competitor content not available</Code> sur les briefs
           créés avant le 2026-05-02 (le contenu n&apos;était pas persisté avant cette date).
         </p>
         <Pre>{`GET /api/v2/briefs/{id}/competitors/3/download?format=html
 → Content-Type: text/html; charset=utf-8
 → Content-Disposition: attachment; filename="comparatif-scooter-3-cleanrider-com.html"
+
+GET /api/v2/briefs/{id}/competitors/3/download?format=markdown
+→ Content-Type: text/markdown; charset=utf-8
+→ Content-Disposition: attachment; filename="comparatif-scooter-3-cleanrider-com.md"
+→ front matter YAML (keyword, position, source, title) puis le contenu
 
 GET /api/v2/briefs/{id}/competitors/3/download?format=docx
 → Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
@@ -552,9 +680,10 @@ GET /api/v2/briefs/{id}/competitors/3/download?format=docx
         <H4>GET /api/v2/briefs/&#123;id&#125;/scoring</H4>
         <p className="mb-2 text-[var(--text-muted)]">
           Breakdown détaillé du score, recalculé sur le HTML actuellement stocké dans le brief
-          (mis à jour par chaque <Code>POST /content</Code>). 8 critères SEO + sémantique + bloc GEO.
-          Le <Code>total</Code> est <strong>relatif à la médiane des concurrents top 10</strong>
-          (médiane = 50, médiane × 1.5 = 100, floor médiane à 60).
+          (mis à jour par chaque <Code>POST /content</Code>). 10 critères SEO, dont sémantique et saillance, plus le bloc GEO.
+          Le <Code>total</Code> est le score persisté du brief, <Code>breakdownTotal</Code> le
+          recalcul de la requête : les deux doivent coïncider, un écart signale un score
+          enregistré par une formule antérieure.
         </p>
         <Pre>{`{
   "id": "...", "keyword": "...",
@@ -565,9 +694,9 @@ GET /api/v2/briefs/{id}/competitors/3/download?format=docx
   "seoTotal": 82, "geoTotal": 70,
   "breakdown": {
     "keyword":      { "score": 13, "max": 15, "details": { ... } },
-    "nlpCoverage":  { "score": 22, "max": 27, "details": {
-      "essentialsUsed": 14, "essentialsTotal": 14, "essentialsScore": 17,
-      "importantsUsed": 7, "importantsTotal": 18, "importantsScore": 5
+    "nlpCoverage":  { "score": 18, "max": 22, "details": {
+      "essentialsUsed": 14, "essentialsTotal": 14, "essentialsScore": 14,
+      "importantsUsed": 7, "importantsTotal": 18, "importantsScore": 4
     } },
     "contentLength":{ "score":  6, "max":  7, "details": { "wc": 1840, "target": 2100 } },
     "headings":     { "score": 11, "max": 13, "details": { ... } },
@@ -575,19 +704,20 @@ GET /api/v2/briefs/{id}/competitors/3/download?format=docx
     "structure":    { "score":  4, "max":  6, "details": { ... } },
     "quality":      { "score":  4, "max":  5, "details": { ... } },
     "images":       { "score":  0, "max":  0, "details": { "count": 4, "target": 5 } },
+    "differentiation": { "score": 3, "max": 4, "details": { ... } },
+    "semantic":     { "score": 11, "max": 15, "details": { "paragraphsScored": 12, "avgCosine": 0.712 } },
+    "salience":     { "score":  4, "max":  4, "details": { "emphasized": true } },
     "geo":          { "total": 70, ... }
   },
   "competitors": { "avg": 71, "best": 85, "bestUrl": "...", "count": 9 },
   "editorWordCount": 1840
 }`}</Pre>
         <p className="text-[var(--text-muted)] mb-2 text-[12px]">
-          <strong>Notes :</strong> <Code>total</Code> est le score affiché à l&apos;utilisateur
-          (préserve le score persisté côté éditeur incluant le critère sémantique calculé
-          live). <Code>breakdownTotal</Code> est le total recalculé côté serveur sans le
-          sémantique (ce critère étant calculé côté client via l&apos;endpoint
-          <Code>/semantic-paragraph</Code>). Pour des consommateurs API qui veulent inclure
-          le sémantique programmatiquement, embedder leurs paragraphes via cet endpoint et
-          appliquer la formule cosinus → score (0.85 → 10, 0.65 → 5, 0.45 → 2).
+          <strong>Notes :</strong> depuis le 2026-09-06, le serveur calcule lui-même la
+          sémantique (embeddings des paragraphes) et la saillance : plus besoin d&apos;appeler
+          <Code>/semantic-paragraph</Code> paragraphe par paragraphe ni de rejouer la formule
+          cosinus à la main pour obtenir un score complet. <Code>total</Code> reste le score
+          persisté, <Code>breakdownTotal</Code> le recalcul de la requête.
         </p>
 
         <H4>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</H4>

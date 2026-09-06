@@ -7,6 +7,11 @@
  */
 import type { NlpResult, NlpTerm, SerpResult } from "./analysis";
 import { computeGeoScore, EMPTY_GEO_SIGNALS, geoSignalsFromHtml, type GeoScore, type GeoSignals } from "./geo-scoring";
+import { htmlToBlockTexts, MIN_BLOCK_CHARS } from "./content-blocks";
+
+// Ré-export : les appelants du scoring (éditeur, briefs-service) prennent la
+// primitive de comptage de blocs ici, au même endroit que le scoring.
+export { htmlToBlockTexts, MIN_BLOCK_CHARS };
 
 // GEO pèse 8 points sur 100 (avant 5 pts, itération 2026-05-08). Le poids
 // remonte légèrement parce que les top 10 réels exploitent souvent la
@@ -14,6 +19,19 @@ import { computeGeoScore, EMPTY_GEO_SIGNALS, geoSignalsFromHtml, type GeoScore, 
 // donc l'ignorer fait perdre du discriminant entre concurrents.
 const SEO_WEIGHT = 0.92;
 const GEO_WEIGHT = 0.08;
+
+/**
+ * Version de la formule de scoring. À incrémenter dès qu'un changement fait
+ * bouger les scores (pondération, seuil, règle de matching, neutralisation
+ * d'un critère). Les scores concurrents persistés portent cette version : à
+ * la moindre différence, ils sont recalculés au prochain chargement du brief,
+ * au lieu de servir de référence figée dans une formule périmée.
+ *
+ * 13 = correctifs de cohérence du 2026-09-06 (paliers NLP vides neutralisés,
+ *      comptage de blocs partagé user/concurrent, référence avgBlocks,
+ *      saillance des concurrents).
+ */
+export const SCORING_VERSION = 13;
 
 // Mots non significatifs pour le matching "soft" du keyword sur les longues
 // expressions ("meilleur moto cross 125 fiable" → on ne va pas exiger que
@@ -190,6 +208,58 @@ export function buildKeywordRegex(keyword: string): RegExp {
   return new RegExp(`\\b${patterns.join(between)}\\b`, "gi");
 }
 
+/**
+ * Vrai si la PREMIÈRE mention du mot-clé dans le corps (hors titres) est en
+ * gras ou en emphase. Version HTML de `detectKwEmphasized` (qui, côté
+ * éditeur, marche sur le DOM) : permet au scoring serveur et au scoring des
+ * concurrents de renseigner le critère de saillance au lieu de le neutraliser.
+ * `undefined` = corps vide, on ne se prononce pas (critère neutralisé).
+ */
+export function kwEmphasizedFromHtml(html: string, keyword: string): boolean | undefined {
+  if (!keyword) return undefined;
+  // Les titres sont exclus : la saillance récompense la mise en avant dans le
+  // corps, le mot-clé en H1 est déjà payé par le critère headings.
+  const body = html.replace(/<h[1-6][^>]*>[\s\S]*?<\/h[1-6]>/gi, " ");
+  // On rejoue le texte en gardant trace des zones en emphase : chaque
+  // caractère du texte normalisé sait s'il est dans un <strong>/<b>/<em>/<i>.
+  const emphasized: boolean[] = [];
+  let plain = "";
+  let depth = 0;
+  const tokenRx = /<\/?([a-z0-9]+)[^>]*>|[^<]+/gi;
+  let m: RegExpExecArray | null;
+  while ((m = tokenRx.exec(body))) {
+    const chunk = m[0];
+    if (chunk.startsWith("<")) {
+      const tag = (m[1] ?? "").toLowerCase();
+      if (/^(strong|b|em|i)$/.test(tag)) {
+        if (chunk.startsWith("</")) depth = Math.max(0, depth - 1);
+        else if (!/\/>$/.test(chunk)) depth += 1;
+      }
+      continue;
+    }
+    const norm = normalize(decodeEntities(chunk));
+    plain += norm;
+    for (let i = 0; i < norm.length; i++) emphasized.push(depth > 0);
+  }
+  if (!plain.trim()) return undefined;
+  const rx = buildKeywordRegex(keyword);
+  rx.lastIndex = 0;
+  const hit = rx.exec(plain);
+  if (!hit) return false;
+  return emphasized[hit.index] === true;
+}
+
+/** Entités les plus courantes : suffisant pour un test de position. */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'");
+}
+
 export type EditorData = {
   text: string;
   h1s: string[];
@@ -205,6 +275,12 @@ export type EditorData = {
   // crawlée sans info de formatage), le critère saillance est neutralisé (max=0,
   // renormalisation), comme images/semantic.
   kwEmphasized?: boolean;
+  // Nombre de blocs de contenu (> 20 caractères), compté par
+  // `htmlToBlockTexts` sur le HTML source. Renseigné par tous les appelants
+  // depuis le 2026-09-06 pour que le critère structure compare la même chose
+  // des deux côtés. Absent, on retombe sur le split `\n\n` du texte (chemin
+  // legacy, cf. commentaire de htmlToBlockTexts).
+  blockCount?: number;
 };
 
 export type ScoreCriterion = {
@@ -322,47 +398,151 @@ export function relativizeScore(rawTotal: number, competitorMedian: number): num
  * a lieu naturellement à la prochaine sauvegarde du brief (rescoreBrief
  * sérialise le NlpResult complet).
  */
+/**
+ * EditorData d'un concurrent crawlé. Point d'entrée unique du scoring
+ * concurrent (analyse initiale et backfill) : garantit que les concurrents
+ * sont mesurés avec les mêmes règles que le contenu du user.
+ *
+ * Le critère sémantique reste neutralisé pour un concurrent, et c'est
+ * volontaire : le centroïde est construit À PARTIR des paragraphes du top 10,
+ * donc scorer un concurrent contre lui-même n'aurait pas de sens. C'est la
+ * dernière asymétrie restante entre score user et score concurrent.
+ */
+export function competitorEditorData(
+  r: Pick<SerpResult, "text" | "structuredHtml" | "h1" | "h2" | "h3" | "imageCount">,
+  keyword: string,
+): EditorData {
+  return {
+    text: r.text ?? "",
+    h1s: r.h1 ?? [],
+    h2s: r.h2 ?? [],
+    h3s: r.h3 ?? [],
+    imageCount: r.imageCount ?? 0,
+    // Le texte concurrent est aplati en une seule ligne par extractContent :
+    // sans ce comptage explicite, le critère structure voyait 1 bloc.
+    blockCount: r.structuredHtml ? htmlToBlockTexts(r.structuredHtml).length : undefined,
+    // Le structuredHtml conserve les <strong>/<em> de la page d'origine :
+    // le concurrent peut donc être jugé sur la saillance, comme le user.
+    kwEmphasized: r.structuredHtml
+      ? kwEmphasizedFromHtml(r.structuredHtml, keyword)
+      : undefined,
+  };
+}
+
+/**
+ * Backfill de `nlp.avgBlocks` pour les briefs analysés avant le 2026-09-06.
+ * Même principe que `ensureCompetitorScores` : fonction pure côté BDD (elle
+ * mute l'objet nlp en mémoire, la persistance se fait à la prochaine
+ * sauvegarde du brief). Sans ce backfill, un ancien brief comparerait le
+ * nombre de blocs du contenu rédigé à une moyenne de `<p>` concurrents.
+ */
+export function ensureAvgBlocks(nlp: NlpResult, serpJson: string | null): number | undefined {
+  if (nlp.avgBlocks && nlp.avgBlocks > 0) return nlp.avgBlocks;
+  if (!serpJson) return undefined;
+  let serp: SerpResult[];
+  try {
+    const parsed = JSON.parse(serpJson);
+    serp = Array.isArray(parsed) ? parsed : Object.values(parsed);
+  } catch {
+    return undefined;
+  }
+  const counts = serp
+    .filter((r) => r && r.structuredHtml && (r.wordCount ?? 0) >= 50)
+    .map((r) => htmlToBlockTexts(r.structuredHtml ?? "").length)
+    .filter((n) => n > 0);
+  if (counts.length === 0) return undefined;
+  nlp.avgBlocks = Math.round(counts.reduce((a, b) => a + b, 0) / counts.length);
+  return nlp.avgBlocks;
+}
+
+/** Score brut d'un concurrent, ou `null` s'il n'est pas exploitable. */
+export function scoreCompetitorRow(r: SerpResult, nlp: NlpResult): number | null {
+  if (!r || !r.text || (r.wordCount ?? 0) < 50) return null;
+  const geoSignals = r.structuredHtml ? geoSignalsFromHtml(r.structuredHtml) : undefined;
+  return computeDetailedScore(
+    competitorEditorData(r, nlp.exactKeyword.keyword),
+    nlp,
+    geoSignals,
+    // Pas de competitorScores ici : on calcule le score brut absolu.
+  ).rawTotal;
+}
+
+/** Rows du SERP, que serpJson soit un tableau ou un objet indexé (legacy). */
+function parseSerpRows(serpJson: string): SerpResult[] | null {
+  try {
+    const parsed = JSON.parse(serpJson);
+    if (Array.isArray(parsed)) return parsed;
+    return Object.keys(parsed as Record<string, SerpResult>)
+      .sort((a, b) => Number(a) - Number(b))
+      .map((k) => (parsed as Record<string, SerpResult>)[k]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Recalcule les scores concurrents ET les réécrit sur chaque row.
+ *
+ * `nlp.competitorScores` n'est pas la seule copie de ces scores : chaque row
+ * de `serpJson` porte son propre `score`, et c'est celui-là que lit
+ * `computeCompetitorStats` pour produire le `avg` / `best` affichés et
+ * renvoyés par l'API. Rafraîchir seulement le tableau laissait donc le `best`
+ * — l'objectif à battre — figé sur l'ancienne formule.
+ *
+ * Renvoie `null` si rien n'était à rafraîchir (formule déjà à jour, SERP
+ * illisible ou aucun concurrent exploitable).
+ */
+export function refreshCompetitorScores(
+  nlp: NlpResult,
+  serpJson: string | null,
+): { serp: SerpResult[]; scores: number[] } | null {
+  if (!serpJson) return null;
+  if (
+    nlp.competitorScores &&
+    nlp.competitorScores.length > 0 &&
+    nlp.scoringVersion === SCORING_VERSION
+  ) {
+    return null;
+  }
+  const rows = parseSerpRows(serpJson);
+  if (!rows) return null;
+
+  const scores: number[] = [];
+  for (const r of rows) {
+    const score = scoreCompetitorRow(r, nlp);
+    if (score === null) continue;
+    r.score = score;
+    scores.push(score);
+  }
+  if (scores.length === 0) return null;
+
+  nlp.competitorScores = scores;
+  nlp.scoringVersion = SCORING_VERSION;
+  return { serp: rows, scores };
+}
+
 export function ensureCompetitorScores(
   nlp: NlpResult,
   serpJson: string | null,
 ): number[] {
-  if (nlp.competitorScores && nlp.competitorScores.length > 0) {
+  // Réutilise les scores persistés seulement s'ils ont été produits par la
+  // formule courante. Sinon on recalcule : un score concurrent figé dans une
+  // ancienne pondération n'est pas une référence valable pour un score user
+  // calculé aujourd'hui.
+  if (
+    nlp.competitorScores &&
+    nlp.competitorScores.length > 0 &&
+    nlp.scoringVersion === SCORING_VERSION
+  ) {
     return nlp.competitorScores;
   }
-  if (!serpJson) return [];
-  let serp: Record<string, SerpResult> | SerpResult[];
-  try {
-    serp = JSON.parse(serpJson);
-  } catch {
-    return [];
-  }
-  const results = Array.isArray(serp)
-    ? serp
-    : Object.keys(serp)
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => (serp as Record<string, SerpResult>)[k]);
-  const scores: number[] = [];
-  for (const r of results) {
-    if (!r || !r.text || (r.wordCount ?? 0) < 50) continue;
-    const geoSignals = r.structuredHtml ? geoSignalsFromHtml(r.structuredHtml) : undefined;
-    const breakdown = computeDetailedScore(
-      {
-        text: r.text,
-        h1s: r.h1 ?? [],
-        h2s: r.h2 ?? [],
-        h3s: r.h3 ?? [],
-        imageCount: r.imageCount ?? 0,
-      },
-      nlp,
-      geoSignals,
-      // Pas de competitorScores ici : on calcule le score brut absolu.
-    );
-    scores.push(breakdown.rawTotal);
-  }
   // Cache en mémoire sur l'objet nlp pour les appels suivants dans la même
-  // requête (évite de re-scorer 10 concurrents pour chaque computeDetailedScore).
-  nlp.competitorScores = scores;
-  return scores;
+  // requête (évite de re-scorer 10 concurrents pour chaque
+  // computeDetailedScore). Rien n'est écrit en base ici : la persistance suit
+  // à la prochaine sauvegarde du brief (cf. refreshCompetitorScores, qui
+  // renvoie aussi les rows à réécrire dans serpJson).
+  const refreshed = refreshCompetitorScores(nlp, serpJson);
+  return refreshed ? refreshed.scores : (nlp.competitorScores ?? []);
 }
 
 /**
@@ -537,17 +717,28 @@ export function computeDetailedScore(
   };
   const essUsed = essentials.filter(matchTerm).length;
   const impUsed = importants.filter(matchTerm).length;
-  // Si pas de termes dans le tier, coverage = 1 (rien à plomber).
-  const essCov = essentials.length > 0 ? essUsed / essentials.length : 1;
-  const impCov = importants.length > 0 ? impUsed / importants.length : 1;
+  const essCov = essentials.length > 0 ? essUsed / essentials.length : 0;
+  const impCov = importants.length > 0 ? impUsed / importants.length : 0;
   // Itération 8 (2026-05-08) : nlpCoverage 35→27 (8 pts → sémantique paragraphe).
   // Itération 12 (2026-06-22) : nlpCoverage 27→22, les 5 pts basculent vers le
   // critère sémantique embeddings (10→15). Objectif : réduire le poids du BM25
   // fréquentiel au profit du sens (cosinus embeddings), plus proche de la
   // façon dont Google comprend la pertinence. Essentiels 14 + Importants 8,
   // ratio ~1,75 préservé.
-  const essScore = Math.min(14, Math.round(essCov * 14));
-  const impScore = Math.min(8, Math.round(impCov * 8));
+  //
+  // Correctif 2026-09-06 : un palier VIDE est neutralisé (max 0), il ne donne
+  // plus ses points. Avant, `essCov`/`impCov` valaient 1 quand le palier était
+  // vide, donc un mot-clé dont tous les termes sont des « opportunités »
+  // (présence < 40) offrait 22/22 de couverture à un texte hors sujet, et un
+  // brief sans aucun terme aussi. Deux briefs n'étaient alors pas comparables :
+  // c'était la distribution des paliers, pas le contenu, qui décidait de 22
+  // points sur 104. Même traitement que differentiation / images / semantic :
+  // max=0 et renormalisation en fin de calcul.
+  const essMax = essentials.length > 0 ? 14 : 0;
+  const impMax = importants.length > 0 ? 8 : 0;
+  const essScore = Math.min(essMax, Math.round(essCov * essMax));
+  const impScore = Math.min(impMax, Math.round(impCov * impMax));
+  r.nlpCoverage.max = essMax + impMax;
   r.nlpCoverage.score = essScore + impScore;
   r.nlpCoverage.details = {
     essentialsUsed: essUsed,
@@ -561,7 +752,10 @@ export function computeDetailedScore(
     // Champs legacy conservés pour rétro-compat (UI/API consommateurs).
     used: essUsed + impUsed,
     total: essentials.length + importants.length,
-    coverage: Math.round(((essCov * 14 + impCov * 8) / 22) * 100),
+    coverage:
+      essMax + impMax > 0
+        ? Math.round(((essScore + impScore) / (essMax + impMax)) * 100)
+        : 0,
   };
 
   // 2 bis. DIFFÉRENCIATION / APPORT (information gain) /4 — itération 11,
@@ -712,8 +906,17 @@ export function computeDetailedScore(
   // (déjà couvert par contentLength).
   {
     let s = 0;
-    const pC = text.split(/\n\s*\n/).filter((p) => p.trim().length > 20).length;
-    const pR = nlp.avgParagraphs > 0 ? pC / nlp.avgParagraphs : 0;
+    const pC =
+      ed.blockCount ??
+      text.split(/\n\s*\n/).filter((p) => p.trim().length > MIN_BLOCK_CHARS).length;
+    // Référence : le nombre de BLOCS des concurrents (`avgBlocks`), pas leur
+    // nombre de `<p>` (`avgParagraphs`). Le numérateur compte les titres, les
+    // items de liste et les lignes de tableau ; comparer ça à un décompte de
+    // `<p>` seuls poussait mécaniquement le ratio au-dessus de la fenêtre dès
+    // qu'un contenu portait une FAQ ou un tableau. `avgParagraphs` reste le
+    // repli pour les briefs analysés avant le 2026-09-06 et non backfillés.
+    const blocksRef = nlp.avgBlocks && nlp.avgBlocks > 0 ? nlp.avgBlocks : nlp.avgParagraphs;
+    const pR = blocksRef > 0 ? pC / blocksRef : 0;
     if (pR >= 0.7 && pR <= 1.4) s += 3;
     else if (pR >= 0.4 && pR < 0.7) s += 1;
     else if (pR > 1.4 && pR <= 2.0) s += 1;
@@ -722,7 +925,11 @@ export function computeDetailedScore(
     else if (aP >= 25 && aP <= 200) s += 1;
     if (wc >= 500) s += 1;
     r.structure.score = Math.min(6, s);
-    r.structure.details = { paragraphs: pC, ratio: Math.round(pR * 100) / 100 };
+    r.structure.details = {
+      paragraphs: pC,
+      target: Math.round(blocksRef),
+      ratio: Math.round(pR * 100) / 100,
+    };
   }
 
   // 7. QUALITY /5 (durci itération 7, 2026-05-08)

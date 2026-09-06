@@ -6,7 +6,7 @@ import { getDb } from "@/db";
 import { brief, client, user as userTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
-import { ensureCompetitorScores } from "@/lib/scoring";
+import { ensureAvgBlocks, ensureCompetitorScores } from "@/lib/scoring";
 import { applyBriefOverrides, parseBriefOverrides } from "@/lib/brief-overrides";
 import { BriefEditor } from "./brief-editor";
 import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
@@ -45,7 +45,14 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
   // prochain save (rescoreBrief sérialise le NlpResult complet). Avec
   // overrides : on re-scoring sur le serp filtré (competitorScores a été
   // invalidé par applyBriefOverrides).
-  if (nlp) ensureCompetitorScores(nlp, JSON.stringify(serp));
+  if (nlp) {
+    const serpJson = JSON.stringify(serp);
+    // Référence de structure d'abord : les scores concurrents en dépendent
+    // (critère structure), donc l'ordre inverse les recalculerait sur
+    // l'ancienne référence (le décompte de <p> au lieu des blocs).
+    ensureAvgBlocks(nlp, serpJson);
+    ensureCompetitorScores(nlp, serpJson);
+  }
   const paa = b.paaJson ? (JSON.parse(b.paaJson) as Paa[]) : [];
   const haloscan = b.haloscanJson ? (JSON.parse(b.haloscanJson) as HaloscanOverview) : null;
 

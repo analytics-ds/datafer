@@ -11,6 +11,7 @@ import { FolderFavicon } from "../page";
 import { FavoriteButton } from "../favorite-button";
 import { SharePanel } from "../share-panel";
 import { DeleteFolderButton } from "../delete-folder";
+import { EditFolderButton } from "../edit-folder";
 import { SitemapPanel } from "./sitemap-panel";
 import { SearchableBriefList } from "../../briefs/searchable-brief-list";
 import { listTagsForBriefs, listTagsForClient } from "@/lib/tags-service";
@@ -104,6 +105,11 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
           <div className="flex items-center gap-2 flex-wrap">
             <FavoriteButton folderId={folder.id} initialFavorited={!!fav} />
             <SharePanel folderId={folder.id} initialToken={folder.shareToken ?? null} />
+            <EditFolderButton
+              folderId={folder.id}
+              folderName={folder.name}
+              folderWebsite={folder.website}
+            />
             <DeleteFolderButton
               folderId={folder.id}
               folderName={folder.name}

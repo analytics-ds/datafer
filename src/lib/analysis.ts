@@ -9,6 +9,7 @@
  */
 
 import { Parser } from "htmlparser2";
+import { htmlToBlockTexts } from "./content-blocks";
 
 export type Heading = { level: 1 | 2 | 3; text: string };
 
@@ -216,7 +217,19 @@ export type NlpResult = {
   entities?: Entity[];
   avgWordCount: number;
   avgHeadings: number;
+  // Moyenne du nombre de <p> chez les concurrents valides. Conservé pour la
+  // rétro-compat : le critère structure lui préfère `avgBlocks` quand il est
+  // disponible (cf. commentaire ci-dessous).
   avgParagraphs: number;
+  // Moyenne du nombre de BLOCS de contenu (> 20 caractères : p, titres, items
+  // de liste, lignes de tableau) chez les concurrents valides, comptés par
+  // `htmlToBlockTexts`. Ajouté le 2026-09-06 : le critère structure compare le
+  // nombre de blocs du contenu rédigé à cette référence, et `avgParagraphs` ne
+  // comptait que les `<p>`. Une FAQ ou un tableau gonflait donc le numérateur
+  // sans toucher au dénominateur, et poussait le ratio hors de la fenêtre
+  // [0,7 ; 1,4] : le contenu le plus structuré perdait des points. Optionnel :
+  // absent sur les briefs antérieurs, backfillé par `ensureAvgBlocks`.
+  avgBlocks?: number;
   minWordCount: number;
   maxWordCount: number;
   // Médiane du nombre d'images chez les concurrents valides du top 10.
@@ -231,6 +244,13 @@ export type NlpResult = {
   // avec les briefs anciens : si absent, le score affiché est le brut
   // jusqu'au lazy backfill au 1er chargement.
   competitorScores?: number[];
+  // Version de la formule qui a produit `competitorScores`. Sans elle, des
+  // scores concurrents calculés par une formule antérieure restaient figés en
+  // base et servaient de référence à un score user calculé avec la formule du
+  // jour (12 itérations de pondération à ce jour). Comparée à
+  // SCORING_VERSION : à la moindre différence, les scores concurrents sont
+  // recalculés au prochain chargement du brief.
+  scoringVersion?: number;
   // Centroïde sémantique (vecteur bge-m3 1024 dim) calculé à partir des
   // paragraphes ≥40 mots de chaque concurrent du top 10. Représente
   // "le sujet idéal vu par Google" pour ce KW. Utilisé live côté éditeur
@@ -2637,6 +2657,8 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     avgWordCount: avgWC,
     avgHeadings: avg(valid, (c) => c.headings) || 8,
     avgParagraphs: avg(valid, (c) => c.paragraphs) || 15,
+    avgBlocks:
+      avg(valid, (c) => htmlToBlockTexts(c.structuredHtml ?? "").length) || undefined,
     minWordCount: Math.round(avgWC * 0.7),
     maxWordCount: Math.round(avgWC * 1.3),
     medianImages: medImg,

@@ -23,9 +23,22 @@ import {
   type SerpResult,
   type NlpResult,
 } from "@/lib/analysis";
-import { computeDetailedScore, ensureCompetitorScores, type DetailedScore, type EditorData } from "@/lib/scoring";
+import {
+  competitorEditorData,
+  computeDetailedScore,
+  ensureAvgBlocks,
+  ensureCompetitorScores,
+  htmlToBlockTexts,
+  kwEmphasizedFromHtml,
+  refreshCompetitorScores,
+  SCORING_VERSION,
+  type DetailedScore,
+  type EditorData,
+  type ParagraphSemanticScore,
+} from "@/lib/scoring";
 import { applyBriefOverrides, parseBriefOverrides } from "@/lib/brief-overrides";
 import { geoSignalsFromHtml } from "@/lib/geo-scoring";
+import { scoreParagraphsAgainstCentroid } from "@/lib/semantic-paragraphs";
 
 export type CompetitorStats = {
   avg: number;
@@ -194,10 +207,14 @@ export function htmlToEditorData(html: string): EditorData {
     .map((l) => l.replace(/[ \t]+/g, " ").trim())
     .filter(Boolean)
     .join("\n\n");
+  // Comptage de blocs explicite (primitive partagée avec l'éditeur et le
+  // scoring concurrent) plutôt que laissé à la charge du critère structure,
+  // qui devinait les blocs en splittant le texte sur `\n\n`.
+  const blockCount = htmlToBlockTexts(html).length;
   // Compte les <img> du HTML (self-closing inclus). Sert au critère images
   // du scoring : on compare ce nombre à la médiane des concurrents.
   const imageCount = (html.match(/<img\b[^>]*>/gi) ?? []).length;
-  return { text, h1s, h2s, h3s, imageCount };
+  return { text, h1s, h2s, h3s, imageCount, blockCount };
 }
 
 function stripTags(s: string): string {
@@ -234,7 +251,17 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
   // 2026-05-16). On garde quand même ensureCompetitorScores pour persister
   // nlp.competitorScores (utilisé par computeCompetitorStats côté UI pour
   // afficher concurrence avg/best).
-  ensureCompetitorScores(nlp, row.serpJson);
+  // refreshCompetitorScores plutôt qu'ensureCompetitorScores : il renvoie
+  // aussi les rows du SERP avec leur `score` à jour, qu'on persiste plus bas.
+  // Chaque row porte sa propre copie du score, et c'est celle-là que lit
+  // computeCompetitorStats pour l'avg / le best affichés et renvoyés par
+  // l'API : sans réécriture, le `best` à battre restait figé sur l'ancienne
+  // formule alors que nlp.competitorScores, lui, était recalculé.
+  // ORDRE IMPORTANT : la référence de structure d'abord. Les scores
+  // concurrents dépendent d'avgBlocks (critère structure), donc les
+  // rafraîchir avant le backfill les recalculerait sur l'ancienne référence.
+  ensureAvgBlocks(nlp, row.serpJson);
+  const refreshedSerp = refreshCompetitorScores(nlp, row.serpJson);
   // Scoring sur le NLP overridé (mots-clés secondaires / termes custom,
   // concurrents désactivés, wordCount), comme l'éditeur via page.tsx. Sans
   // ça, le score persisté par POST /api/v1/briefs/{id}/content ignorait les
@@ -243,15 +270,41 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
   // seraient bakés et impossibles à retirer via la modal Paramètres) ;
   // applyBriefOverrides travaille sur une copie, le backfill ci-dessus reste
   // sur le nlp brut.
-  const rawSerp = row.serpJson ? (JSON.parse(row.serpJson) as SerpResult[]) : [];
+  // Les rows rafraîchies servent de base au scoring overridé, sinon on
+  // repart du serpJson persisté.
+  const rawSerp =
+    refreshedSerp?.serp ?? (row.serpJson ? (JSON.parse(row.serpJson) as SerpResult[]) : []);
   const overrides = parseBriefOverrides(row.overridesJson);
   const overridden = applyBriefOverrides({ nlp, serp: rawSerp, position: null }, overrides);
   const scoringNlp = overridden.nlp ?? nlp;
   // Si des concurrents sont désactivés, applyBriefOverrides a invalidé
   // competitorScores sur la copie : re-scoring sur le SERP filtré.
-  ensureCompetitorScores(scoringNlp, JSON.stringify(overridden.serp));
+  const overriddenSerpJson = JSON.stringify(overridden.serp);
+  // Même ordre que ci-dessus : avgBlocks avant les scores concurrents.
+  ensureAvgBlocks(scoringNlp, overriddenSerpJson);
+  ensureCompetitorScores(scoringNlp, overriddenSerpJson);
   const geoSignals = geoSignalsFromHtml(editorHtml);
-  const breakdown = computeDetailedScore(ed, scoringNlp, geoSignals);
+  // Saillance et sémantique : sans ces deux critères, le scoring serveur
+  // tournait sur 85 points quand l'éditeur tournait sur 104, et le même HTML
+  // ne donnait pas le même score selon le chemin (correctif 2026-09-06).
+  const kwEmphasized = kwEmphasizedFromHtml(
+    editorHtml,
+    scoringNlp.exactKeyword?.keyword ?? "",
+  );
+  const ai = (getCloudflareContext().env as unknown as { AI?: Ai }).AI;
+  // `null` = critère non calculable (pas de centroïde sur les briefs
+  // antérieurs à l'itération sémantique, binding AI absent, embeddings en
+  // échec) : on laisse alors computeDetailedScore le neutraliser plutôt que
+  // de pousser une valeur inventée.
+  const semanticScores: ParagraphSemanticScore[] | null =
+    await scoreParagraphsAgainstCentroid(editorHtml, scoringNlp.semanticCentroid, ai);
+  const breakdown = computeDetailedScore(
+    { ...ed, kwEmphasized },
+    scoringNlp,
+    geoSignals,
+    undefined,
+    semanticScores ?? undefined,
+  );
 
   const nlpJsonToWrite = nlp.competitorScores !== undefined ? JSON.stringify(nlp) : row.nlpJson;
 
@@ -261,6 +314,9 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
       editorHtml,
       score: breakdown.total,
       nlpJson: nlpJsonToWrite,
+      // Écrit seulement quand les scores concurrents ont été recalculés : on
+      // ne réécrit pas serpJson (payload lourd) à chaque rescore.
+      ...(refreshedSerp ? { serpJson: JSON.stringify(refreshedSerp.serp) } : {}),
       updatedAt: new Date(),
     })
     .where(eq(brief.id, briefId));
@@ -269,7 +325,11 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
     ok: true,
     total: breakdown.total,
     breakdown,
-    competitors: computeCompetitorStats(row.serpJson),
+    // Stats calculées sur les rows rafraîchies quand il y en a : le `best`
+    // renvoyé au client doit venir de la même formule que son score.
+    competitors: computeCompetitorStats(
+      refreshedSerp ? JSON.stringify(refreshedSerp.serp) : row.serpJson,
+    ),
   };
 }
 
@@ -670,7 +730,7 @@ async function createBriefAnalysisPayload(
     // d'inclure le GEO comme côté user, donc cohérent à comparer.
     const geoSignals = c.structuredHtml ? geoSignalsFromHtml(c.structuredHtml) : undefined;
     const breakdown = computeDetailedScore(
-      { text: c.text, h1s: c.h1, h2s: c.h2, h3s: c.h3, imageCount: c.imageCount },
+      competitorEditorData(c, nlp.exactKeyword.keyword),
       nlp,
       geoSignals,
     );
@@ -678,6 +738,9 @@ async function createBriefAnalysisPayload(
     competitorScores.push(breakdown.rawTotal);
   }
   nlp.competitorScores = competitorScores;
+  // Estampille de formule : permet de détecter, plus tard, que ces scores ont
+  // été produits par une version antérieure et doivent être recalculés.
+  nlp.scoringVersion = SCORING_VERSION;
 
   await setStep("scoring");
   const haloscan = haloscanKey ? await fetchHaloscan(keyword, country, haloscanKey) : null;
@@ -779,8 +842,10 @@ async function createBriefAnalysisPayload(
         initialEditorHtml = blocks.join("\n");
       }
       const myGeoSignals = myPage.structuredHtml ? geoSignalsFromHtml(myPage.structuredHtml) : undefined;
+      // La page du client passe par le même chemin qu'un concurrent : son
+      // contenu vient du crawl, pas de l'éditeur.
       const breakdown = computeDetailedScore(
-        { text: myPage.text, h1s: myPage.h1, h2s: myPage.h2, h3s: myPage.h3, imageCount: myPage.imageCount },
+        competitorEditorData(myPage, nlp.exactKeyword.keyword),
         nlp,
         myGeoSignals,
       );

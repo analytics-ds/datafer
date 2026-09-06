@@ -2,8 +2,14 @@ import { NextResponse } from "next/server";
 import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
 import { renderHtmlDocument, safeFilename } from "@/lib/export-content";
 import { renderDocx } from "@/lib/export-docx";
+import { htmlToMarkdown } from "@/lib/export-markdown";
 
 export const dynamic = "force-dynamic";
+
+/** Valeur YAML sûre pour le front matter : guillemets doubles échappés. */
+function yamlString(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
 
 export async function GET(req: Request, context: { params: Promise<{ id: string; n: string }> }) {
   const { id, n } = await context.params;
@@ -13,9 +19,13 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
   }
 
   const url = new URL(req.url);
-  const format = url.searchParams.get("format");
-  if (format !== "html" && format !== "docx") {
-    return NextResponse.json({ error: "format must be html or docx" }, { status: 400 });
+  const raw = url.searchParams.get("format");
+  const format = raw === "md" ? "markdown" : raw;
+  if (format !== "html" && format !== "docx" && format !== "markdown") {
+    return NextResponse.json(
+      { error: "format must be html, markdown or docx" },
+      { status: 400 },
+    );
   }
 
   const result = await authBrief(req, id);
@@ -47,6 +57,28 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
   } catch {}
   const slug = safeFilename(`${row.keyword}-${position}-${host || "concurrent"}`);
   const title = `${competitor.title || competitor.link} — Position ${position} (${host}) — ${row.keyword}`;
+
+  if (format === "markdown") {
+    // Front matter YAML plutôt qu'un H1 de provenance : le contenu du
+    // concurrent a déjà son propre H1, deux titres de niveau 1 dans le même
+    // fichier n'ont pas de sens. Les métadonnées restent lisibles et se
+    // parsent dans n'importe quel pipeline.
+    const frontMatter = [
+      "---",
+      `keyword: ${yamlString(row.keyword)}`,
+      `position: ${position}`,
+      `source: ${yamlString(competitor.link)}`,
+      `title: ${yamlString(competitor.title || competitor.link)}`,
+      "---",
+    ].join("\n");
+    const md = `${frontMatter}\n\n${htmlToMarkdown(bodyHtml)}\n`;
+    return new Response(md, {
+      headers: {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${slug}.md"`,
+      },
+    });
+  }
 
   if (format === "html") {
     return new Response(renderHtmlDocument(title, bodyHtml), {

@@ -119,6 +119,9 @@ export function applyBriefOverrides(
     // bge-m3 figé à la création).
     if (overrides.disabledCompetitors && overrides.disabledCompetitors.length > 0) {
       next.competitorScores = undefined;
+      // Même raison pour la référence de structure : elle est la moyenne des
+      // blocs des concurrents, donc elle change quand on en retire.
+      next.avgBlocks = undefined;
     }
 
     nlp = next;

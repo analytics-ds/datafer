@@ -141,6 +141,14 @@ export function TrashIcon(props: IconProps) {
   );
 }
 
+export function PencilIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM51.31,163.31l96-96,20.68,20.69-96,96ZM48,179.31,76.69,208H48Zm48,25.38L75.31,184l96-96L192,108.69Zm96-96L171.31,88l24-24L216,84.69Z" />
+    </Icon>
+  );
+}
+
 export function ShareIcon(props: IconProps) {
   return (
     <Icon {...props}>
