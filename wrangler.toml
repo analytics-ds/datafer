@@ -5,9 +5,12 @@ main = ".open-next/worker.js"
 
 assets = { directory = ".open-next/assets", binding = "ASSETS" }
 
-# Domaine de prod. L'URL workers.dev reste servie en parallèle et est
-# acceptée par Better Auth via trustedOrigins (src/lib/auth.ts).
-routes = [{ pattern = "corpus.datashake.fr", custom_domain = true }]
+# L'URL workers.dev est la seule adresse servie par ce worker. Le domaine
+# corpus.datashake.fr est un CNAME vers le projet Pages « corpus-proxy »
+# qui relaie vers cette URL : la zone datashake.fr n'est PAS dans ce compte
+# Cloudflare, donc ne jamais déclarer de `routes` ici (le deploy échoue en
+# code 10082 et désactive workers.dev au passage, prod en 404).
+workers_dev = true
 
 [[d1_databases]]
 binding = "DB"
