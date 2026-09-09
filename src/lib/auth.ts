@@ -29,6 +29,13 @@ function buildAuth() {
     }),
     secret,
     baseURL: (env as { BETTER_AUTH_URL?: string }).BETTER_AUTH_URL,
+    // Better Auth rejette en « Invalid origin » toute requête dont l'Origin
+    // n'est pas baseURL. Le worker répond sur deux hôtes : le domaine de
+    // prod et l'URL workers.dev historique, les deux doivent passer.
+    trustedOrigins: [
+      "https://corpus.datashake.fr",
+      "https://datafer.analytics-e0d.workers.dev",
+    ],
     emailAndPassword: {
       enabled: true,
       // No public signup: accounts created via `npm run create-user`

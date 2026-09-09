@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "../../_ui";
 
-const BASE = "https://datafer.analytics-e0d.workers.dev";
+const BASE = "https://corpus.datashake.fr";
 
 export default function ApiDocsPage() {
   return (
