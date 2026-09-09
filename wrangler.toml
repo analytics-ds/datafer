@@ -5,6 +5,10 @@ main = ".open-next/worker.js"
 
 assets = { directory = ".open-next/assets", binding = "ASSETS" }
 
+# Domaine de prod. L'URL workers.dev reste servie en parallèle et est
+# acceptée par Better Auth via trustedOrigins (src/lib/auth.ts).
+routes = [{ pattern = "corpus.datashake.fr", custom_domain = true }]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "datafer"
@@ -36,7 +40,7 @@ queue = "datafer-sitemap-sync-v2"
 binding = "AI"
 
 [vars]
-BETTER_AUTH_URL = "https://datafer.analytics-e0d.workers.dev"
+BETTER_AUTH_URL = "https://corpus.datashake.fr"
 # Provider SERP : "crazyserp" (par défaut, ~$0.50/1k FR) ou "serpapi"
 # (~$10/1k). Peut être basculé sans redeploy via `wrangler secret put` ou
 # en éditant cette ligne et `npm run deploy`.
