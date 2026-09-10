@@ -19,8 +19,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "corpus · datashake",
-  description: "corpus, l'outil d'optimisation sémantique SEO de datashake.",
+  title: "corpus by datashake · outil d'optimisation de contenu SEO et GEO",
+  description: "corpus analyse le top 10 Google, extrait les patterns sémantiques et score ton contenu en temps réel. L'outil d'optimisation SEO et GEO de datashake.",
 };
 
 export default function RootLayout({
