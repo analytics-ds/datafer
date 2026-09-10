@@ -181,7 +181,7 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
                 {user.name}
               </span>
               <span
-                className="shrink-0 inline-flex items-center justify-center px-1.5 py-0.5 rounded-[var(--radius-pill)] text-[10px] font-bold tracking-[0.2px] bg-[var(--bg-olive-light)] text-[var(--text)] leading-none"
+                className="shrink-0 inline-flex items-center justify-center px-1.5 py-0.5 rounded-[var(--radius-pill)] text-[10px] font-bold bg-[var(--bg-olive-light)] text-[var(--text)] leading-none"
                 title={`Niveau ${user.level} · Voir le détail dans les paramètres`}
               >
                 Lv {user.level}
@@ -239,7 +239,7 @@ function NavItem({
 function NavSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mt-6">
-      <div className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
+      <div className="px-3 mb-2 text-[10px] font-semibold uppercase text-[var(--text-muted)]">
         {title}
       </div>
       <div className="flex flex-col gap-[1px]">{children}</div>

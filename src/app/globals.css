@@ -218,14 +218,15 @@ body {
   }
 
   /* Micro-libellés de section et de métrique (SCORE, MOTS, TES CLIENTS…).
-     Ils sont en Inter, comme tout ce qui n'est pas un titre, et gardent un
-     interlettrage quasi nul : la version très espacée donnait un rendu de
-     maquette générique plutôt qu'une interface tenue. */
+     Ils sont en Inter, comme tout ce qui n'est pas un titre, et gardent
+     l'interlettrage naturel de la police : tout espacement ajouté, même
+     minime, donnait un rendu de maquette générique plutôt qu'une interface
+     tenue (arbitrage Pierre du 2026-09-10). */
   .df-label {
     font-family: var(--font-body), -apple-system, sans-serif;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.2px;
+    letter-spacing: normal;
   }
 
   /* Code réel uniquement (documentation API, clés, extraits JSON). */
