@@ -671,7 +671,7 @@ export function BriefEditor(props: BriefEditorProps) {
           <h2 className="df-title text-[24px] tracking-[-0.6px] font-semibold leading-none">
             {keyword}
           </h2>
-          <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px] uppercase">
+          <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold uppercase">
             {country}
           </span>
           {folder && !hideNewAnalysis && (
@@ -689,7 +689,7 @@ export function BriefEditor(props: BriefEditorProps) {
               <span>{folder.name}</span>
             </span>
           )}
-          <span className="inline-flex items-center gap-[5px] px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px] uppercase bg-[var(--state-ok-bg)] text-[var(--text)]">
+          <span className="inline-flex items-center gap-[5px] px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold uppercase bg-[var(--state-ok-bg)] text-[var(--text)]">
             <span className="w-[5px] h-[5px] rounded-full bg-[var(--brand-kaki)]" />
             {crawledCount}/{serp.length} pages crawlées
           </span>
@@ -1190,7 +1190,7 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
           pas une note absolue : un score de 70 signifie que le contenu fait ~40 % de mieux
           que la médiane des concurrents qui rankent déjà.
         </p>
-        <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-3">
+        <div className="text-[10px] font-semibold uppercase text-[var(--text-muted)] mb-3">
           Pondération SEO (92 % du score total)
         </div>
         <ul className="text-[12px] space-y-[8px] mb-5">
@@ -1460,14 +1460,14 @@ function EditorSidebar({
           </div>
         </div>
         <div className="flex flex-col gap-[4px] min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-inverse-muted)] inline-flex items-center">
+          <span className="text-[10px] font-semibold uppercase text-[var(--text-inverse-muted)] inline-flex items-center">
             Score SEO/GEO
             <ScoreInfoTrigger />
           </span>
           <span className="text-[13px] font-semibold leading-tight text-[var(--text-inverse)]">{scoreHint}</span>
           {nlp?.intent && (
             <span
-              className="self-start mt-1 inline-flex items-center gap-[5px] px-[8px] py-[3px] rounded-[var(--radius-pill)] border border-[rgba(255,255,255,0.22)] text-[9px] font-semibold uppercase tracking-[0.2px] text-[var(--text-inverse)]"
+              className="self-start mt-1 inline-flex items-center gap-[5px] px-[8px] py-[3px] rounded-[var(--radius-pill)] border border-[rgba(255,255,255,0.22)] text-[9px] font-semibold uppercase text-[var(--text-inverse)]"
               title="Intent de recherche détecté pour ce keyword"
             >
               {/* La charte réserve les couleurs secondaires aux tout petits
@@ -1636,7 +1636,7 @@ function EditorSidebar({
           </div>
           {nlp.semanticClusters.map((c) => (
             <div key={c.label} className="mb-[10px]">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-secondary)] mb-[4px]">
+              <div className="text-[10px] font-semibold uppercase text-[var(--text-secondary)] mb-[4px]">
                 {c.label} <span className="opacity-60 font-normal">({c.terms.length})</span>
               </div>
               <div className="flex flex-wrap gap-[3px]">
@@ -1718,7 +1718,7 @@ function EditorSidebar({
           <BenchRow label="Paragraphes" value={String(nlp.avgParagraphs)} last />
           {serp.length > 0 && (
             <div className="mt-[10px] pt-[10px] border-t border-[var(--border)]">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
+              <div className="text-[10px] font-semibold uppercase text-[var(--text-muted)] mb-[6px]">
                 Concurrents top {serp.length}
               </div>
               <div className="flex flex-col gap-[2px]">
@@ -1816,7 +1816,7 @@ function Section({
             setOpen((v) => !v);
           }
         }}
-        className="w-full flex items-center justify-between gap-[6px] text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[10px] hover:text-[var(--text)] transition-colors cursor-pointer select-none"
+        className="w-full flex items-center justify-between gap-[6px] text-[10px] font-semibold uppercase text-[var(--text-muted)] mb-[10px] hover:text-[var(--text)] transition-colors cursor-pointer select-none"
       >
         <span className="flex items-center gap-[6px]">
           <span className="w-[6px] h-[6px] rounded-full" style={{ background: dotColor }} />
@@ -1984,7 +1984,7 @@ function CompetitorSections({
                 >
                   {pct}%
                 </span>
-                <span className="text-[9px] text-[var(--text-muted)] font-semibold uppercase tracking-[0.2px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <span className="text-[9px] text-[var(--text-muted)] font-semibold uppercase opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                   → H2
                 </span>
               </span>
@@ -2131,7 +2131,7 @@ function PaaCoverageList({
               {covered ? "✓" : "?"}
             </span>
             <span className="flex-1">{q.question}</span>
-            <span className="text-[9px] text-[var(--text-muted)] font-semibold uppercase tracking-[0.2px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+            <span className="text-[9px] text-[var(--text-muted)] font-semibold uppercase opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
               → H2
             </span>
           </button>
@@ -2170,7 +2170,7 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert, info, kwTe
   const totalCount = terms.length + (kwTerms?.length ?? 0);
   return (
     <div className="mb-3">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.2px] mb-[6px] flex items-center gap-[5px]" style={{ color }}>
+      <div className="text-[10px] font-semibold uppercase mb-[6px] flex items-center gap-[5px]" style={{ color }}>
         <span className="w-[5px] h-[5px] rounded-full" style={{ background: color }} />
         {label}
         <span className="font-mono font-normal text-[var(--text-muted)]">
@@ -2573,7 +2573,7 @@ function CitationPopover({
       style={{ top, left, width: POPOVER_W, transform }}
     >
       <div className="flex items-center justify-between gap-2 px-3 py-[7px] border-b border-[var(--border)]">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
+        <div className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">
           « {term} » chez les concurrents
         </div>
         <div className="text-[10px] font-mono text-[var(--text-muted)]">
@@ -3429,7 +3429,7 @@ function CompetitorScoreRow({ scoreTotal, serp }: { scoreTotal: number; serp: Se
 
   return (
     <div className="bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] p-3 mb-5">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-inverse-muted)] mb-2">
+      <div className="text-[10px] font-semibold uppercase text-[var(--text-inverse-muted)] mb-2">
         Concurrence SERP
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -3475,7 +3475,7 @@ function CompareCell({
   const sign = gap > 0 ? "+" : "";
   return (
     <div title={tooltip}>
-      <div className="text-[10px] uppercase tracking-[0.2px] text-[var(--text-inverse-muted)] mb-[2px]">{label}</div>
+      <div className="text-[10px] uppercase text-[var(--text-inverse-muted)] mb-[2px]">{label}</div>
       <div className="flex items-baseline gap-2">
         <span className="font-mono font-semibold text-[15px]">{value}</span>
         <span className="inline-flex items-center gap-[4px] text-[11px] font-semibold font-mono text-[var(--text-inverse)]">
@@ -3555,7 +3555,7 @@ function KeywordStatsRow({
       />
       {position != null && rankingUrl && (
         <div className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[2px]">
+          <div className="text-[10px] font-semibold uppercase text-[var(--text-muted)] mb-[2px]">
             Page qui ranke
           </div>
           <a
@@ -3612,7 +3612,7 @@ function KeyStat({
       style={{ background: p.bg, borderColor: isBest ? p.border : `${p.border}40` }}
     >
       <span
-        className="text-[9px] font-semibold uppercase tracking-[0.2px] mb-[3px]"
+        className="text-[9px] font-semibold uppercase mb-[3px]"
         style={{ color: isBest ? "rgba(255,255,255,0.7)" : "var(--text-muted)" }}
       >
         {label}
@@ -3710,7 +3710,7 @@ function SerpScoreChart({
     >
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-inverse-muted)]">
+          <div className="text-[10px] font-semibold uppercase text-[var(--text-inverse-muted)]">
             Score SEO/GEO concurrents
           </div>
           <div className="text-[12px] text-[var(--text-inverse-secondary)] mt-[2px]">
@@ -3826,7 +3826,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
                   <div className="font-mono text-[13px] font-semibold text-[var(--red)]">
                     PDF
                   </div>
-                  <div className="text-[9px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-semibold">
+                  <div className="text-[9px] uppercase text-[var(--text-muted)] font-semibold">
                     pdf
                   </div>
                 </div>
@@ -3840,7 +3840,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
                 <div className="font-mono text-[13px] font-semibold text-[var(--text-muted)]">
                   ⚠
                 </div>
-                <div className="text-[9px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-semibold">
+                <div className="text-[9px] uppercase text-[var(--text-muted)] font-semibold">
                   crawl ✗
                 </div>
               </div>
@@ -3858,7 +3858,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
                     {r.score}
                   </span>
                 </div>
-                <div className="text-[9px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-semibold">
+                <div className="text-[9px] uppercase text-[var(--text-muted)] font-semibold">
                   score
                 </div>
               </div>
@@ -3868,7 +3868,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             <div className="font-mono text-[13px] font-semibold">
               {r.wordCount ? r.wordCount : "N/A"}
             </div>
-            <div className="text-[9px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-semibold">
+            <div className="text-[9px] uppercase text-[var(--text-muted)] font-semibold">
               mots
             </div>
           </div>
@@ -3876,7 +3876,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             <div className="font-mono text-[13px] font-semibold">
               {r.headings ?? "N/A"}
             </div>
-            <div className="text-[9px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-semibold">
+            <div className="text-[9px] uppercase text-[var(--text-muted)] font-semibold">
               titres
             </div>
           </div>

@@ -36,7 +36,7 @@ export function LoginForm() {
         <LogoApp height={20} />
       </div>
 
-      <span className="inline-flex items-center px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px] uppercase mb-5">
+      <span className="inline-flex items-center px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold uppercase mb-5">
         Connexion
       </span>
 
@@ -47,7 +47,7 @@ export function LoginForm() {
         Connectez-vous à votre espace corpus pour générer vos briefs et accéder à vos clients.
       </p>
 
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
+      <label className="block text-[11px] font-semibold uppercase text-[var(--text-muted)] mb-[6px]">
         Email
       </label>
       <input
@@ -60,7 +60,7 @@ export function LoginForm() {
         className="w-full px-4 py-[12px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-4 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
 
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
+      <label className="block text-[11px] font-semibold uppercase text-[var(--text-muted)] mb-[6px]">
         Mot de passe
       </label>
       <input

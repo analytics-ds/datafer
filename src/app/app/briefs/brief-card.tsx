@@ -395,7 +395,7 @@ function InlineMetric({
       className="inline-flex items-baseline gap-[5px]"
       style={{ cursor: tooltip ? "help" : "default" }}
     >
-      <span className="text-[10px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-medium">
+      <span className="text-[10px] uppercase text-[var(--text-muted)] font-medium">
         {label}
       </span>
       <span
