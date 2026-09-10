@@ -5,6 +5,18 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Outil interne : noindex sur toutes les réponses, y compris celles qui
+  // ne passent pas par le rendu HTML (API, fichiers, redirections).
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive, nosnippet, noimageindex" },
+        ],
+      },
+    ];
+  },
   experimental: {
     serverActions: {
       // corpus.datashake.fr est un relais Cloudflare Pages (corpus-proxy)

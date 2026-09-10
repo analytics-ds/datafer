@@ -20,7 +20,17 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "corpus by datashake · outil d'optimisation de contenu SEO et GEO",
-  description: "corpus analyse le top 10 Google, extrait les patterns sémantiques et score ton contenu en temps réel. L'outil d'optimisation SEO et GEO de datashake.",
+  description: "corpus analyse le top 10 Google, extrait les patterns sémantiques et score vos contenus en temps réel. L'outil d'optimisation SEO et GEO de datashake.",
+  /* Outil interne : aucune page ne doit ressortir dans un moteur ni dans un
+     LLM, y compris les liens de partage client (/share, /share-brief). Le
+     noindex est doublé d'un header X-Robots-Tag dans next.config.ts et d'un
+     robots.txt bloquant (src/app/robots.ts). */
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: { index: false, follow: false, noimageindex: true },
+  },
 };
 
 export default function RootLayout({
