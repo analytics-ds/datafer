@@ -33,6 +33,9 @@ export default function ApiDocsPage() {
           <li><Code>GET /api/v1/briefs</Code>, liste les briefs, filtrable par <Code>keyword</Code> / <Code>folderId</Code> / <Code>status</Code></li>
           <li><Code>GET /api/v1/briefs/&#123;id&#125;</Code>, lit le brief, renvoie <Code>pending</Code> / <Code>ready</Code> / <Code>failed</Code></li>
           <li><Code>POST /api/v1/briefs/&#123;id&#125;/content</Code>, soumet du contenu HTML et reçoit le score détaillé</li>
+          <li><Code>GET /api/v1/folders</Code>, liste les dossiers (clients) pour retrouver un <Code>folderId</Code></li>
+          <li><Code>GET|POST|DELETE /api/v1/folders/&#123;id&#125;/share</Code>, lien de partage public d&apos;un dossier</li>
+          <li><Code>GET|POST|DELETE /api/v1/briefs/&#123;id&#125;/share</Code>, lien de partage public d&apos;un brief seul</li>
         </ul>
         <H4>API V2 (lecture étendue, granulaire)</H4>
         <ul className="list-disc pl-5 text-[var(--text-muted)] mb-3">
@@ -335,6 +338,71 @@ export default function ApiDocsPage() {
           <li><Code>breakdown.semantic</Code> : critère sémantique paragraphe (cosinus moyen vs centroïde top 10 via bge-m3). Calculé côté éditeur via l&apos;endpoint <Code>POST /api/v2/briefs/&#123;id&#125;/semantic-paragraph</Code>. Neutralisé (max=0) si pas de paragraphes scorés.</li>
           <li>Regarde <Code>breakdown</Code> pour identifier les axes faibles (mot-clé, couverture NLP, structure…) et itérer.</li>
         </ul>
+      </Section>
+
+      <Section title="5. Générer un lien de partage client" dot="var(--accent)">
+        <p className="mb-3">
+          Mêmes liens que les boutons « Partager » de l&apos;UI, en API. Deux granularités :
+          le dossier entier (le client voit tous ses briefs) et le brief seul.
+        </p>
+        <ul className="list-disc pl-5 text-[var(--text-muted)] mb-3">
+          <li>Dossier : <Code>{BASE}/share/&#123;token&#125;</Code></li>
+          <li>Brief : <Code>{BASE}/share-brief/&#123;token&#125;</Code></li>
+        </ul>
+        <p className="mb-3 text-[var(--text-muted)]">
+          Le lien est en lecture seule, sans authentification, et <strong>n&apos;expire pas</strong> :
+          seul un <Code>DELETE</Code> (ou le bouton Révoquer de l&apos;UI) le coupe.
+          Le <Code>POST</Code> est idempotent, il renvoie le lien existant s&apos;il y en a déjà un,
+          ce qui évite d&apos;invalider un lien déjà envoyé au client. Pour changer volontairement
+          de token, passer <Code>&#123;&quot;regenerate&quot;: true&#125;</Code> : l&apos;ancien lien tombe
+          immédiatement en 404.
+        </p>
+
+        <H4>Dossier</H4>
+        <Pre>{`# retrouver l'id du dossier
+curl "${BASE}/api/v1/folders?q=quitoque" \\
+  -H "Authorization: Bearer dfk_..."
+
+# activer le partage (ou récupérer le lien existant)
+curl -X POST ${BASE}/api/v1/folders/{folderId}/share \\
+  -H "Authorization: Bearer dfk_..."
+
+# état du partage
+curl ${BASE}/api/v1/folders/{folderId}/share -H "Authorization: Bearer dfk_..."
+
+# révoquer
+curl -X DELETE ${BASE}/api/v1/folders/{folderId}/share -H "Authorization: Bearer dfk_..."`}</Pre>
+
+        <p className="mb-2 text-[var(--text-muted)]">Réponse du POST :</p>
+        <Pre>{`{
+  "folderId": "8f2c...",
+  "name": "Quitoque",
+  "shared": true,
+  "created": true,
+  "token": "kR3v...",
+  "url": "${BASE}/share/kR3v..."
+}`}</Pre>
+
+        <H4>Brief</H4>
+        <Pre>{`curl -X POST ${BASE}/api/v1/briefs/{briefId}/share \\
+  -H "Authorization: Bearer dfk_..."
+
+# régénérer le token (invalide l'ancien lien)
+curl -X POST ${BASE}/api/v1/briefs/{briefId}/share \\
+  -H "Authorization: Bearer dfk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"regenerate": true}'
+
+curl -X DELETE ${BASE}/api/v1/briefs/{briefId}/share -H "Authorization: Bearer dfk_..."`}</Pre>
+
+        <Pre>{`{
+  "briefId": "a3c1b7e8-...",
+  "keyword": "chaussures running",
+  "shared": true,
+  "created": false,
+  "token": "9xQa...",
+  "url": "${BASE}/share-brief/9xQa..."
+}`}</Pre>
       </Section>
 
       <Section title="Exemple d'intégration Node.js" dot="var(--accent)">

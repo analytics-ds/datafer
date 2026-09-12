@@ -1,6 +1,6 @@
 "use server";
 
-import { randomUUID, randomBytes } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -8,6 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { client, folderFavorite } from "@/db/schema";
+import { generateShareToken } from "@/lib/share-links";
 
 export async function createFolderAction(formData: FormData) {
   const session = await getAuth().api.getSession({ headers: await headers() });
@@ -67,7 +68,7 @@ export async function enableShareAction(folderId: string): Promise<
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) return { ok: false, error: "Non authentifié" };
 
-  const token = randomBytes(24).toString("base64url");
+  const token = generateShareToken();
   const db = getDb();
   await db
     .update(client)

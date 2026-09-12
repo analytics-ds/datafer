@@ -1,12 +1,12 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
+import { generateShareToken } from "@/lib/share-links";
 import {
   attachTagToBrief,
   createTag,
@@ -38,7 +38,7 @@ export async function enableBriefShareAction(briefId: string): Promise<
   if (!(await assertAccess(briefId)))
     return { ok: false, error: "Brief introuvable" };
 
-  const token = randomBytes(24).toString("base64url");
+  const token = generateShareToken();
   const db = getDb();
   await db.update(brief).set({ shareToken: token, updatedAt: new Date() }).where(eq(brief.id, briefId));
   revalidatePath(`/app/briefs/${briefId}`);
