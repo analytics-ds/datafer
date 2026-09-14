@@ -48,6 +48,9 @@ BETTER_AUTH_URL = "https://corpus.datashake.fr"
 # (~$10/1k). Peut être basculé sans redeploy via `wrangler secret put` ou
 # en éditant cette ligne et `npm run deploy`.
 SERP_PROVIDER = "crazyserp"
+# Repli SERP Bright Data quand le provider principal ne renvoie rien (panne
+# fournisseur). Activé le 14/09/2026 suite à la panne CrazySerp. "0" pour couper.
+SERP_BRIGHTDATA_FALLBACK = "1"
 # Compte Cloudflare pour appeler la Browser Rendering REST API en
 # fallback de crawl (sites bloquants type Akamai). Free tier : 10 min/j.
 CF_ACCOUNT_ID = "e0dd71e4cd791925c9b37a85496aa259"

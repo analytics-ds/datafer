@@ -59,6 +59,11 @@ dead_letter_queue = "datafer-sitemap-sync-v2-dlq"
 
 [vars]
 SERP_PROVIDER = "crazyserp"
+# Repli SERP Bright Data quand le provider principal ne renvoie rien (panne
+# fournisseur). Activé le 14/09/2026, jour où CrazySerp est tombé (0/12 appels,
+# 500 sur tous les mots-clés) avec la clé de secours à 0 crédit : sans ce repli,
+# 100 % des briefs échouent en `no SERP results`. Remettre "0" pour le couper.
+SERP_BRIGHTDATA_FALLBACK = "1"
 
 # Cron natif Cloudflare : tourne toutes les minutes pour purger les briefs
 # `pending` au-delà de 2 min. Remplace le cron GH Actions trop flaky

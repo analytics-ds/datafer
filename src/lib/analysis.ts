@@ -245,7 +245,7 @@ export type NlpResult = {
   competitorSemanticScores?: number[];
 };
 
-// ─── SERP providers (CrazySerp + SerpAPI) ────────────────────────────────────
+// ─── SERP providers (CrazySerp + SerpAPI + repli Bright Data) ────────────────
 //
 // On supporte deux providers pour pouvoir basculer entre les essais gratuits.
 // Le choix se fait via la variable d'env `SERP_PROVIDER` :
@@ -254,6 +254,11 @@ export type NlpResult = {
 //
 // CrazySerp est ~150× moins cher mais limité aux crédits dispo. SerpAPI
 // reste utile pour les jours où on dépasse le quota CrazySerp.
+//
+// En plus de ces deux providers, un 3e niveau Bright Data se déclenche quand
+// le provider choisi ne renvoie AUCUN résultat (cf. fetchSerpFromBrightdata).
+// C'est le filet anti-panne fournisseur : sans lui, une panne CrazySerp fait
+// échouer 100 % des briefs en `no SERP results` (vécu les 11 et 14/09/2026).
 
 export type SerpProvider = "crazyserp" | "serpapi";
 
@@ -263,11 +268,20 @@ export async function fetchSerp(
   apiKey: string,
   provider: SerpProvider = "crazyserp",
   apiKeyFallback?: string,
+  brightdata?: { BRIGHTDATA_TOKEN?: string; BRIGHTDATA_ZONE?: string; enabled?: boolean },
 ): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
-  if (provider === "serpapi") {
-    return fetchSerpFromSerpapi(keyword, country, apiKey);
+  const primary =
+    provider === "serpapi"
+      ? await fetchSerpFromSerpapi(keyword, country, apiKey)
+      : await fetchSerpFromCrazyserp(keyword, country, apiKey, apiKeyFallback);
+
+  if (primary.results.length) return primary;
+
+  if (brightdata?.enabled) {
+    console.log("[serp] provider principal vide, repli Bright Data", { provider, keyword });
+    return fetchSerpFromBrightdata(keyword, country, brightdata);
   }
-  return fetchSerpFromCrazyserp(keyword, country, apiKey, apiKeyFallback);
+  return primary;
 }
 
 // ─── CrazySerp ───────────────────────────────────────────────────────────────
@@ -563,6 +577,208 @@ async function fetchSerpFromSerpapi(
   }));
   const results = allResults.slice(0, 10);
   return { results, allResults, paa };
+}
+
+// ─── Bright Data (repli SERP de dernier recours) ─────────────────────────────
+//
+// Ajouté le 2026-09-14 : CrazySerp est tombé côté fournisseur (0/12 appels OK,
+// `500 Failed to fetch search results` sur tous les mots-clés et tous les
+// marchés, y compris avec une clé valide et créditée) et la clé de secours
+// `CRAZYSERP_KEY_FALLBACK` est à 0 crédit (http 402). Résultat : tout brief
+// échouait en `no SERP results`, l'outil était inutilisable.
+//
+// Ce 3e niveau récupère la SERP via la zone Bright Data déjà utilisée pour le
+// crawl des concurrents (mêmes secrets BRIGHTDATA_TOKEN / BRIGHTDATA_ZONE, pas
+// de nouveau compte à ouvrir). Deux formats de réponse sont gérés :
+//   1. `brd_json=1` → JSON déjà parsé (zones SERP API). Chemin nominal.
+//   2. HTML brut (zones Web Unlocker simples) → parsing des <h3> dans les <a>.
+//      On récupère alors titre + URL mais pas les snippets, ce qui suffit :
+//      le NLP travaille sur les pages crawlées, pas sur les snippets.
+//
+// Ne se déclenche QUE si CrazySerp n'a rien renvoyé, donc facturé uniquement
+// pendant une panne. Coupure possible sans redéploiement de code en passant
+// SERP_BRIGHTDATA_FALLBACK à "0" dans wrangler-analysis.toml.
+
+type BrightDataSerpJson = {
+  organic?: Array<{
+    link?: string;
+    url?: string;
+    title?: string;
+    description?: string;
+    snippet?: string;
+    display_link?: string;
+    rank?: number;
+    position?: number;
+  }>;
+  people_also_ask?: Array<{
+    question?: string;
+    answer?: string;
+    snippet?: string;
+    link?: string;
+  }>;
+};
+
+function googleSearchUrl(keyword: string, country: string, json: boolean): string {
+  const cc = country.toLowerCase();
+  const lang = COUNTRY_TO_LANG[cc] ?? "fr";
+  const googleDomain = COUNTRY_TO_GOOGLE_DOMAIN[cc] ?? "google.fr";
+  const params = new URLSearchParams({
+    q: keyword,
+    // num=20 pour garantir un top 10 plein même quand Google insère des blocs
+    // spéciaux (même raison que la page 2 côté CrazySerp).
+    num: "20",
+    gl: cc === "uk" || cc === "gb" ? "uk" : cc,
+    hl: lang,
+  });
+  // brd_json est un paramètre Bright Data, pas Google : il demande à leur
+  // couche SERP de renvoyer du JSON parsé au lieu du HTML.
+  if (json) params.set("brd_json", "1");
+  return `https://www.${googleDomain}/search?${params.toString()}`;
+}
+
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
+function stripSerpTags(s: string): string {
+  return decodeHtmlEntities(s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " "));
+}
+
+/**
+ * Parse un HTML de SERP Google pour en extraire les résultats organiques.
+ *
+ * Le markup Google est obfusqué et change souvent, mais la structure
+ * `<a href="https://…"> … <h3>Titre</h3> … </a>` est stable depuis des années.
+ * On filtre les URL internes Google (navigation, cache) et on dédoublonne par
+ * URL en gardant le premier passage, qui correspond à la meilleure position.
+ */
+export function parseGoogleSerpHtml(html: string): SerpResult[] {
+  const out: SerpResult[] = [];
+  const seen = new Set<string>();
+  const re = /<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>[\s\S]{0,2000}?<h3[^>]*>([\s\S]*?)<\/h3>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const link = decodeHtmlEntities(m[1]);
+    const title = stripSerpTags(m[2]).trim();
+    if (!title) continue;
+    let host: string;
+    try {
+      host = new URL(link).hostname.toLowerCase();
+    } catch {
+      continue;
+    }
+    if (/(^|\.)google\.[a-z.]+$/.test(host) || host === "webcache.googleusercontent.com") {
+      continue;
+    }
+    if (seen.has(link)) continue;
+    seen.add(link);
+    out.push({
+      position: out.length + 1,
+      title,
+      link,
+      snippet: "",
+      displayed_link: host,
+    });
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+async function fetchSerpFromBrightdata(
+  keyword: string,
+  country: string,
+  env: { BRIGHTDATA_TOKEN?: string; BRIGHTDATA_ZONE?: string },
+): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
+  const empty = { results: [], allResults: [], paa: [] };
+  const token = env.BRIGHTDATA_TOKEN;
+  const zone = env.BRIGHTDATA_ZONE;
+  if (!token || !zone) {
+    console.log("[serp-brightdata] secrets manquants, repli impossible");
+    return empty;
+  }
+
+  // 1re passe en JSON (zones SERP API), 2e en HTML brut (zones Unlocker).
+  for (const asJson of [true, false]) {
+    try {
+      const r = await fetch("https://api.brightdata.com/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          zone,
+          url: googleSearchUrl(keyword, country, asJson),
+          format: "raw",
+          country: country.toLowerCase(),
+        }),
+        signal: AbortSignal.timeout(45000),
+      });
+      if (!r.ok) {
+        console.error("[serp-brightdata] http error", { status: r.status, asJson, keyword });
+        continue;
+      }
+      const body = await r.text();
+
+      let allResults: SerpResult[] = [];
+      let paa: Paa[] = [];
+
+      const trimmed = body.trimStart();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        let d: BrightDataSerpJson | null = null;
+        try {
+          d = JSON.parse(body) as BrightDataSerpJson;
+        } catch {
+          d = null;
+        }
+        if (d?.organic?.length) {
+          allResults = d.organic
+            .map((o, i) => ({
+              position: o.rank ?? o.position ?? i + 1,
+              title: o.title ?? "",
+              link: o.link ?? o.url ?? "",
+              snippet: o.description ?? o.snippet ?? "",
+              displayed_link: o.display_link ?? o.link ?? o.url ?? "",
+            }))
+            .filter((x) => x.link);
+          paa = (d.people_also_ask ?? []).map((q) => ({
+            question: q.question ?? "",
+            snippet: q.answer ?? q.snippet ?? "",
+            link: q.link ?? "",
+          }));
+        }
+      }
+
+      // Pas de JSON exploitable : la zone n'est pas une zone SERP API, on
+      // retombe sur le parsing du HTML renvoyé.
+      if (!allResults.length) {
+        allResults = parseGoogleSerpHtml(body);
+      }
+
+      if (allResults.length) {
+        console.log("[serp-brightdata] ok", {
+          keyword,
+          mode: asJson ? "json" : "html",
+          count: allResults.length,
+        });
+        return { results: allResults.slice(0, 10), allResults, paa };
+      }
+      console.error("[serp-brightdata] aucun résultat extrait", {
+        keyword,
+        asJson,
+        bodyLength: body.length,
+      });
+    } catch (e) {
+      console.error("[serp-brightdata] exception", { keyword, asJson, err: String(e) });
+    }
+  }
+  return empty;
 }
 
 /**

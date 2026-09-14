@@ -519,6 +519,13 @@ async function createBriefAnalysisPayload(
     serpKey,
     provider,
     provider === "crazyserp" ? env.CRAZYSERP_KEY_FALLBACK : undefined,
+    {
+      BRIGHTDATA_TOKEN: env.BRIGHTDATA_TOKEN,
+      BRIGHTDATA_ZONE: env.BRIGHTDATA_ZONE,
+      // Repli facturé à la requête Bright Data : on ne le déclenche que si la
+      // var est explicitement à "1", pour pouvoir le couper sans redéployer.
+      enabled: env.SERP_BRIGHTDATA_FALLBACK === "1",
+    },
   );
   if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
 

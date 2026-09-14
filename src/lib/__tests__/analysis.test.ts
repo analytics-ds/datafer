@@ -4,8 +4,44 @@ import {
   filterPaaByLanguage,
   findDomainHit,
   extractJsonPayloadText,
+  parseGoogleSerpHtml,
   parseHTML,
 } from "@/lib/analysis";
+
+describe("parseGoogleSerpHtml", () => {
+  const serp = `
+    <div><a href="https://www.google.fr/preferences"><h3>Paramètres</h3></a></div>
+    <div class="g"><a href="https://www.amv.fr/assurance-moto"><br><h3 class="LC20lb">Assurance moto AMV</h3></a>
+      <div>Devis en ligne</div></div>
+    <div class="g"><a href="https://www.macif.fr/assurance-moto"><h3>Assurance moto &amp; scooter</h3></a></div>
+    <div class="g"><a href="https://www.amv.fr/assurance-moto"><h3>Doublon AMV</h3></a></div>
+  `;
+
+  it("extrait les résultats organiques dans l'ordre de la SERP", () => {
+    const r = parseGoogleSerpHtml(serp);
+    expect(r.map((x) => x.link)).toEqual([
+      "https://www.amv.fr/assurance-moto",
+      "https://www.macif.fr/assurance-moto",
+    ]);
+    expect(r[0].position).toBe(1);
+    expect(r[0].title).toBe("Assurance moto AMV");
+    expect(r[0].displayed_link).toBe("www.amv.fr");
+  });
+
+  it("décode les entités HTML des titres", () => {
+    expect(parseGoogleSerpHtml(serp)[1].title).toBe("Assurance moto & scooter");
+  });
+
+  it("écarte les liens internes Google et les doublons d'URL", () => {
+    const links = parseGoogleSerpHtml(serp).map((x) => x.link);
+    expect(links.some((l) => l.includes("google.fr"))).toBe(false);
+    expect(new Set(links).size).toBe(links.length);
+  });
+
+  it("renvoie un tableau vide sur un HTML sans résultat", () => {
+    expect(parseGoogleSerpHtml("<html><body>pas de SERP</body></html>")).toEqual([]);
+  });
+});
 
 describe("extractParagraphsFromHtml", () => {
   it("retourne un tableau vide quand il n'y a pas de paragraphe", () => {
