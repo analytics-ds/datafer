@@ -757,6 +757,12 @@ function stripSerpTags(s: string): string {
  * `<a href="https://…"> … <h3>Titre</h3> … </a>` est stable depuis des années.
  * On filtre les URL internes Google (navigation, cache) et on dédoublonne par
  * URL en gardant le premier passage, qui correspond à la meilleure position.
+ *
+ * Le filtre vise la navigation du moteur, pas le domaine google : les
+ * propriétés Google sont des concurrents organiques légitimes, et
+ * developers.google.com sort d'ailleurs en position 1 sur « qu'est-ce que le
+ * SEO » (constaté le 14/09/2026). Écarter tout *.google.* ferait sauter un
+ * vrai résultat du top 10.
  */
 export function parseGoogleSerpHtml(html: string): SerpResult[] {
   const out: SerpResult[] = [];
@@ -769,13 +775,24 @@ export function parseGoogleSerpHtml(html: string): SerpResult[] {
     const title = stripSerpTags(m[2]).trim();
     if (!title) continue;
     let host: string;
+    let chemin: string;
     try {
-      host = new URL(link).hostname.toLowerCase();
+      const u = new URL(link);
+      host = u.hostname.toLowerCase();
+      chemin = u.pathname;
     } catch {
       continue;
     }
+    // Navigation du moteur : le domaine nu (www.google.fr, google.com) sur ses
+    // chemins internes, et le cache. developers.google.com, support.google.com
+    // ou blog.google restent des résultats organiques et passent.
+    const estHoteMoteur = /^(www\.)?google\.[a-z.]+$/.test(host);
+    const estCheminMoteur =
+      /^\/(search|url|preferences|imgres|shopping|maps|travel|finance|advanced_search|intl|policies|setprefs|history)(\/|$)/.test(
+        chemin,
+      ) || chemin === "/";
     if (
-      /(^|\.)google\.[a-z.]+$/.test(host) ||
+      (estHoteMoteur && estCheminMoteur) ||
       host === "webcache.googleusercontent.com"
     ) {
       continue;

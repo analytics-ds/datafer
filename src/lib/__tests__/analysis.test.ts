@@ -100,6 +100,20 @@ describe("parseGoogleSerpHtml", () => {
     expect(parseGoogleSerpHtml(serp)[1].title).toBe("Assurance moto & scooter");
   });
 
+  it("garde les propriétés Google qui sont de vrais résultats organiques", () => {
+    // developers.google.com sort en position 1 sur « qu'est-ce que le SEO ».
+    const html = `
+      <div><a href="https://www.google.fr/search?q=seo"><h3>Recherches associées</h3></a></div>
+      <div><a href="https://developers.google.com/search/docs/fundamentals/seo-starter-guide?hl=fr"><h3>Guide SEO de Google</h3></a></div>
+      <div><a href="https://support.google.com/webmasters/answer/7451184"><h3>Aide Search Console</h3></a></div>
+    `;
+    const r = parseGoogleSerpHtml(html);
+    expect(r.map((x) => x.displayed_link)).toEqual([
+      "developers.google.com",
+      "support.google.com",
+    ]);
+  });
+
   it("écarte les liens internes Google et les doublons d'URL", () => {
     const links = parseGoogleSerpHtml(serp).map((x) => x.link);
     expect(links.some((l) => l.includes("google.fr"))).toBe(false);
