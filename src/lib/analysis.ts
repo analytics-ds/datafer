@@ -379,16 +379,20 @@ async function fetchCrazyserpPage(
     googleDomain,
   });
   const url = `https://crazyserp.com/api/search?${params.toString()}`;
-  // 3 tentatives par appel avec backoff 0s / 1s / 2s pour absorber les
-  // latences transient de CrazySerp (le service a parfois des pics de
-  // latence >30s qui causent des timeouts puis se résorbent dans la seconde
-  // suivante). Demande Pierre 2026-05-26 (brief "piercing oreille" qui a
-  // timeout sur les 2 clés en même temps).
+  // Tentatives avec backoff pour absorber les latences transient de CrazySerp.
+  // Demande Pierre 2026-05-26 (brief "piercing oreille" qui a timeout sur les
+  // 2 clés en même temps).
   //
-  // Timeout 30s par tentative × 3 max = 90s worst case par appel. Combiné
-  // avec la cascade primary → fallback côté caller, on reste sous le
-  // deadline ANALYSIS_DEADLINE_MS de 180s.
-  const maxAttempts = 3;
+  // 2026-09-14 : 2 tentatives à 45s au lieu de 3 à 30s, à budget constant
+  // (90s). Mesuré pendant la panne : quand CrazySerp répond, il met parfois
+  // 30,8s (« abri buches exterieur ») — un timeout à 30s jetait donc une
+  // réponse valide, et réessayer plus souvent ne sert à rien face à un service
+  // lent. Mieux vaut attendre plus longtemps, moins souvent.
+  //
+  // Combiné avec la cascade primary → fallback côté caller, on reste sous le
+  // deadline ANALYSIS_DEADLINE_MS de 240s.
+  const maxAttempts = 2;
+  const attemptTimeoutMs = 45000;
   let lastError: string = "";
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
@@ -400,7 +404,7 @@ async function fetchCrazyserpPage(
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(attemptTimeoutMs),
       });
       if (!r.ok) {
         lastError = `http ${r.status}`;
@@ -423,7 +427,7 @@ async function fetchCrazyserpPage(
       lastError = e instanceof Error ? e.message : String(e);
     }
   }
-  console.error("[crazyserp] page fetch failed after 3 attempts", {
+  console.error(`[crazyserp] page fetch failed after ${maxAttempts} attempts`, {
     page,
     keyword,
     error: lastError,
