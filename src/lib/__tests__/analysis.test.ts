@@ -6,7 +6,25 @@ import {
   extractJsonPayloadText,
   parseGoogleSerpHtml,
   parseHTML,
+  resolveGoogleRedirect,
 } from "@/lib/analysis";
+
+describe("resolveGoogleRedirect", () => {
+  it("laisse passer une URL qui n'est pas une redirection Google", async () => {
+    const url = "https://www.amv.fr/assurance-moto";
+    await expect(resolveGoogleRedirect(url)).resolves.toBe(url);
+  });
+
+  it("décode /url?q= sans appel réseau", async () => {
+    await expect(
+      resolveGoogleRedirect("https://www.google.fr/url?q=https://www.macif.fr/moto&sa=U"),
+    ).resolves.toBe("https://www.macif.fr/moto");
+  });
+
+  it("rend l'entrée telle quelle si elle n'est pas une URL valide", async () => {
+    await expect(resolveGoogleRedirect("pas-une-url")).resolves.toBe("pas-une-url");
+  });
+});
 
 describe("parseGoogleSerpHtml", () => {
   const serp = `
