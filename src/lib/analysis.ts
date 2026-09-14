@@ -269,16 +269,34 @@ export async function fetchSerp(
     BRIGHTDATA_ZONE?: string;
     enabled?: boolean;
   },
+  crazyserpKey?: string,
 ): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
-  // Bright Data en provider direct : pendant une panne prolongée du provider
-  // principal, interroger quand même CrazySerp coûte ~40 s par brief (3 essais
-  // × 2 clés) pour finir systématiquement sur le repli, et c'est dans cette
-  // fenêtre que les échecs transitoires tombent. `SERP_PROVIDER=brightdata`
-  // va droit au but. À remettre sur "crazyserp" dès que le service revient,
-  // Bright Data étant facturé à la requête.
+  const vide = { results: [], allResults: [], paa: [] };
+
+  // Le repli joue dans les DEUX sens : un brief ne doit pas échouer parce
+  // qu'un fournisseur a hoqueté. Les deux tombent en panne indépendamment
+  // (CrazySerp est en panne fournisseur depuis le 11/09, Bright Data renvoie
+  // ~5 % de corps vides sous charge), donc les enchaîner fait chuter le taux
+  // d'échec sans rien coûter quand le premier répond : le second n'est appelé
+  // que sur un échec complet du premier.
   if (provider === "brightdata") {
-    if (!brightdata) return { results: [], allResults: [], paa: [] };
-    return fetchSerpFromBrightdata(keyword, country, brightdata);
+    const bd = brightdata
+      ? await fetchSerpFromBrightdata(keyword, country, brightdata)
+      : vide;
+    if (bd.results.length) return bd;
+    if (crazyserpKey) {
+      console.log("[serp] Bright Data vide, repli CrazySerp", { keyword });
+      // Une seule tentative : CrazySerp sert ici de filet, pas de provider
+      // principal, et le budget d'analyse doit rester au crawl.
+      return fetchSerpFromCrazyserp(
+        keyword,
+        country,
+        crazyserpKey,
+        apiKeyFallback,
+        1,
+      );
+    }
+    return bd;
   }
 
   const primary =
@@ -360,6 +378,8 @@ async function fetchCrazyserpPage(
   country: string,
   apiKey: string,
   page: number,
+  /** Nombre de tentatives. 1 quand CrazySerp sert de simple filet. */
+  tentatives?: number,
 ): Promise<CrazySerpResponse | null> {
   const cc = country.toLowerCase();
   const location = COUNTRY_TO_LOCATION[cc] ?? "France";
@@ -391,7 +411,7 @@ async function fetchCrazyserpPage(
   //
   // Combiné avec la cascade primary → fallback côté caller, on reste sous le
   // deadline ANALYSIS_DEADLINE_MS de 240s.
-  const maxAttempts = 2;
+  const maxAttempts = tentatives ?? 2;
   const attemptTimeoutMs = 45000;
   let lastError: string = "";
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -440,10 +460,12 @@ async function fetchSerpFromCrazyserp(
   country: string,
   apiKey: string,
   apiKeyFallback?: string,
+  /** Tentatives par page. 1 quand CrazySerp n'est que le filet de Bright Data. */
+  tentatives?: number,
 ): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
   // Page 1 = 1 crédit. Renvoie ~10 résultats organiques (parfois 8-9 si
   // Google a inséré des blocs spéciaux).
-  let first = await fetchCrazyserpPage(keyword, country, apiKey, 1);
+  let first = await fetchCrazyserpPage(keyword, country, apiKey, 1, tentatives);
   // Bascule automatique sur la clé secondaire si la primaire ne répond pas
   // (cas typique : quota CrazySerp épuisé sur la primaire). Pierre voit
   // [crazyserp] fallback dans les logs Cloudflare et sait qu'il faut
@@ -451,7 +473,13 @@ async function fetchSerpFromCrazyserp(
   let activeKey = apiKey;
   if (!first && apiKeyFallback) {
     console.log("[crazyserp] primary key failed, trying fallback");
-    first = await fetchCrazyserpPage(keyword, country, apiKeyFallback, 1);
+    first = await fetchCrazyserpPage(
+      keyword,
+      country,
+      apiKeyFallback,
+      1,
+      tentatives,
+    );
     if (first) {
       activeKey = apiKeyFallback;
       console.log("[crazyserp] using fallback key for this brief");

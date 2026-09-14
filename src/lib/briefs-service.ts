@@ -601,7 +601,7 @@ async function createBriefAnalysisPayload(
     country,
     serpKey,
     provider,
-    provider === "crazyserp" ? env.CRAZYSERP_KEY_FALLBACK : undefined,
+    env.CRAZYSERP_KEY_FALLBACK,
     {
       BRIGHTDATA_TOKEN: env.BRIGHTDATA_TOKEN,
       BRIGHTDATA_ZONE: env.BRIGHTDATA_ZONE,
@@ -609,6 +609,9 @@ async function createBriefAnalysisPayload(
       // var est explicitement à "1", pour pouvoir le couper sans redéployer.
       enabled: env.SERP_BRIGHTDATA_FALLBACK === "1",
     },
+    // Filet inverse : quand Bright Data est le provider et qu'il ne renvoie
+    // rien, on retente chez CrazySerp, qui est le moins cher des deux.
+    env.CRAZYSERP_KEY,
   );
   if (!results.length)
     return { ok: false, status: 502, error: "no SERP results" };
