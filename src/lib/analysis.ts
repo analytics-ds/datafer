@@ -256,7 +256,7 @@ export type NlpResult = {
 // C'est le filet anti-panne fournisseur : sans lui, une panne CrazySerp fait
 // échouer 100 % des briefs en `no SERP results` (vécu les 11 et 14/09/2026).
 
-export type SerpProvider = "crazyserp" | "serpapi";
+export type SerpProvider = "crazyserp" | "serpapi" | "brightdata";
 
 export async function fetchSerp(
   keyword: string,
@@ -270,6 +270,17 @@ export async function fetchSerp(
     enabled?: boolean;
   },
 ): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
+  // Bright Data en provider direct : pendant une panne prolongée du provider
+  // principal, interroger quand même CrazySerp coûte ~40 s par brief (3 essais
+  // × 2 clés) pour finir systématiquement sur le repli, et c'est dans cette
+  // fenêtre que les échecs transitoires tombent. `SERP_PROVIDER=brightdata`
+  // va droit au but. À remettre sur "crazyserp" dès que le service revient,
+  // Bright Data étant facturé à la requête.
+  if (provider === "brightdata") {
+    if (!brightdata) return { results: [], allResults: [], paa: [] };
+    return fetchSerpFromBrightdata(keyword, country, brightdata);
+  }
+
   const primary =
     provider === "serpapi"
       ? await fetchSerpFromSerpapi(keyword, country, apiKey)
@@ -809,11 +820,14 @@ async function fetchSerpFromBrightdata(
   // immédiat tombe donc systématiquement dans la quarantaine : on attend
   // RETRY_COOLDOWN_MS (leur minimum + marge) avant de rejouer.
   //
-  // Budget pire cas ~76s, à comparer à ANALYSIS_DEADLINE_MS = 240s dont il
-  // faut laisser de quoi crawler les 10 concurrents.
+  // Budget pire cas ~112s, à comparer à ANALYSIS_DEADLINE_MS = 240s dont il
+  // faut laisser de quoi crawler les 10 concurrents. Ce pire cas n'est atteint
+  // qu'en enchaînant les échecs ; un appel qui passe répond en quelques
+  // secondes. Avec SERP_PROVIDER=brightdata on n'a pas dépensé les ~40s de
+  // CrazySerp avant d'arriver ici.
   const RETRY_COOLDOWN_MS = 16000;
   const passes: Array<{ asJson: boolean; attempts: number }> = [
-    { asJson: true, attempts: 2 },
+    { asJson: true, attempts: 3 },
     { asJson: false, attempts: 1 },
   ];
   for (const pass of passes) {

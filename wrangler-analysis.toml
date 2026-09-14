@@ -58,7 +58,12 @@ max_retries = 1
 dead_letter_queue = "datafer-sitemap-sync-v2-dlq"
 
 [vars]
-SERP_PROVIDER = "crazyserp"
+# ⚠️ TEMPORAIRE, panne CrazySerp du 14/09/2026. Remettre "crazyserp" dès que le
+# service répond (test : curl -H "Authorization: Bearer $K"
+# "https://crazyserp.com/api/search?q=test&page=1&gl=fr&hl=fr" doit rendre 200,
+# pas 500). Bright Data est facturé à la requête, CrazySerp est ~150x moins
+# cher : cette ligne ne doit pas rester en place une fois la panne finie.
+SERP_PROVIDER = "brightdata"
 # Repli SERP Bright Data quand le provider principal ne renvoie rien (panne
 # fournisseur). Activé le 14/09/2026, jour où CrazySerp est tombé (0/12 appels,
 # 500 sur tous les mots-clés) avec la clé de secours à 0 crédit : sans ce repli,

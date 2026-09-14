@@ -6,6 +6,7 @@ import { brief, client } from "@/db/schema";
 import type { CorpusEnv } from "@/lib/corpus-env";
 import {
   fetchSerp,
+  type SerpProvider,
   fetchCrazyserpTop100,
   fetchHaloscan,
   fetchHaloscanQuestions,
@@ -23,8 +24,16 @@ import {
   type SerpResult,
   type NlpResult,
 } from "@/lib/analysis";
-import { computeDetailedScore, ensureCompetitorScores, type DetailedScore, type EditorData } from "@/lib/scoring";
-import { applyBriefOverrides, parseBriefOverrides } from "@/lib/brief-overrides";
+import {
+  computeDetailedScore,
+  ensureCompetitorScores,
+  type DetailedScore,
+  type EditorData,
+} from "@/lib/scoring";
+import {
+  applyBriefOverrides,
+  parseBriefOverrides,
+} from "@/lib/brief-overrides";
 import { geoSignalsFromHtml } from "@/lib/geo-scoring";
 
 export type CompetitorStats = {
@@ -34,15 +43,33 @@ export type CompetitorStats = {
   count: number;
 };
 
-export function computeCompetitorStats(serpJson: string | null): CompetitorStats | null {
+export function computeCompetitorStats(
+  serpJson: string | null,
+): CompetitorStats | null {
   if (!serpJson) return null;
   let parsed: SerpResult[] = [];
-  try { parsed = JSON.parse(serpJson) as SerpResult[]; } catch { return null; }
-  const scored = parsed.filter((r): r is SerpResult & { score: number } => typeof r.score === "number");
+  try {
+    parsed = JSON.parse(serpJson) as SerpResult[];
+  } catch {
+    return null;
+  }
+  const scored = parsed.filter(
+    (r): r is SerpResult & { score: number } => typeof r.score === "number",
+  );
   if (scored.length === 0) return null;
-  const avg = Math.round(scored.reduce((s, r) => s + r.score, 0) / scored.length);
-  const bestRow = scored.reduce((b, r) => (r.score > b.score ? r : b), scored[0]);
-  return { avg, best: bestRow.score, bestUrl: bestRow.link ?? null, count: scored.length };
+  const avg = Math.round(
+    scored.reduce((s, r) => s + r.score, 0) / scored.length,
+  );
+  const bestRow = scored.reduce(
+    (b, r) => (r.score > b.score ? r : b),
+    scored[0],
+  );
+  return {
+    avg,
+    best: bestRow.score,
+    bestUrl: bestRow.link ?? null,
+    count: scored.length,
+  };
 }
 
 export type CreateBriefInput = {
@@ -122,7 +149,8 @@ export function normalizeSecondaryKeywords(
       .replace(/[^a-z0-9\s'-]/g, " ")
       .split(/\s+/)
       .filter((w) => w.length > 1);
-    if (kwTokens.length === 0 || kwTokens.every((t) => mainTokens.has(t))) continue;
+    if (kwTokens.length === 0 || kwTokens.every((t) => mainTokens.has(t)))
+      continue;
     seen.add(folded);
     out.push(kw);
     if (out.length >= MAX_SECONDARY_KEYWORDS) break;
@@ -153,7 +181,10 @@ async function resolveFolder(
   db: Db,
   userId: string,
   folderId: string | null,
-): Promise<{ ok: true; website: string | null } | { ok: false; status: number; error: string }> {
+): Promise<
+  | { ok: true; website: string | null }
+  | { ok: false; status: number; error: string }
+> {
   if (!folderId) return { ok: true, website: null };
   const [f] = await db
     .select({ id: client.id, website: client.website })
@@ -205,10 +236,18 @@ function stripTags(s: string): string {
 }
 
 export type RescoreResult =
-  | { ok: true; total: number; breakdown: DetailedScore; competitors: CompetitorStats | null }
+  | {
+      ok: true;
+      total: number;
+      breakdown: DetailedScore;
+      competitors: CompetitorStats | null;
+    }
   | { ok: false; status: number; error: string };
 
-export async function rescoreBrief(briefId: string, editorHtml: string): Promise<RescoreResult> {
+export async function rescoreBrief(
+  briefId: string,
+  editorHtml: string,
+): Promise<RescoreResult> {
   const db = getDb();
   const [row] = await db
     .select({
@@ -222,8 +261,10 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
     .where(eq(brief.id, briefId))
     .limit(1);
   if (!row) return { ok: false, status: 404, error: "brief not found" };
-  if (row.status === "pending") return { ok: false, status: 409, error: "brief not ready yet" };
-  if (row.status === "failed") return { ok: false, status: 409, error: "brief analysis failed" };
+  if (row.status === "pending")
+    return { ok: false, status: 409, error: "brief not ready yet" };
+  if (row.status === "failed")
+    return { ok: false, status: 409, error: "brief analysis failed" };
   const nlp = row.nlpJson ? (JSON.parse(row.nlpJson) as NlpResult) : null;
   if (!nlp) return { ok: false, status: 500, error: "brief has no NLP data" };
 
@@ -243,9 +284,14 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
   // seraient bakés et impossibles à retirer via la modal Paramètres) ;
   // applyBriefOverrides travaille sur une copie, le backfill ci-dessus reste
   // sur le nlp brut.
-  const rawSerp = row.serpJson ? (JSON.parse(row.serpJson) as SerpResult[]) : [];
+  const rawSerp = row.serpJson
+    ? (JSON.parse(row.serpJson) as SerpResult[])
+    : [];
   const overrides = parseBriefOverrides(row.overridesJson);
-  const overridden = applyBriefOverrides({ nlp, serp: rawSerp, position: null }, overrides);
+  const overridden = applyBriefOverrides(
+    { nlp, serp: rawSerp, position: null },
+    overrides,
+  );
   const scoringNlp = overridden.nlp ?? nlp;
   // Si des concurrents sont désactivés, applyBriefOverrides a invalidé
   // competitorScores sur la copie : re-scoring sur le SERP filtré.
@@ -253,7 +299,8 @@ export async function rescoreBrief(briefId: string, editorHtml: string): Promise
   const geoSignals = geoSignalsFromHtml(editorHtml);
   const breakdown = computeDetailedScore(ed, scoringNlp, geoSignals);
 
-  const nlpJsonToWrite = nlp.competitorScores !== undefined ? JSON.stringify(nlp) : row.nlpJson;
+  const nlpJsonToWrite =
+    nlp.competitorScores !== undefined ? JSON.stringify(nlp) : row.nlpJson;
 
   await db
     .update(brief)
@@ -292,14 +339,22 @@ export async function createPendingBrief(
   input: CreateBriefInput,
   opts?: { dedupe?: boolean },
 ): Promise<
-  | { ok: true; id: string; duplicate?: boolean; duplicateStatus?: "pending" | "ready" }
+  | {
+      ok: true;
+      id: string;
+      duplicate?: boolean;
+      duplicateStatus?: "pending" | "ready";
+    }
   | { ok: false; status: number; error: string }
 > {
   const keyword = input.keyword.trim();
   const country = (input.country || "fr").toLowerCase();
   const folderId = input.folderId || null;
   if (!keyword) return { ok: false, status: 400, error: "keyword required" };
-  const secondaryKeywords = normalizeSecondaryKeywords(input.secondaryKeywords, keyword);
+  const secondaryKeywords = normalizeSecondaryKeywords(
+    input.secondaryKeywords,
+    keyword,
+  );
 
   const db = getDb();
   const folder = await resolveFolder(db, userId, folderId);
@@ -341,7 +396,9 @@ export async function createPendingBrief(
     clientId: folderId,
     keyword,
     myUrl: input.myUrl?.trim() || null,
-    secondaryKeywords: secondaryKeywords.length ? JSON.stringify(secondaryKeywords) : null,
+    secondaryKeywords: secondaryKeywords.length
+      ? JSON.stringify(secondaryKeywords)
+      : null,
     // Seed des mots-clés secondaires dans les overrides : ils passent par le
     // même chemin que les termes custom du back-office (applyBriefOverrides
     // les injecte en tête des termes NLP, tier Essentiels) → suivis dans
@@ -401,7 +458,10 @@ export async function completeBriefAnalysis(
   try {
     const deadline = new Promise<never>((_, reject) =>
       setTimeout(
-        () => reject(new Error(`analysis timed out after ${ANALYSIS_DEADLINE_MS}ms`)),
+        () =>
+          reject(
+            new Error(`analysis timed out after ${ANALYSIS_DEADLINE_MS}ms`),
+          ),
         ANALYSIS_DEADLINE_MS,
       ),
     );
@@ -421,10 +481,17 @@ export async function completeBriefAnalysis(
       // à un bug de mapping côté client (cas observé sur country=it / "no SERP
       // results" — Pierre 2026-05-28). On veut que le client API puisse voir
       // pourquoi l'analyse a planté.
-      console.log("[brief-analysis] marking brief failed", { briefId, error: res.error });
+      console.log("[brief-analysis] marking brief failed", {
+        briefId,
+        error: res.error,
+      });
       await db
         .update(brief)
-        .set({ status: "failed", errorMessage: res.error, updatedAt: new Date() })
+        .set({
+          status: "failed",
+          errorMessage: res.error,
+          updatedAt: new Date(),
+        })
         .where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
       return;
     }
@@ -506,16 +573,26 @@ async function createBriefAnalysisPayload(
   if (!folder.ok) return folder;
   const folderWebsite = folder.website;
 
-  const provider = (env.SERP_PROVIDER === "serpapi" ? "serpapi" : "crazyserp") as
-    | "crazyserp"
-    | "serpapi";
-  const serpKey = provider === "serpapi" ? env.SERPAPI_KEY : env.CRAZYSERP_KEY;
+  const provider: SerpProvider =
+    env.SERP_PROVIDER === "serpapi"
+      ? "serpapi"
+      : env.SERP_PROVIDER === "brightdata"
+        ? "brightdata"
+        : "crazyserp";
+  const serpKey =
+    provider === "serpapi"
+      ? env.SERPAPI_KEY
+      : provider === "brightdata"
+        ? // Bright Data s'authentifie avec son propre token, pas avec une clé
+          // de provider SERP : on neutralise le garde-fou de clé manquante.
+          env.BRIGHTDATA_TOKEN
+        : env.CRAZYSERP_KEY;
   const haloscanKey = env.HALOSCAN_KEY;
   if (!serpKey)
     return {
       ok: false,
       status: 500,
-      error: `${provider === "serpapi" ? "SERPAPI_KEY" : "CRAZYSERP_KEY"} missing on server`,
+      error: `${provider === "serpapi" ? "SERPAPI_KEY" : provider === "brightdata" ? "BRIGHTDATA_TOKEN" : "CRAZYSERP_KEY"} missing on server`,
     };
 
   await setStep("fetching_serp");
@@ -533,7 +610,8 @@ async function createBriefAnalysisPayload(
       enabled: env.SERP_BRIGHTDATA_FALLBACK === "1",
     },
   );
-  if (!results.length) return { ok: false, status: 502, error: "no SERP results" };
+  if (!results.length)
+    return { ok: false, status: 502, error: "no SERP results" };
 
   await setStep(`crawling:0/${results.length}`);
   // Compteur live partagé : on update analysisStep dès qu'un site
@@ -600,7 +678,9 @@ async function createBriefAnalysisPayload(
           ),
         ]);
       } catch (e) {
-        console.log(`[crawl] exception url=${r.link} err=${e instanceof Error ? e.message : String(e)}`);
+        console.log(
+          `[crawl] exception url=${r.link} err=${e instanceof Error ? e.message : String(e)}`,
+        );
       }
       done++;
       // best-effort, on s'en fiche si l'update DB échoue ponctuellement
@@ -608,7 +688,9 @@ async function createBriefAnalysisPayload(
       return c;
     }),
   );
-  const crawled = settled.map((s) => (s.status === "fulfilled" ? s.value : null));
+  const crawled = settled.map((s) =>
+    s.status === "fulfilled" ? s.value : null,
+  );
   const pageContents: PageContent[] = [];
   // Cap text/structuredHtml par concurrent avant persistance dans serpJson :
   // un PDF universitaire de 20k+ mots (cas "intelligenza artificiale hr" sur
@@ -620,7 +702,8 @@ async function createBriefAnalysisPayload(
   // dans l'onglet SERP qui n'a pas besoin du PDF in extenso.
   const MAX_TEXT_CHARS = 30_000;
   const MAX_STRUCTURED_HTML_CHARS = 30_000;
-  const truncate = (s: string, max: number) => (s.length > max ? s.slice(0, max) : s);
+  const truncate = (s: string, max: number) =>
+    s.length > max ? s.slice(0, max) : s;
   const enrichedResults: SerpResult[] = results.map((r, i) => {
     const c = crawled[i];
     if (c) {
@@ -646,8 +729,13 @@ async function createBriefAnalysisPayload(
       if (r.snippet) {
         pageContents.push({
           text: r.title + " " + r.snippet,
-          h1: [r.title], h2: [], h3: [], outline: [{ level: 1, text: r.title }],
-          headings: 1, paragraphs: 1, structuredHtml: "",
+          h1: [r.title],
+          h2: [],
+          h3: [],
+          outline: [{ level: 1, text: r.title }],
+          headings: 1,
+          paragraphs: 1,
+          structuredHtml: "",
           wordCount: (r.title + " " + r.snippet).split(/\s+/).length,
           imageCount: 0,
         });
@@ -681,9 +769,17 @@ async function createBriefAnalysisPayload(
     // Signaux GEO du concurrent extraits depuis structuredHtml (variante
     // sans DOM, utilisable côté worker). Permet au score brut concurrent
     // d'inclure le GEO comme côté user, donc cohérent à comparer.
-    const geoSignals = c.structuredHtml ? geoSignalsFromHtml(c.structuredHtml) : undefined;
+    const geoSignals = c.structuredHtml
+      ? geoSignalsFromHtml(c.structuredHtml)
+      : undefined;
     const breakdown = computeDetailedScore(
-      { text: c.text, h1s: c.h1, h2s: c.h2, h3s: c.h3, imageCount: c.imageCount },
+      {
+        text: c.text,
+        h1s: c.h1,
+        h2s: c.h2,
+        h3s: c.h3,
+        imageCount: c.imageCount,
+      },
       nlp,
       geoSignals,
     );
@@ -693,7 +789,9 @@ async function createBriefAnalysisPayload(
   nlp.competitorScores = competitorScores;
 
   await setStep("scoring");
-  const haloscan = haloscanKey ? await fetchHaloscan(keyword, country, haloscanKey) : null;
+  const haloscan = haloscanKey
+    ? await fetchHaloscan(keyword, country, haloscanKey)
+    : null;
   const volume = haloscan?.search_volume ?? null;
   let kgr = haloscan?.kgr ?? null;
   let allintitleCount = haloscan?.allintitleCount ?? null;
@@ -701,10 +799,15 @@ async function createBriefAnalysisPayload(
   // le provider courant est SerpAPI (avec CrazySerp on n'a pas l'opérateur
   // allintitle). Sinon kgr reste null.
   if (kgr == null && provider === "serpapi" && env.SERPAPI_KEY) {
-    const fallbackAllintitle = await fetchAllintitleCount(keyword, country, env.SERPAPI_KEY);
+    const fallbackAllintitle = await fetchAllintitleCount(
+      keyword,
+      country,
+      env.SERPAPI_KEY,
+    );
     if (fallbackAllintitle != null) {
       allintitleCount = allintitleCount ?? fallbackAllintitle;
-      if (volume && volume > 0) kgr = Math.round((fallbackAllintitle / volume) * 1000) / 1000;
+      if (volume && volume > 0)
+        kgr = Math.round((fallbackAllintitle / volume) * 1000) / 1000;
     }
   }
   let domainHit = findDomainHit(allResults, folderWebsite);
@@ -718,10 +821,13 @@ async function createBriefAnalysisPayload(
     provider === "crazyserp" &&
     env.CRAZYSERP_KEY
   ) {
-    console.log("[brief] client absent du top 10, recherche top 100 via CrazySerp page=10", {
-      keyword,
-      folderWebsite,
-    });
+    console.log(
+      "[brief] client absent du top 10, recherche top 100 via CrazySerp page=10",
+      {
+        keyword,
+        folderWebsite,
+      },
+    );
     const extended = await fetchCrazyserpTop100(
       keyword,
       country,
@@ -751,14 +857,19 @@ async function createBriefAnalysisPayload(
     const seen = new Set(finalPaa.map((q) => q.question.toLowerCase()));
     for (const q of extra) {
       const k = q.question.toLowerCase();
-      if (!seen.has(k)) { finalPaa.push(q); seen.add(k); }
+      if (!seen.has(k)) {
+        finalPaa.push(q);
+        seen.add(k);
+      }
       if (finalPaa.length >= 8) break;
     }
   }
 
   // Détecte les questions PAA peu couvertes par les concurrents : opportunités
   // pour le rédacteur. Utilise les pageContents qui ont du vrai contenu.
-  const realPages = pageContents.filter((p) => p.wordCount > 100 && p.paragraphs > 1);
+  const realPages = pageContents.filter(
+    (p) => p.wordCount > 100 && p.paragraphs > 1,
+  );
   if (realPages.length >= 3) {
     nlp.opportunities = detectOpportunities(finalPaa, realPages);
   }
@@ -791,9 +902,17 @@ async function createBriefAnalysisPayload(
         blocks.push(`<p>${escapeHtml(myPage.text)}</p>`);
         initialEditorHtml = blocks.join("\n");
       }
-      const myGeoSignals = myPage.structuredHtml ? geoSignalsFromHtml(myPage.structuredHtml) : undefined;
+      const myGeoSignals = myPage.structuredHtml
+        ? geoSignalsFromHtml(myPage.structuredHtml)
+        : undefined;
       const breakdown = computeDetailedScore(
-        { text: myPage.text, h1s: myPage.h1, h2s: myPage.h2, h3s: myPage.h3, imageCount: myPage.imageCount },
+        {
+          text: myPage.text,
+          h1s: myPage.h1,
+          h2s: myPage.h2,
+          h3s: myPage.h3,
+          imageCount: myPage.imageCount,
+        },
         nlp,
         myGeoSignals,
       );
