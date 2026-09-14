@@ -4,8 +4,128 @@ import {
   filterPaaByLanguage,
   findDomainHit,
   extractJsonPayloadText,
+  parseGoogleSerpHtml,
   parseHTML,
+  resolveGoogleRedirect,
+  runNLP,
 } from "@/lib/analysis";
+
+describe("runNLP face aux mots qui collident avec Object.prototype", () => {
+  // Régression du 14/09/2026 : un titre de concurrent contenant « constructor »
+  // faisait planter toute l'analyse (« Cannot read properties of undefined »)
+  // et le brief tombait en failed. Même piège avec toString, valueOf,
+  // hasOwnProperty et __proto__, sur les titres comme sur le corps de texte.
+  const piegeux = [
+    "constructor",
+    "toString",
+    "valueOf",
+    "hasOwnProperty",
+    "__proto__",
+  ];
+
+  function page(n: number) {
+    return {
+      text: `Le ${piegeux.join(" ")} des capuches de pluie pour femme, un texte de test suffisamment long pour alimenter le calcul des termes et des entites nommees sur la page numero ${n}.`,
+      h1: [`Capuche de pluie femme ${n}`],
+      h2: piegeux.map((m) => `Section ${m} numero ${n}`),
+      h3: [`Detail ${piegeux[n % piegeux.length]}`],
+      outline: [],
+      headings: 6,
+      paragraphs: 3,
+      wordCount: 320,
+      imageCount: 2,
+      structuredHtml: `<h1>Capuche ${n}</h1><p>${piegeux.join(" ")}</p>`,
+    };
+  }
+
+  it("ne plante pas et produit un resultat exploitable", () => {
+    const pages = [0, 1, 2, 3, 4].map(page);
+    const res = runNLP(pages, "capuche de pluie femme");
+    expect(res).toBeTruthy();
+    expect(Array.isArray(res.nlpTerms)).toBe(true);
+  });
+
+  it("plante pas non plus quand le mot piegeux est le seul contenu des titres", () => {
+    const pages = [0, 1, 2].map((n) => ({
+      ...page(n),
+      h2: ["constructor"],
+      h3: ["toString"],
+    }));
+    expect(() => runNLP(pages, "capuche de pluie femme")).not.toThrow();
+  });
+});
+
+describe("resolveGoogleRedirect", () => {
+  it("laisse passer une URL qui n'est pas une redirection Google", async () => {
+    const url = "https://www.amv.fr/assurance-moto";
+    await expect(resolveGoogleRedirect(url)).resolves.toBe(url);
+  });
+
+  it("décode /url?q= sans appel réseau", async () => {
+    await expect(
+      resolveGoogleRedirect(
+        "https://www.google.fr/url?q=https://www.macif.fr/moto&sa=U",
+      ),
+    ).resolves.toBe("https://www.macif.fr/moto");
+  });
+
+  it("rend l'entrée telle quelle si elle n'est pas une URL valide", async () => {
+    await expect(resolveGoogleRedirect("pas-une-url")).resolves.toBe(
+      "pas-une-url",
+    );
+  });
+});
+
+describe("parseGoogleSerpHtml", () => {
+  const serp = `
+    <div><a href="https://www.google.fr/preferences"><h3>Paramètres</h3></a></div>
+    <div class="g"><a href="https://www.amv.fr/assurance-moto"><br><h3 class="LC20lb">Assurance moto AMV</h3></a>
+      <div>Devis en ligne</div></div>
+    <div class="g"><a href="https://www.macif.fr/assurance-moto"><h3>Assurance moto &amp; scooter</h3></a></div>
+    <div class="g"><a href="https://www.amv.fr/assurance-moto"><h3>Doublon AMV</h3></a></div>
+  `;
+
+  it("extrait les résultats organiques dans l'ordre de la SERP", () => {
+    const r = parseGoogleSerpHtml(serp);
+    expect(r.map((x) => x.link)).toEqual([
+      "https://www.amv.fr/assurance-moto",
+      "https://www.macif.fr/assurance-moto",
+    ]);
+    expect(r[0].position).toBe(1);
+    expect(r[0].title).toBe("Assurance moto AMV");
+    expect(r[0].displayed_link).toBe("www.amv.fr");
+  });
+
+  it("décode les entités HTML des titres", () => {
+    expect(parseGoogleSerpHtml(serp)[1].title).toBe("Assurance moto & scooter");
+  });
+
+  it("garde les propriétés Google qui sont de vrais résultats organiques", () => {
+    // developers.google.com sort en position 1 sur « qu'est-ce que le SEO ».
+    const html = `
+      <div><a href="https://www.google.fr/search?q=seo"><h3>Recherches associées</h3></a></div>
+      <div><a href="https://developers.google.com/search/docs/fundamentals/seo-starter-guide?hl=fr"><h3>Guide SEO de Google</h3></a></div>
+      <div><a href="https://support.google.com/webmasters/answer/7451184"><h3>Aide Search Console</h3></a></div>
+    `;
+    const r = parseGoogleSerpHtml(html);
+    expect(r.map((x) => x.displayed_link)).toEqual([
+      "developers.google.com",
+      "support.google.com",
+    ]);
+  });
+
+  it("écarte les liens internes Google et les doublons d'URL", () => {
+    const links = parseGoogleSerpHtml(serp).map((x) => x.link);
+    expect(links.some((l) => l.includes("google.fr"))).toBe(false);
+    expect(new Set(links).size).toBe(links.length);
+  });
+
+  it("renvoie un tableau vide sur un HTML sans résultat", () => {
+    expect(
+      parseGoogleSerpHtml("<html><body>pas de SERP</body></html>"),
+    ).toEqual([]);
+  });
+});
 
 describe("extractParagraphsFromHtml", () => {
   it("retourne un tableau vide quand il n'y a pas de paragraphe", () => {
@@ -15,7 +135,9 @@ describe("extractParagraphsFromHtml", () => {
   });
 
   it("ignore les paragraphes sous le seuil de mots", () => {
-    expect(extractParagraphsFromHtml("<p>Beaucoup trop court.</p>")).toEqual([]);
+    expect(extractParagraphsFromHtml("<p>Beaucoup trop court.</p>")).toEqual(
+      [],
+    );
   });
 
   it("garde les paragraphes au-dessus du seuil par défaut (40 mots)", () => {
@@ -149,7 +271,9 @@ describe("parseHTML — titres dans les <button> (accordéons FAQ)", () => {
     expect(parsed.h3).toContain("Quelles chaussures choisir ?");
     // L'icône UI du bouton ne doit pas polluer le texte ni le titre.
     expect(parsed.text).not.toContain("+");
-    expect(parsed.outline.map((o) => o.text)).toContain("Comment porter un jean large ?");
+    expect(parsed.outline.map((o) => o.text)).toContain(
+      "Comment porter un jean large ?",
+    );
   });
 
   it("continue d'ignorer le texte non-titre des boutons", () => {
@@ -191,7 +315,10 @@ describe("filterPaaByLanguage", () => {
   });
 
   it("garde une question FR commençant par un mot non interrogatif", () => {
-    const paa = [q("Brasero ou barbecue : que choisir ?"), q("Doit-on couvrir un brasero ?")];
+    const paa = [
+      q("Brasero ou barbecue : que choisir ?"),
+      q("Doit-on couvrir un brasero ?"),
+    ];
     expect(filterPaaByLanguage(paa, "fr")).toHaveLength(2);
   });
 
@@ -205,9 +332,27 @@ describe("filterPaaByLanguage", () => {
 
 describe("findDomainHit", () => {
   const serp = [
-    { position: 1, title: "", link: "https://www.amazon.fr/brasero", snippet: "", displayed_link: "" },
-    { position: 2, title: "", link: "https://blog.coeo.fr/guide-brasero", snippet: "", displayed_link: "" },
-    { position: 3, title: "", link: "https://coeo.fr/braseros", snippet: "", displayed_link: "" },
+    {
+      position: 1,
+      title: "",
+      link: "https://www.amazon.fr/brasero",
+      snippet: "",
+      displayed_link: "",
+    },
+    {
+      position: 2,
+      title: "",
+      link: "https://blog.coeo.fr/guide-brasero",
+      snippet: "",
+      displayed_link: "",
+    },
+    {
+      position: 3,
+      title: "",
+      link: "https://coeo.fr/braseros",
+      snippet: "",
+      displayed_link: "",
+    },
   ];
 
   it("retourne position ET url de la 1re occurrence du domaine", () => {
@@ -218,7 +363,9 @@ describe("findDomainHit", () => {
   });
 
   it("matche en ignorant www et le protocole", () => {
-    expect(findDomainHit(serp, "www.amazon.fr")?.url).toBe("https://www.amazon.fr/brasero");
+    expect(findDomainHit(serp, "www.amazon.fr")?.url).toBe(
+      "https://www.amazon.fr/brasero",
+    );
   });
 
   it("retourne null si le domaine est absent ou non fourni", () => {
