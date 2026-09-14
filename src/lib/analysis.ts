@@ -2958,11 +2958,15 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
   // Pour chaque unigramme stemmé, on garde la liste des surface-forms afin
   // de pouvoir afficher la forme la plus fréquente ET matcher toutes les
   // variantes dans l'éditeur.
-  const docFreq: Record<string, number> = {};
+  // Toutes les tables indexées par un mot venu des pages crawlées sont créées
+  // sans prototype : cf. le commentaire de detectCompetitorSections.
+  const docFreq: Record<string, number> = Object.create(null);
   const allTerms: Array<{ tf: Record<string, number>; total: number }> = [];
   const headingStems = new Set<string>();
   // Map stem → surface-form → count total (tous docs confondus)
-  const surfaceForms: Record<string, Record<string, number>> = {};
+  const surfaceForms: Record<string, Record<string, number>> = Object.create(
+    null,
+  );
   // Pool global des phrases extraites des pages valides. Chaque entrée porte
   // l'URL source pour qu'on puisse afficher dans le popover NLP "ce
   // concurrent emploie le terme dans cette phrase". Fenêtre [50, 280] chars
@@ -3018,7 +3022,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     // Séquence stemmée pour les unigrammes (BM25 sur stems).
     const stems = rawWords.map(frenchStem);
 
-    const tf: Record<string, number> = {};
+    const tf: Record<string, number> = Object.create(null);
     const seen = new Set<string>();
 
     // Unigrammes : clé = stem
@@ -3030,7 +3034,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
       }
       // Trace surface-form
       const surface = rawWords[i];
-      surfaceForms[s] ??= {};
+      surfaceForms[s] ??= Object.create(null);
       surfaceForms[s][surface] = (surfaceForms[s][surface] ?? 0) + 1;
     });
 
@@ -3076,7 +3080,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
 
   // Score BM25 pour chaque terme, agrégé sur l'ensemble des documents où il
   // apparaît. idf(t) = log((N - df + 0.5)/(df + 0.5) + 1).
-  const termScore: Record<string, number> = {};
+  const termScore: Record<string, number> = Object.create(null);
   for (const [t, df] of Object.entries(docFreq)) {
     const idf = Math.log((n - df + 0.5) / (df + 0.5) + 1);
     let total = 0;
@@ -3162,7 +3166,8 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
                 ].filter((v) => v && v.length >= 2),
               ),
             );
-        const byUrl: Record<string, { url: string; sentence: string }> = {};
+        const byUrl: Record<string, { url: string; sentence: string }> =
+          Object.create(null);
         const SEEN_URLS_TARGET = 10;
         for (const item of allSentences) {
           if (!sentenceMatchesAnyTerm(item.sentence, matchPatterns)) continue;
@@ -3550,7 +3555,13 @@ function detectCompetitorSections(
       surfaces: Record<string, number>;
       samples: string[];
     }
-  > = {};
+    // `Object.create(null)` et pas `{}` : les clés sont des mots extraits des
+    // titres des concurrents. Sur un mot comme « constructor » ou « toString »,
+    // un objet littéral renvoie le membre hérité d'Object.prototype, le `??=`
+    // ne crée alors jamais l'entrée et la ligne suivante plante, ce qui fait
+    // échouer le brief entier (vécu le 14/09/2026 sur « capuche de pluie
+    // femme »). Un objet sans prototype n'a pas ces clés héritées.
+  > = Object.create(null);
 
   pages.forEach((p, idx) => {
     const headings = [...(p.h2 ?? []), ...(p.h3 ?? [])];
@@ -3726,7 +3737,7 @@ function detectNamedEntities(pages: PageContent[]): Entity[] {
   const map: Record<
     string,
     { sources: Set<number>; display: string; occurrences: number }
-  > = {};
+  > = Object.create(null);
 
   pages.forEach((p, idx) => {
     // Statistiques de casse par page pour filtrer les mots communs
@@ -3736,7 +3747,7 @@ function detectNamedEntities(pages: PageContent[]): Entity[] {
     const caseStats: Record<
       string,
       { lower: number; allCaps: number; titleCase: number }
-    > = {};
+    > = Object.create(null);
     const rawTokens = p.text.split(/[^\wÀ-ÿ'']+/).filter((t) => t.length > 1);
     for (const tok of rawTokens) {
       const lc = tok.toLowerCase();

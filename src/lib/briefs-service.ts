@@ -456,7 +456,13 @@ export async function completeBriefAnalysis(
       .where(and(eq(brief.id, briefId), eq(brief.status, "pending")));
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown error";
-    console.log("[brief-analysis] marking brief failed after uncaught error", { briefId, error: msg });
+    // La pile est indispensable : le message seul (« Cannot read properties of
+    // undefined ») ne dit pas quelle étape de l'analyse a lâché.
+    console.log("[brief-analysis] marking brief failed after uncaught error", {
+      briefId,
+      error: msg,
+      stack: e instanceof Error ? e.stack?.slice(0, 1500) : undefined,
+    });
     await db
       .update(brief)
       .set({ status: "failed", errorMessage: msg, updatedAt: new Date() })
