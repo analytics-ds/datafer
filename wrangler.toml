@@ -47,9 +47,9 @@ BETTER_AUTH_URL = "https://corpus.datashake.fr"
 # Provider SERP : "crazyserp" (par défaut, ~$0.50/1k FR) ou "serpapi"
 # (~$10/1k). Peut être basculé sans redeploy via `wrangler secret put` ou
 # en éditant cette ligne et `npm run deploy`.
-# ⚠️ TEMPORAIRE, panne CrazySerp du 14/09/2026 (0/12 appels, 500 sur tous les
-# mots-clés). Remettre "crazyserp" dès que le service répond : Bright Data est
-# facturé à la requête, CrazySerp est ~150x moins cher.
+# Bright Data en provider SERP depuis le 14/09/2026 (panne CrazySerp). Surcoût
+# chiffré et accepté : ~1 € par millier de briefs. Pas d'urgence à rebasculer,
+# cf. le commentaire détaillé dans wrangler-analysis.toml.
 SERP_PROVIDER = "brightdata"
 # Repli SERP Bright Data quand le provider principal ne renvoie rien (panne
 # fournisseur). Activé le 14/09/2026 suite à la panne CrazySerp. "0" pour couper.

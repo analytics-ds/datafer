@@ -58,11 +58,15 @@ max_retries = 1
 dead_letter_queue = "datafer-sitemap-sync-v2-dlq"
 
 [vars]
-# ⚠️ TEMPORAIRE, panne CrazySerp du 14/09/2026. Remettre "crazyserp" dès que le
-# service répond (test : curl -H "Authorization: Bearer $K"
-# "https://crazyserp.com/api/search?q=test&page=1&gl=fr&hl=fr" doit rendre 200,
-# pas 500). Bright Data est facturé à la requête, CrazySerp est ~150x moins
-# cher : cette ligne ne doit pas rester en place une fois la panne finie.
+# Bright Data en provider SERP, décidé le 14/09/2026 après la panne CrazySerp.
+# Le surcoût a été chiffré et accepté : 1 brief = 1 requête SERP, soit ~1,50 $
+# les 1000 briefs contre ~0,25 $ chez CrazySerp, ~1 € d'écart par millier. À
+# comparer aux ~0,006 $ que le brief dépense déjà en crawl Bright Data.
+#
+# Il n'y a donc PAS d'urgence à rebasculer sur "crazyserp" quand leur service
+# reviendra : ne le faire que si le volume de briefs change d'ordre de grandeur.
+# CrazySerp reste branché en filet (cf. fetchSerp, repli bidirectionnel), donc
+# son retour profite automatiquement à la fiabilité sans toucher à cette ligne.
 SERP_PROVIDER = "brightdata"
 # Repli SERP Bright Data quand le provider principal ne renvoie rien (panne
 # fournisseur). Activé le 14/09/2026, jour où CrazySerp est tombé (0/12 appels,
