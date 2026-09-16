@@ -70,6 +70,7 @@ export default async function SharedSingleBriefPage({
           tagsCreateEndpoint={`/api/share-brief/${token}/tags-create`}
           exportEndpoint={`/api/share-brief/${token}/export`}
           maillageEndpoint={`/api/share-brief/${token}/maillage`}
+          semanticEndpoint={`/api/share-brief/${token}/semantic-paragraph`}
           printUrl={`/api/share-brief/${token}/print`}
           commentsEndpoint={`/api/share-brief/${token}/comments`}
           commentAuthor={{ type: "client", name: folder?.name?.trim() || "Client" }}

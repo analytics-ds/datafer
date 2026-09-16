@@ -95,6 +95,7 @@ type BriefEditorProps = {
    * - `/api/share-brief/<token>/maillage` côté partage public
    */
   maillageEndpoint?: string;
+  semanticEndpoint?: string;
   /** URL de la page imprimable (PDF via window.print). */
   printUrl?: string;
   /** Masquer le bouton "Nouvelle analyse" (ex. en mode partage). */
@@ -143,6 +144,9 @@ export function BriefEditor(props: BriefEditorProps) {
   const tagsCreateEndpoint = props.tagsCreateEndpoint ?? `/api/tags`;
   const exportEndpoint = props.exportEndpoint ?? `/api/briefs/${id}/export`;
   const maillageEndpoint = props.maillageEndpoint ?? `/api/briefs/${id}/maillage`;
+  // Scoring sémantique : la vue partagée passe sa variante publique, sinon
+  // le critère reste neutralisé côté client et le score diverge.
+  const semanticEndpoint = props.semanticEndpoint ?? `/api/v2/briefs/${id}/semantic-paragraph`;
   const printUrl = props.printUrl ?? `/api/briefs/${id}/print`;
   const commentsEndpoint = props.commentsEndpoint ?? `/api/briefs/${id}/comments`;
   const commentAuthor: CommentAuthor = props.commentAuthor ?? { type: "user", name: "Consultant" };
@@ -339,7 +343,7 @@ export function BriefEditor(props: BriefEditorProps) {
       await Promise.all(
         toFetch.map(async (paragraph) => {
           try {
-            const r = await fetch(`/api/v2/briefs/${id}/semantic-paragraph`, {
+            const r = await fetch(semanticEndpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ paragraph }),
