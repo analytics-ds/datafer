@@ -29,6 +29,19 @@ Source : `~/Desktop/SEO-Claude/Perso/DA datashake/datashake_Brandbook.pdf`. Tout
 
 ⚠️ **Le repo est public et `public/fonts/SeasonSans-Medium.woff2` est une police payante** (licence Displaay Desktop + Web, 25 postes). Passer le repo en privé, ou servir la police depuis un hébergement privé, avant de pousser. Sans le fichier, Inter prend le relais — c'est le substitut que la charte autorise explicitement.
 
+## Langues (i18n)
+
+L'interface est bilingue français / anglais depuis le 2026-09-19. Les clients US ouvrent leur lien de partage en anglais.
+
+- **Dictionnaires** : `src/lib/i18n/dictionaries/fr.ts` et `en.ts`, clés plates `zone.element`, paramètres `{nom}`. `en` est typé sur `fr` : **une clé manquante casse le build**, et `src/lib/__tests__/i18n.test.ts` vérifie la parité des clés et des paramètres.
+- **Résolution de la langue**, du plus explicite au plus implicite (`src/lib/i18n/server.ts`) : cookie `corpus_locale` posé par le sélecteur du header → colonne `client.locale` du dossier → français.
+- **Côté client** : `useT()` / `useI18n()` (`src/lib/i18n/context.tsx`), fournis par un `LocaleProvider` posé dans le layout `/app`, les pages de partage et le login. C'est lui qui aligne `<html lang>`.
+- **Côté serveur** : `getTranslator()` dans les Server Components, les Server Actions et les routes d'API dont le message remonte à l'écran. Un composant serveur qui ne peut pas lire le contexte reçoit `t` en prop (cf. `LevelCard`).
+- **Dates et nombres** : `formatDate()` / `formatNumber()` de `src/lib/relative-date.ts`, jamais `toLocaleString("fr-FR")` en dur.
+- **Doc d'API** : trop de prose pour un dictionnaire, elle vit en deux fichiers (`settings/api-docs/content-fr.tsx` et `content-en.tsx`) qui partagent les primitives de `ui.tsx`. Les exemples de code et de JSON restent identiques dans les deux : ils documentent ce que l'API renvoie vraiment, y compris ses `message` en français.
+
+**Ce qui reste volontairement en français** : les listes linguistiques de `analysis.ts` et `scoring.ts` (stopwords, lemmatiseur, mots interrogatifs). Elles portent sur la langue du **contenu analysé**, pas sur l'interface. Conséquence connue sur un brief `us` : le lemmatiseur ne regroupe pas les variantes anglaises, et la couverture PAA utilise des mots interrogatifs français. Les marqueurs de Quick summary GEO, eux, ont été élargis à l'anglais.
+
 ## Stack
 
 - Next.js 16 (App Router) + React 19
