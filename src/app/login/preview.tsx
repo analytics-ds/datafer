@@ -1,4 +1,7 @@
+"use client";
+
 import { LogoApp, LogoMark } from "@/components/brand";
+import { useT } from "@/lib/i18n/context";
 
 /**
  * Aperçu stylisé de corpus affiché à gauche de l'écran de login.
@@ -11,6 +14,7 @@ import { LogoApp, LogoMark } from "@/components/brand";
  * posé sur fond noir.
  */
 export function LoginPreview() {
+  const t = useT();
   return (
     <div className="relative hidden md:flex flex-col justify-between h-full bg-[var(--bg)] overflow-hidden p-10 lg:p-14 border-r border-[var(--border)]">
       {/* Pattern de marque : la charte le décrit comme quelques blocs issus du
@@ -35,13 +39,12 @@ export function LoginPreview() {
       {/* Tagline */}
       <div className="relative z-10 max-w-[480px]">
         <h2 className="df-title text-[44px] leading-[1.05] tracking-[-1.2px] mb-3">
-          Analysez, optimisez,
+          {t("login.tagline.line1")}
           <br />
-          <span className="df-accent">dominez.</span>
+          <span className="df-accent">{t("login.tagline.line2")}</span>
         </h2>
         <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] max-w-[380px]">
-          Analyse les top résultats Google, extrait les patterns NLP et score
-          le contenu en temps réel. Au cœur de la stack SEO et GEO datashake.
+          {t("login.pitch")}
         </p>
       </div>
     </div>
@@ -49,6 +52,7 @@ export function LoginPreview() {
 }
 
 function MockInterface() {
+  const t = useT();
   const circumference = 2 * Math.PI * 26;
   const score = 84;
   const dashOffset = circumference - (score / 100) * circumference;
@@ -62,7 +66,7 @@ function MockInterface() {
       <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] bg-[var(--bg-card)]">
         <div className="flex items-center gap-[10px]">
           <span className="df-title text-[18px] leading-none">
-            chaussures running homme
+            {t("login.mock.keyword")}
           </span>
           <span className="px-[10px] py-[3px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px]">
             FR
@@ -70,7 +74,7 @@ function MockInterface() {
         </div>
         <div className="flex items-center gap-[6px] px-3 py-1 border border-[var(--border)] text-[var(--text)] rounded-[var(--radius-pill)] text-[11px] font-semibold">
           <span className="w-[6px] h-[6px] rounded-full bg-[var(--brand-kaki)]" />
-          Confiance haute
+          {t("login.mock.confidence")}
         </div>
       </div>
 
@@ -98,13 +102,13 @@ function MockInterface() {
             </div>
           </div>
           <div className="flex flex-col gap-[2px]">
-            <span className="text-[12px] font-semibold">Score SEO/GEO</span>
-            <span className="text-[11px] text-[var(--text-inverse-muted)]">Bien optimisé</span>
+            <span className="text-[12px] font-semibold">{t("panel.scoreLabel")}</span>
+            <span className="text-[11px] text-[var(--text-inverse-muted)]">{t("panel.hint.wellOptimised")}</span>
           </div>
         </div>
         <div className="flex items-center gap-[10px]">
           <span className="font-mono text-[12px] text-[var(--text-inverse-secondary)]">
-            <strong className="text-[var(--text-inverse)]">1 284</strong> mots
+            <strong className="text-[var(--text-inverse)]">1 284</strong> {t("editor.words")}
           </span>
           <div className="w-[90px] h-1 bg-[var(--score-track)] rounded-full overflow-hidden">
             <div className="h-full bg-[var(--score-good)] rounded-full" style={{ width: "82%" }} />
@@ -117,7 +121,7 @@ function MockInterface() {
         {/* Fake editor */}
         <div className="p-5 overflow-hidden">
           <div className="df-title text-[20px] leading-[1.2] mb-3 pb-2 border-b border-[var(--border)]">
-            Meilleures chaussures de running
+            {t("login.mock.title")}
           </div>
           <div className="space-y-[6px]">
             <div className="h-2 bg-[var(--bg-warm)] rounded-full w-full" />
@@ -126,7 +130,7 @@ function MockInterface() {
             <div className="h-2 bg-[var(--bg-warm)] rounded-full w-[96%]" />
             <div className="h-2 bg-[var(--bg-warm)] rounded-full w-[78%]" />
           </div>
-          <div className="text-[13px] font-semibold mt-4 mb-2 text-[var(--text)]">Amorti &amp; stabilité</div>
+          <div className="text-[13px] font-semibold mt-4 mb-2 text-[var(--text)]">{t("login.mock.heading")}</div>
           <div className="space-y-[6px]">
             <div className="h-2 bg-[var(--bg-warm)] rounded-full w-[88%]" />
             <div className="h-2 bg-[var(--bg-warm)] rounded-full w-[72%]" />
@@ -137,7 +141,7 @@ function MockInterface() {
         <div className="p-4 bg-[var(--bg-warm)] border-l border-[var(--border)] overflow-hidden">
           <div className="text-[9px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-2 flex items-center gap-[5px]">
             <span className="w-[6px] h-[6px] rounded-full bg-[var(--accent)]" />
-            Champ sémantique
+            {t("panel.section.semanticField")}
           </div>
           <div className="flex flex-wrap gap-[4px]">
             <KwTag label="amorti" used />

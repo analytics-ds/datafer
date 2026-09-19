@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from "react";
 import type { CommentAuthor, CommentDTO } from "./comment-layer-types";
+import { useI18n } from "@/lib/i18n/context";
+import { intlLocale } from "@/lib/relative-date";
+import type { Locale } from "@/lib/i18n/types";
 
 type Thread = {
   anchorId: string;
@@ -40,6 +43,7 @@ export function CommentsTab({
   reply,
   onJumpToAnchor,
 }: Props) {
+  const { locale, t } = useI18n();
   const [filter, setFilter] = useState<"open" | "resolved" | "all">("open");
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
@@ -68,13 +72,13 @@ export function CommentsTab({
     return result;
   }, [comments]);
 
-  const filtered = threads.filter((t) =>
-    filter === "open" ? !t.resolved : filter === "resolved" ? t.resolved : true,
+  const filtered = threads.filter((thread) =>
+    filter === "open" ? !thread.resolved : filter === "resolved" ? thread.resolved : true,
   );
 
   const counts = useMemo(() => {
-    const open = threads.filter((t) => !t.resolved).length;
-    const resolved = threads.filter((t) => t.resolved).length;
+    const open = threads.filter((thread) => !thread.resolved).length;
+    const resolved = threads.filter((thread) => thread.resolved).length;
     return { open, resolved, total: threads.length };
   }, [threads]);
 
@@ -86,20 +90,22 @@ export function CommentsTab({
     <div className="mx-auto max-w-[820px] px-8 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-[18px] font-semibold leading-tight">Commentaires</h2>
+          <h2 className="text-[18px] font-semibold leading-tight">{t("editor.tab.comments")}</h2>
           <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">
-            {counts.open} actif{counts.open > 1 ? "s" : ""} · {counts.resolved} résolu{counts.resolved > 1 ? "s" : ""}
+            {t(counts.open > 1 ? "comments.count.open.plural" : "comments.count.open", { count: counts.open })}
+            {" · "}
+            {t(counts.resolved > 1 ? "comments.count.resolved.plural" : "comments.count.resolved", { count: counts.resolved })}
           </p>
         </div>
         <div className="inline-flex rounded-[var(--radius-pill)] border border-[var(--border)] bg-[var(--bg-card)] p-1 shadow-[var(--shadow-sm)]">
           <FilterBtn active={filter === "open"} onClick={() => setFilter("open")}>
-            Actifs <span className="ml-1 opacity-70">{counts.open}</span>
+            {t("comments.filter.open")} <span className="ml-1 opacity-70">{counts.open}</span>
           </FilterBtn>
           <FilterBtn active={filter === "resolved"} onClick={() => setFilter("resolved")}>
-            Résolus <span className="ml-1 opacity-70">{counts.resolved}</span>
+            {t("comments.filter.resolved")} <span className="ml-1 opacity-70">{counts.resolved}</span>
           </FilterBtn>
           <FilterBtn active={filter === "all"} onClick={() => setFilter("all")}>
-            Tous <span className="ml-1 opacity-70">{counts.total}</span>
+            {t("comments.filter.all")} <span className="ml-1 opacity-70">{counts.total}</span>
           </FilterBtn>
         </div>
       </div>
@@ -111,33 +117,33 @@ export function CommentsTab({
           </div>
           <p className="text-[13px] text-[var(--text-secondary)]">
             {filter === "open"
-              ? "Aucun commentaire actif. Surligne du texte dans l'éditeur pour en ajouter un."
+              ? t("comments.empty.open")
               : filter === "resolved"
-                ? "Aucun commentaire résolu."
-                : "Aucun commentaire sur ce brief."}
+                ? t("comments.empty.resolved")
+                : t("comments.empty.all")}
           </p>
         </div>
       )}
 
       <ul className="space-y-3">
-        {filtered.map((t) => (
+        {filtered.map((thread) => (
           <li
-            key={t.anchorId}
+            key={thread.anchorId}
             className="overflow-hidden rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)] transition-shadow hover:shadow-[var(--shadow)]"
           >
             <button
               type="button"
-              onClick={() => onJumpToAnchor(t.anchorId)}
+              onClick={() => onJumpToAnchor(thread.anchorId)}
               className="block w-full border-b border-[var(--border)] bg-[var(--bg-warm)] px-5 py-3 text-left text-[12.5px] italic text-[var(--text-secondary)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,var(--bg-warm))]"
-              title="Aller à l'ancre dans l'éditeur"
+              title={t("comments.jumpToAnchor")}
             >
               <span className="mr-2 inline-block h-3 w-[3px] -mb-px align-middle bg-[var(--accent)]" />
-              {truncate(t.anchorText, 240)}
+              {truncate(thread.anchorText, 240)}
             </button>
 
             <div className="px-5 pb-4 pt-3">
               <div className="space-y-3">
-                {[t.root, ...t.replies].map((c) => (
+                {[thread.root, ...thread.replies].map((c) => (
                   <div key={c.id} className="flex items-start gap-3 group">
                     <span
                       className={
@@ -171,7 +177,7 @@ export function CommentsTab({
                           className="text-[10.5px] text-[var(--text-muted)]"
                           style={{ fontFamily: "var(--font-mono)" }}
                         >
-                          {formatDateFull(c.createdAt)}
+                          {formatDateFull(c.createdAt, locale)}
                         </span>
                         {c.authorType === "client" && (
                           <span className="rounded-full bg-[var(--bg-olive-light)] px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-[var(--text)]">
@@ -186,11 +192,11 @@ export function CommentsTab({
                         <button
                           type="button"
                           onClick={() => {
-                            if (window.confirm("Supprimer ce commentaire ?")) remove(c.id);
+                            if (window.confirm(t("comments.delete.confirm"))) remove(c.id);
                           }}
                           className="mt-1 text-[10.5px] font-semibold text-[var(--red)] opacity-0 transition-opacity hover:underline group-hover:opacity-100"
                         >
-                          Supprimer
+                          {t("common.delete")}
                         </button>
                       )}
                     </div>
@@ -198,44 +204,47 @@ export function CommentsTab({
                 ))}
               </div>
 
-              {t.resolved && t.root.resolvedByName && (
+              {thread.resolved && thread.root.resolvedByName && (
                 <p
                   className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[var(--green-bg)] px-2.5 py-0.5 text-[10.5px] font-semibold text-[var(--text)]"
                   style={{ fontFamily: "var(--font-mono)" }}
                 >
-                  ✓ Résolu par {t.root.resolvedByName} · {formatDateFull(t.root.resolvedAt!)}
+                  {t("comments.resolvedBy", {
+                    name: thread.root.resolvedByName ?? "",
+                    date: formatDateFull(thread.root.resolvedAt!, locale),
+                  })}
                 </p>
               )}
 
               <div className="mt-4 flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => patch(t.root.id, { resolved: !t.resolved })}
+                  onClick={() => patch(thread.root.id, { resolved: !thread.resolved })}
                   className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-1.5 text-[12px] font-semibold text-[var(--text)] transition-colors hover:bg-[var(--bg-warm)] hover:border-[var(--border-strong)]"
                 >
-                  {t.resolved ? "Rouvrir" : "Résoudre"}
+                  {thread.resolved ? t("comments.reopen") : t("comments.resolve")}
                 </button>
-                {!t.resolved && (
+                {!thread.resolved && (
                   <button
                     type="button"
                     onClick={() => {
-                      setReplyTo(replyTo === t.root.id ? null : t.root.id);
+                      setReplyTo(replyTo === thread.root.id ? null : thread.root.id);
                       setReplyBody("");
                     }}
                     className="rounded-[var(--radius-xs)] bg-[var(--bg-black)] px-3 py-1.5 text-[12px] font-semibold text-[var(--text-inverse)] transition-colors hover:bg-[var(--bg-dark)]"
                   >
-                    Répondre
+                    {t("comments.reply")}
                   </button>
                 )}
               </div>
 
-              {replyTo === t.root.id && (
+              {replyTo === thread.root.id && (
                 <div className="mt-3 rounded-[var(--radius-xs)] bg-[var(--bg-warm)] p-3">
                   <textarea
                     autoFocus
                     value={replyBody}
                     onChange={(e) => setReplyBody(e.target.value)}
-                    placeholder="Votre réponse…"
+                    placeholder={t("comments.reply.placeholder")}
                     rows={2}
                     className="w-full rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-[13px] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--accent)_20%,transparent)]"
                   />
@@ -245,16 +254,16 @@ export function CommentsTab({
                       onClick={() => setReplyTo(null)}
                       className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-1.5 text-[12px] font-semibold hover:bg-[var(--bg-warm)]"
                     >
-                      Annuler
+                      {t("common.cancel")}
                     </button>
                     <button
                       type="button"
                       disabled={!replyBody.trim()}
                       onClick={async () => {
                         await reply({
-                          anchorId: t.anchorId,
-                          anchorText: t.anchorText,
-                          parentId: t.root.id,
+                          anchorId: thread.anchorId,
+                          anchorText: thread.anchorText,
+                          parentId: thread.root.id,
                           body: replyBody.trim(),
                         });
                         setReplyTo(null);
@@ -262,7 +271,7 @@ export function CommentsTab({
                       }}
                       className="rounded-[var(--radius-xs)] bg-[var(--bg-black)] px-3 py-1.5 text-[12px] font-semibold text-[var(--text-inverse)] hover:bg-[var(--bg-dark)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)]"
                     >
-                      Répondre
+                      {t("comments.reply")}
                     </button>
                   </div>
                 </div>
@@ -312,9 +321,9 @@ function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
 }
 
-function formatDateFull(iso: string): string {
+function formatDateFull(iso: string, locale: Locale): string {
   const d = new Date(iso);
-  return d.toLocaleString("fr-FR", {
+  return d.toLocaleString(intlLocale(locale), {
     day: "numeric",
     month: "short",
     hour: "2-digit",

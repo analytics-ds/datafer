@@ -74,6 +74,11 @@ export const client = sqliteTable("client", {
   website: text("website"),
   color: text("color"),
   notes: text("notes"),
+  // Langue d'affichage de l'interface pour ce dossier, héritée par ses briefs
+  // et par ses liens de partage : un dossier client US s'ouvre en anglais sans
+  // que le client ait à toucher au sélecteur. Un choix explicite dans le
+  // header (cookie) reste prioritaire, cf. src/lib/i18n/server.ts.
+  locale: text("locale", { enum: ["fr", "en"] }).notNull().default("fr"),
   // Partage externe : si shareToken est présent, le dossier est accessible
   // en lecture seule sur /share/<token> (sans auth).
   shareToken: text("share_token").unique(),

@@ -17,7 +17,7 @@ import { buildKeywordRegex, computeDetailedScore, isJunkNlpTerm, MIN_VALID_COMPE
 import {
   extractGeoSignals,
   EMPTY_GEO_SIGNALS,
-  GEO_LABELS,
+  GEO_LABEL_KEYS,
   type GeoSignals,
 } from "@/lib/geo-scoring";
 import { faviconUrl } from "@/lib/favicon";
@@ -43,6 +43,9 @@ import { InfoBubble } from "./info-bubble";
 import type { BriefOverrides } from "@/lib/brief-overrides";
 import { CaretDownIcon, GearIcon, SidebarIcon } from "@/components/icons";
 import { scoreColor, ratioColor } from "@/lib/score-color";
+import { useI18n, useT } from "@/lib/i18n/context";
+import type { TranslationKey, Translator } from "@/lib/i18n";
+import { formatNumber } from "@/lib/relative-date";
 
 type Folder = { id: string; name: string; website: string | null; scope: "personal" | "agency" };
 
@@ -137,6 +140,7 @@ type BriefEditorProps = {
 type Tab = "editor" | "serp" | "insights" | "comments";
 
 export function BriefEditor(props: BriefEditorProps) {
+  const t = useT();
   const { id, keyword, country, folder, initialHtml, nlp, serp, paa, haloscan, position } = props;
   const saveEndpoint = props.saveEndpoint ?? `/api/briefs/${id}`;
   const tagsEndpoint = props.tagsEndpoint ?? `/api/briefs/${id}/tags`;
@@ -166,8 +170,8 @@ export function BriefEditor(props: BriefEditorProps) {
   // consultant à son prénom. Repli commun sur le domaine de la page analysée
   // (recalculé après un import d'URL), puis sur un libellé neutre.
   const selfLabel = isShareMode
-    ? (folder?.name?.trim() || myHostOf(myUrl))
-    : (props.consultantFirstName?.trim() || myHostOf(myUrl));
+    ? (folder?.name?.trim() || myHostOf(myUrl, t))
+    : (props.consultantFirstName?.trim() || myHostOf(myUrl, t));
   // Modal Paramètres back-office (icône ⚙️). Affichée uniquement quand le
   // brief est ouvert depuis la session authentifiée (pas en mode partage).
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -387,7 +391,9 @@ export function BriefEditor(props: BriefEditorProps) {
       if (el.style.borderLeft) el.style.borderLeft = "";
       if (el.style.paddingLeft) el.style.paddingLeft = "";
       // On ne retire que le title de proximité sémantique : un title posé par
-      // autre chose (un lien, par exemple) n'a pas à sauter.
+      // autre chose (un lien, par exemple) n'a pas à sauter. Chaîne figée en
+      // français : elle a été écrite en base dans du HTML sauvegardé avant
+      // l'i18n, ce n'est pas un libellé d'interface à traduire.
       if (el.title.startsWith("Proximité sémantique")) el.removeAttribute("title");
     }
   }, [paragraphScores, editorData.text]);
@@ -563,7 +569,7 @@ export function BriefEditor(props: BriefEditorProps) {
   };
 
   const handleInsertLink = () => {
-    const url = window.prompt("URL du lien :");
+    const url = window.prompt(t("editor.link.prompt"));
     if (!url) return;
     editorRef.current?.focus();
     document.execCommand("createLink", false, url);
@@ -691,7 +697,7 @@ export function BriefEditor(props: BriefEditorProps) {
           )}
           <span className="inline-flex items-center gap-[5px] px-2 py-[3px] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px] uppercase bg-[var(--state-ok-bg)] text-[var(--text)]">
             <span className="w-[5px] h-[5px] rounded-full bg-[var(--brand-kaki)]" />
-            {crawledCount}/{serp.length} pages crawlées
+            {t("editor.crawledPages", { done: crawledCount, total: serp.length })}
           </span>
           <StatusPicker status={workflowStatus} onChange={changeWorkflowStatus} size="sm" />
           <TagPicker
@@ -715,7 +721,7 @@ export function BriefEditor(props: BriefEditorProps) {
             disabledReason={
               folder
                 ? null
-                : "Rattache le brief à un client pour ajouter des tags."
+                : t("editor.tags.needFolder")
             }
           />
         </div>
@@ -728,9 +734,9 @@ export function BriefEditor(props: BriefEditorProps) {
             <button
               onClick={() => setImportOpen(true)}
               className="px-4 py-[8px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[12px] font-semibold hover:bg-[var(--bg-warm)] transition-colors"
-              title="Récupérer le contenu d'une page existante et l'injecter dans l'éditeur"
+              title={t("editor.import.tooltip")}
             >
-              Importer une URL
+              {t("editor.import.cta")}
             </button>
           )}
           <ExportMenu exportEndpoint={exportEndpoint} printUrl={printUrl} />
@@ -742,14 +748,14 @@ export function BriefEditor(props: BriefEditorProps) {
               href="/app/briefs/new"
               className="px-4 py-[8px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[12px] font-semibold hover:bg-[var(--bg-warm)] transition-colors"
             >
-              + Nouvelle analyse
+              {t("editor.newAnalysis")}
             </Link>
           )}
           {!hideNewAnalysis && (
             <button
               onClick={() => setSettingsOpen(true)}
-              title="Paramètres du brief"
-              aria-label="Paramètres du brief"
+              title={t("editor.settings")}
+              aria-label={t("editor.settings")}
               className="ml-1 inline-flex items-center justify-center w-[38px] h-[38px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] transition-colors"
             >
               <GearIcon size={18} />
@@ -761,20 +767,20 @@ export function BriefEditor(props: BriefEditorProps) {
       {/* Tabs */}
       <div className="flex gap-[2px] px-7 bg-[var(--bg-card)] border-b border-[var(--border)]">
         <TabButton active={tab === "editor"} onClick={() => setTab("editor")}>
-          Éditeur
+          {t("editor.tab.editor")}
         </TabButton>
         <TabButton active={tab === "serp"} onClick={() => setTab("serp")} count={serp.length}>
           SERP
         </TabButton>
         <TabButton active={tab === "insights"} onClick={() => setTab("insights")}>
-          Insights
+          {t("editor.tab.insights")}
         </TabButton>
         <TabButton
           active={tab === "comments"}
           onClick={() => setTab("comments")}
           count={commentsState.comments.filter((c) => !c.parentId && !c.resolvedAt).length || undefined}
         >
-          Commentaires
+          {t("editor.tab.comments")}
         </TabButton>
       </div>
 
@@ -790,7 +796,7 @@ export function BriefEditor(props: BriefEditorProps) {
             {/* Word count bar */}
             <div className="flex items-center justify-end px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-card)] gap-[10px]">
               <span className="font-mono text-[12px] text-[var(--text-secondary)]">
-                <strong className="text-[var(--text)]">{wc}</strong> mots
+                <strong className="text-[var(--text)]">{wc}</strong> {t("editor.words")}
               </span>
               <div className="w-[120px] h-1 bg-[var(--bg-warm)] rounded-full overflow-hidden">
                 <div
@@ -805,14 +811,14 @@ export function BriefEditor(props: BriefEditorProps) {
                   visible dans le bouton pour ne pas perdre l'info clé. */}
               <button
                 onClick={togglePanel}
-                title={panelOpen ? "Masquer le panneau d'analyse" : "Afficher le panneau d'analyse"}
-                aria-label={panelOpen ? "Masquer le panneau d'analyse" : "Afficher le panneau d'analyse"}
+                title={panelOpen ? t("editor.panel.hide") : t("editor.panel.show")}
+                aria-label={panelOpen ? t("editor.panel.hide") : t("editor.panel.show")}
                 aria-expanded={panelOpen}
                 className="ml-2 inline-flex items-center gap-2 px-2 h-[28px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] transition-colors"
               >
                 {!panelOpen && (
                   <span className="font-mono text-[11px] font-semibold text-[var(--text)]">
-                    Score {score.total}
+                    {t("editor.scoreShort", { score: score.total })}
                   </span>
                 )}
                 <SidebarIcon size={16} className="scale-x-[-1]" />
@@ -862,7 +868,7 @@ export function BriefEditor(props: BriefEditorProps) {
                   "rich-editor min-h-full px-8 py-7 outline-none text-[16px] leading-[1.85] " +
                   (htmlMode ? "hidden" : "")
                 }
-                data-placeholder="Commencez à rédiger votre contenu optimisé ici…"
+                data-placeholder={t("editor.placeholder")}
               />
               {htmlMode && (
                 <textarea
@@ -871,7 +877,7 @@ export function BriefEditor(props: BriefEditorProps) {
                   spellCheck={false}
                   className="block min-h-full w-full resize-none border-0 bg-[var(--bg-card)] px-8 py-7 font-mono text-[13px] leading-[1.6] text-[var(--text)] outline-none"
                   style={{ fontFamily: "var(--font-mono)" }}
-                  placeholder="Collez le HTML ici. Recliquez sur <> pour repasser en mode visuel."
+                  placeholder={t("editor.html.placeholder")}
                 />
               )}
             </div>
@@ -1122,13 +1128,14 @@ export function BriefEditor(props: BriefEditorProps) {
 }
 
 function ScoreInfoTrigger() {
+  const t = useT();
   const [open, setOpen] = useState(false);
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Comment est calculé le score SEO ?"
+        aria-label={t("score.info.aria")}
         className="ml-1 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border border-[var(--border-strong)] text-[10px] font-bold text-[var(--text-muted)] align-middle leading-none hover:border-[var(--accent)] hover:text-[var(--text)] transition-colors"
       >
         ?
@@ -1140,6 +1147,7 @@ function ScoreInfoTrigger() {
 }
 
 function ScoreInfoModal({ onClose }: { onClose: () => void }) {
+  const t = useT();
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -1148,19 +1156,22 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Les critères de scoring et leur pondération : cf. CLAUDE.md, section
+  // « Scoring SEO ». Libellés et explications passent par le dictionnaire,
+  // les points restent la source de vérité du code.
   const criteres = [
-    { name: "Couverture sémantique (NLP)", pts: 22, hint: "Présence des termes essentiels et importants vus chez les top 10 concurrents (BM25)" },
-    { name: "Différenciation / apport", pts: 4, hint: "Couverture des angles « Opportunité » que le top 10 sous-traite : récompense le contenu qui apporte plus que la simple parité avec les concurrents (information gain)" },
-    { name: "Mot-clé principal", pts: 15, hint: "Couverture des tokens + bonus correspondance exacte" },
-    { name: "Titres (H1/H2/H3)", pts: 13, hint: "H1 unique, KW dans H1, nombre de H2, KW dans H2, au moins 2 H3" },
-    { name: "Placement du mot-clé", pts: 13, hint: "KW dans les 100 premiers mots, 1re phrase, 100 derniers mots, distribution" },
-    { name: "Sémantique paragraphe (IA)", pts: 15, hint: "Cosinus moyen des paragraphes vs centroïde sémantique top 10 (embeddings bge-m3). Poids renforcé itération 12 au détriment du BM25" },
-    { name: "Longueur de contenu", pts: 7, hint: "wc dans la fourchette concurrents, ±20 % de la moyenne, au-dessus de la moyenne" },
-    { name: "Structure", pts: 6, hint: "Ratio paragraphes, longueur des paragraphes, contenu ≥ 500 mots" },
-    { name: "Qualité rédactionnelle", pts: 5, hint: "Longueur moyenne des phrases, densité du KW, diversité lexicale ≥ 0,55" },
-    { name: "Saillance de l'entité", pts: 4, hint: "Mot-clé exact mis en avant (gras) à sa première mention dans le texte (brevet Google US9251473B2)" },
+    { key: "nlp", pts: 22 },
+    { key: "differentiation", pts: 4 },
+    { key: "keyword", pts: 15 },
+    { key: "headings", pts: 13 },
+    { key: "placement", pts: 13 },
+    { key: "semantic", pts: 15 },
+    { key: "length", pts: 7 },
+    { key: "structure", pts: 6 },
+    { key: "quality", pts: 5 },
+    { key: "salience", pts: 4 },
     // Images retiré du scoring (itération 9, 2026-06-10).
-  ];
+  ] as const;
   const maxPts = Math.max(...criteres.map((c) => c.pts));
 
   return (
@@ -1175,30 +1186,28 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
         <button
           type="button"
           onClick={onClose}
-          aria-label="Fermer"
+          aria-label={t("common.close")}
           className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)]"
         >
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
             <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
         </button>
-        <h3 className="df-title text-[20px] mb-3">Comment est calculé le score ?</h3>
+        <h3 className="df-title text-[20px] mb-3">{t("score.info.title")}</h3>
         <p className="text-[13px] leading-[1.55] text-[var(--text-secondary)] mb-5">
-          Le score corpus est <strong>calibré sur les concurrents</strong> du top 10 Google.
-          La médiane des scores bruts concurrents = 50, médiane × 1,5 = 100. Sur les requêtes
-          à concurrence faible, on remonte la médiane à 60 pour rester ambitieux. Ce n&apos;est
-          pas une note absolue : un score de 70 signifie que le contenu fait ~40 % de mieux
-          que la médiane des concurrents qui rankent déjà.
+          {t("score.info.intro")}
         </p>
         <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-3">
-          Pondération SEO (92 % du score total)
+          {t("score.info.weighting")}
         </div>
         <ul className="text-[12px] space-y-[8px] mb-5">
           {criteres.map((c) => (
-            <li key={c.name} className="flex items-start gap-3">
+            <li key={c.key} className="flex items-start gap-3">
               <div className="flex-1 min-w-0">
-                <div className="font-semibold">{c.name}</div>
-                <div className="text-[11px] text-[var(--text-muted)] leading-[1.4]">{c.hint}</div>
+                <div className="font-semibold">{t(`score.criterion.${c.key}` as TranslationKey)}</div>
+                <div className="text-[11px] text-[var(--text-muted)] leading-[1.4]">
+                  {t(`score.criterion.${c.key}.hint` as TranslationKey)}
+                </div>
               </div>
               <div className="flex items-center gap-2 shrink-0 pt-[2px]">
                 <div className="w-[80px] h-[5px] bg-[var(--bg-warm)] rounded-full overflow-hidden">
@@ -1215,9 +1224,8 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
           ))}
         </ul>
         <div className="text-[12px] leading-[1.55] text-[var(--text-secondary)] bg-[var(--bg-warm)] rounded-[var(--radius-xs)] p-3 border border-[var(--border)]">
-          <strong className="text-[var(--text)]">Signaux GEO (8 % du score)</strong> : citations,
-          listes, FAQ, schémas et autres marqueurs qui aident à apparaître dans les réponses
-          générées par ChatGPT, Perplexity et Google AI Overviews.
+          <strong className="text-[var(--text)]">{t("score.info.geo.title")}</strong>{" "}
+          {t("score.info.geo.body")}
         </div>
       </div>
     </div>
@@ -1314,6 +1322,7 @@ function EditorSidebar({
   insertTermAtCursor: (t: string) => void;
   insertPaaAsH2: (q: string) => void;
 }) {
+  const { locale, t } = useI18n();
   // normalize() = lowercase + strip accents + flatten ligatures. Indispensable
   // côté chips NLP : "première" et "premiere" doivent matcher pareil.
   const lower = normalize(editorText);
@@ -1324,53 +1333,57 @@ function EditorSidebar({
   const [termsView, setTermsView] = useState<"all" | "headings">("all");
 
   const subItems = [
-    { label: "Mot-clé exact", s: score.keyword, color: "var(--text)",
-      tip: score.keyword.score < 10 ? "↑ Ajoutez des occurrences naturelles du mot-clé" : "✓ Bonne densité de mot-clé" },
-    { label: "Couverture NLP", s: score.nlpCoverage, color: "var(--text)",
+    { label: t("panel.item.keyword"), s: score.keyword, color: "var(--text)",
+      tip: score.keyword.score < 10 ? t("panel.tip.keyword.low") : t("panel.tip.keyword.ok") },
+    { label: t("panel.item.nlp"), s: score.nlpCoverage, color: "var(--text)",
       tip: Number(score.nlpCoverage.details.coverage ?? 0) < 50
-        ? `↑ Utilisez les termes sémantiques (${score.nlpCoverage.details.used}/${score.nlpCoverage.details.total} couverts)`
-        : "✓ Bon champ sémantique" },
+        ? t("panel.tip.nlp.low", {
+            used: String(score.nlpCoverage.details.used ?? 0),
+            total: String(score.nlpCoverage.details.total ?? 0),
+          })
+        : t("panel.tip.nlp.ok") },
     // Différenciation / apport (information gain, itération 11). Neutralisé
     // (max=0) si le KW n'a aucun terme d'opportunité.
     ...(score.differentiation.max > 0
       ? [{
-          label: "Différenciation", s: score.differentiation, color: "var(--text)",
+          label: t("panel.item.differentiation"), s: score.differentiation, color: "var(--text)",
           tip: score.differentiation.score >= 3
-            ? "✓ Le contenu couvre des angles que le top 10 sous-traite (apport)"
-            : "↑ Couvre des termes « Opportunité » que les concurrents oublient pour te différencier du top 10",
+            ? t("panel.tip.differentiation.ok")
+            : t("panel.tip.differentiation.low"),
         }]
       : []),
-    { label: "Longueur", s: score.contentLength, color: "var(--text)",
-      tip: wc < (nlp?.minWordCount ?? 500) ? `↑ Visez au moins ${nlp?.minWordCount} mots` : "✓ Longueur dans la cible" },
-    { label: "Titres H1/H2/H3", s: score.headings, color: "var(--text)",
+    { label: t("panel.item.length"), s: score.contentLength, color: "var(--text)",
+      tip: wc < (nlp?.minWordCount ?? 500)
+        ? t("panel.tip.length.low", { min: nlp?.minWordCount ?? 500 })
+        : t("panel.tip.length.ok") },
+    { label: t("panel.item.headings"), s: score.headings, color: "var(--text)",
       tip: score.headings.score < 10
-        ? Number(score.headings.details.h1 ?? 0) === 0 ? "↑ Ajoutez un H1 avec votre mot-clé"
-        : Number(score.headings.details.h1 ?? 0) > 1 ? "⚠ Un seul H1 recommandé"
-        : "↑ Ajoutez des H2 pour structurer"
-        : "✓ Bonne hiérarchie de titres" },
-    { label: "Placement KW", s: score.placement, color: "var(--text)",
-      tip: score.placement.score < 10 ? "↑ Placez le mot-clé dans l'intro et répartissez-le" : "✓ Mot-clé bien distribué" },
-    { label: "Structure", s: score.structure, color: "var(--text)",
-      tip: score.structure.score < 6 ? "↑ Découpez en paragraphes plus courts" : "✓ Bonne structure" },
-    { label: "Qualité rédac.", s: score.quality, color: "var(--text-secondary)",
-      tip: score.quality.score < 4 ? "↑ Variez le vocabulaire et la longueur des phrases" : "✓ Bonne qualité rédactionnelle" },
+        ? Number(score.headings.details.h1 ?? 0) === 0 ? t("panel.tip.headings.noH1")
+        : Number(score.headings.details.h1 ?? 0) > 1 ? t("panel.tip.headings.manyH1")
+        : t("panel.tip.headings.noH2")
+        : t("panel.tip.headings.ok") },
+    { label: t("panel.item.placement"), s: score.placement, color: "var(--text)",
+      tip: score.placement.score < 10 ? t("panel.tip.placement.low") : t("panel.tip.placement.ok") },
+    { label: t("panel.item.structure"), s: score.structure, color: "var(--text)",
+      tip: score.structure.score < 6 ? t("panel.tip.structure.low") : t("panel.tip.structure.ok") },
+    { label: t("panel.item.quality"), s: score.quality, color: "var(--text-secondary)",
+      tip: score.quality.score < 4 ? t("panel.tip.quality.low") : t("panel.tip.quality.ok") },
     // Jauge Images retirée (itération 9, 2026-06-10) : le critère est
     // neutralisé dans le scoring (max=0), plus rien à afficher.
-    { label: "GEO (LLMs)", s: { score: score.geo.total, max: 100, details: {} }, color: "var(--text)",
-      tip: score.geo.total < 60
-        ? "↑ Ajoutez tableau / FAQ / liste / résumé / chiffre pour citation IA"
-        : "✓ Bons signaux GEO" },
+    { label: t("panel.item.geo"), s: { score: score.geo.total, max: 100, details: {} }, color: "var(--text)",
+      tip: score.geo.total < 60 ? t("panel.tip.geo.low") : t("panel.tip.geo.ok") },
     // Sémantique paragraphe (itération 8) : critère neutralisé (max=0) si
     // brief antérieur ou si le debounce live n'a pas encore scoré les paras.
     ...(score.semantic.max > 0
       ? [{
-          label: "Sémantique Google", s: score.semantic, color: "var(--text)",
+          label: t("panel.item.semantic"), s: score.semantic, color: "var(--text)",
           tip: (() => {
             const avg = Number(score.semantic.details.avgCosine ?? 0);
             const n = Number(score.semantic.details.paragraphsScored ?? 0);
-            if (avg >= 0.75) return `✓ Excellente proximité sémantique (${n} paragraphes, cosinus moyen ${avg.toFixed(2)})`;
-            if (avg >= 0.55) return `↑ Bonne proximité (${avg.toFixed(2)}). Renforcez les paragraphes en jaune/rouge`;
-            return `↑ Proximité sémantique faible (${avg.toFixed(2)}). Recentrez le contenu sur le sujet du KW`;
+            if (avg >= 0.75)
+              return t("panel.tip.semantic.high", { count: n, cosine: avg.toFixed(2) });
+            if (avg >= 0.55) return t("panel.tip.semantic.mid", { cosine: avg.toFixed(2) });
+            return t("panel.tip.semantic.low", { cosine: avg.toFixed(2) });
           })(),
         }]
       : []),
@@ -1378,10 +1391,10 @@ function EditorSidebar({
     // mention. Neutralisé (max=0) tant que le corps n'a pas de texte.
     ...(score.salience.max > 0
       ? [{
-          label: "Saillance entité", s: score.salience, color: "var(--text)",
+          label: t("panel.item.salience"), s: score.salience, color: "var(--text)",
           tip: score.salience.score > 0
-            ? "✓ Mot-clé mis en avant (gras) à sa première mention"
-            : "↑ Mettre le mot-clé exact en gras à sa première mention dans le texte",
+            ? t("panel.tip.salience.ok")
+            : t("panel.tip.salience.low"),
         }]
       : []),
   ];
@@ -1426,12 +1439,12 @@ function EditorSidebar({
   const ringOffset = ringCirc - (scoreTotal / 100) * ringCirc;
   const ringColor = scoreColor(scoreTotal);
   const scoreHint =
-    wc < 10 ? "Commencez à écrire"
-    : scoreTotal < 25 ? "Ajoutez du contenu"
-    : scoreTotal < 45 ? "Enrichissez le sémantique"
-    : scoreTotal < 65 ? "Bon début !"
-    : scoreTotal < 80 ? "Bien optimisé"
-    : "Excellent !";
+    wc < 10 ? t("panel.hint.start")
+    : scoreTotal < 25 ? t("panel.hint.addContent")
+    : scoreTotal < 45 ? t("panel.hint.enrich")
+    : scoreTotal < 65 ? t("panel.hint.goodStart")
+    : scoreTotal < 80 ? t("panel.hint.wellOptimised")
+    : t("panel.hint.excellent");
 
   return (
     <aside className="flex flex-col overflow-y-auto bg-[var(--bg)] p-5 text-[13px]">
@@ -1461,14 +1474,14 @@ function EditorSidebar({
         </div>
         <div className="flex flex-col gap-[4px] min-w-0">
           <span className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-inverse-muted)] inline-flex items-center">
-            Score SEO/GEO
+            {t("panel.scoreLabel")}
             <ScoreInfoTrigger />
           </span>
           <span className="text-[13px] font-semibold leading-tight text-[var(--text-inverse)]">{scoreHint}</span>
           {nlp?.intent && (
             <span
               className="self-start mt-1 inline-flex items-center gap-[5px] px-[8px] py-[3px] rounded-[var(--radius-pill)] border border-[rgba(255,255,255,0.22)] text-[9px] font-semibold uppercase tracking-[0.2px] text-[var(--text-inverse)]"
-              title="Intent de recherche détecté pour ce keyword"
+              title={t("panel.intent.tooltip")}
             >
               {/* La charte réserve les couleurs secondaires aux tout petits
                   éléments : seule la puce est colorée, le texte reste blanc. */}
@@ -1482,11 +1495,11 @@ function EditorSidebar({
                     : "var(--brand-blue)",
                 }}
               />
-              {nlp.intent === "transactional" ? "Transactionnel"
-                : nlp.intent === "informational" ? "Informationnel"
-                : nlp.intent === "commercial" ? "Comparatif"
-                : nlp.intent === "navigational" ? "Marque/Produit"
-                : "Local"}
+              {nlp.intent === "transactional" ? t("intent.transactional")
+                : nlp.intent === "informational" ? t("intent.informational")
+                : nlp.intent === "commercial" ? t("intent.commercial")
+                : nlp.intent === "navigational" ? t("intent.navigational")
+                : t("intent.local")}
             </span>
           )}
         </div>
@@ -1505,10 +1518,10 @@ function EditorSidebar({
 
       {/* Sub-scores */}
       <Section
-        title="Score détaillé"
+        title={t("panel.section.detail")}
         dotColor="var(--bg-black)"
         dark
-        info="Décomposition du score SEO en 8 critères pondérés, ramenés sur 100. Chaque barre indique ta progression sur le critère (kaki ≥70%, bleu 40-69%, jaune <40%). La somme pondérée donne le score affiché en haut."
+        info={t("panel.section.detail.info")}
       >
         {subItems.map((i) => {
           const pct = Math.round((i.s.score / i.s.max) * 100);
@@ -1536,28 +1549,28 @@ function EditorSidebar({
 
       {ek && (
         <Section
-          title="Mot-clé exact (densité)"
+          title={t("panel.section.density")}
           dotColor="var(--accent)"
-          info="Densité = (occurrences × longueur du KW) / nombre total de mots × 100. La fourchette idéale est calculée d'après les concurrents top 10. Trop bas = mot-clé sous-représenté, trop haut = bourrage (risque de pénalité Google)."
+          info={t("panel.section.density.info")}
         >
           <div className="font-mono text-[13px] font-semibold px-3 py-[7px] bg-[var(--bg-warm)] rounded-[var(--radius-xs)] mb-[10px] text-center">
             &quot;{ek.keyword}&quot;
           </div>
-          <Metric label="Occurrences" value={`${kwCount} / ~${ek.avgCount}`} tone={kwCount >= ek.avgCount * 0.7 ? "good" : "warn"} />
-          <Metric label="Densité" value={`${density}% / ${ek.idealDensityMin.toFixed(1)} à ${ek.idealDensityMax.toFixed(1)}%`}
+          <Metric label={t("panel.metric.occurrences")} value={`${kwCount} / ~${ek.avgCount}`} tone={kwCount >= ek.avgCount * 0.7 ? "good" : "warn"} />
+          <Metric label={t("panel.metric.density")} value={t("panel.metric.density.value", { value: density, min: ek.idealDensityMin.toFixed(1), max: ek.idealDensityMax.toFixed(1) })}
             tone={density >= ek.idealDensityMin && density <= ek.idealDensityMax ? "good" : density > ek.idealDensityMax ? "bad" : "warn"} />
-          <Metric label="Dans l'intro" value={inIntro ? "✓" : "✗"} tone={inIntro ? "good" : "warn"} />
-          <Metric label="Dans le H1" value={`${editorH1HasKw ? "✓" : "✗"} (${ek.inH1Pct}% SERP)`} tone={editorH1HasKw ? "good" : "warn"} />
-          <Metric label="Nb de H1" value={`${editorH1Count} / 1`} tone={editorH1Count === 1 ? "good" : editorH1Count === 0 ? "warn" : "bad"} last />
+          <Metric label={t("panel.metric.inIntro")} value={inIntro ? "✓" : "✗"} tone={inIntro ? "good" : "warn"} />
+          <Metric label={t("panel.metric.inH1")} value={`${editorH1HasKw ? "✓" : "✗"} (${ek.inH1Pct}% SERP)`} tone={editorH1HasKw ? "good" : "warn"} />
+          <Metric label={t("panel.metric.h1Count")} value={`${editorH1Count} / 1`} tone={editorH1Count === 1 ? "good" : editorH1Count === 0 ? "warn" : "bad"} last />
         </Section>
       )}
 
       {nlp && (((nlp.keywordTerms?.length ?? 0) + essential.length + important.length + opportunity.length) > 0) && (
         <Section
-          title="Champ sémantique"
+          title={t("panel.section.semanticField")}
           dotColor="var(--purple)"
           defaultOpen
-          info="Termes que les concurrents top 10 utilisent fréquemment sur ce KW. Plus la présence est haute, plus le terme est attendu par Google. 3 tiers : Essentiels (≥70%), Importants (40-69%), Opportunités (<40%)."
+          info={t("panel.section.semanticField.info")}
           headerAction={
             <CopyTermsButton
               terms={[
@@ -1575,64 +1588,64 @@ function EditorSidebar({
               onClick={() => setTermsView("all")}
               className={`px-[11px] py-[4px] rounded-[var(--radius-pill)] text-[11px] font-semibold transition-colors ${termsView === "all" ? "bg-[var(--bg-card)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
             >
-              Tout{" "}
+              {t("panel.terms.all")}{" "}
               <span className="font-mono opacity-70">{allTermsCount}</span>
             </button>
             <button
               type="button"
               onClick={() => setTermsView("headings")}
-              title="Termes que les concurrents emploient dans leurs titres (Hn)"
+              title={t("panel.terms.headings.tooltip")}
               className={`px-[11px] py-[4px] rounded-[var(--radius-pill)] text-[11px] font-semibold transition-colors ${termsView === "headings" ? "bg-[var(--bg-card)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
             >
-              Headings{" "}
+              {t("panel.terms.headings")}{" "}
               <span className="font-mono opacity-70">{headingsTermsCount}</span>
             </button>
           </div>
           {showHeadings && headingsTermsCount === 0 && (
             <p className="text-[12px] text-[var(--text-muted)] mb-2">
-              Aucun terme attendu dans les titres pour ce mot-clé.
+              {t("panel.terms.headings.empty")}
             </p>
           )}
           <TierTags
-            label="Essentiels"
+            label={t("panel.tier.essential")}
             color="var(--text)" bg="var(--state-warn-bg)" border="var(--brand-yellow)"
             terms={essentialView}
             kwTerms={showHeadings ? undefined : (nlp.keywordTerms ?? []).filter((k) => k.kind === "exact")}
             lower={lower}
             onInsert={insertTermAtCursor}
-            info="Le mot-clé principal du brief + les termes présents chez ≥70% des concurrents top 10. Considérés comme obligatoires : tous à couvrir pour avoir le score NLP max (17/27 pts)."
+            info={t("panel.tier.essential.info")}
           />
           <TierTags
-            label="Importants"
+            label={t("panel.tier.important")}
             color="var(--text)" bg="var(--state-ok-bg)" border="var(--brand-kaki)"
             terms={importantView} lower={lower} onInsert={insertTermAtCursor}
-            info="Termes présents chez 40-69% des concurrents. Pas obligatoires mais fortement attendus. Couvrir le maximum donne jusqu'à 10/27 pts de NLP."
+            info={t("panel.tier.important.info")}
           />
           <TierTags
-            label="Opportunité"
+            label={t("panel.tier.opportunity")}
             color="var(--text)" bg="var(--state-info-bg)" border="var(--brand-blue)"
             terms={opportunityView} lower={lower} onInsert={insertTermAtCursor}
-            info="Termes présents chez moins de 40% des concurrents. Ignorés du scoring (zéro pénalité). À ajouter en bonus si pertinent pour différencier le contenu."
+            info={t("panel.tier.opportunity.info")}
           />
         </Section>
       )}
 
       {/* Checklist GEO : 5 patterns appréciés par les LLMs. Pèse 10 pts. */}
-      <Section title="Optimisation GEO" dotColor="var(--purple)">
+      <Section title={t("panel.section.geo")} dotColor="var(--purple)">
         <p className="text-[11px] text-[var(--text-muted)] mb-[10px] leading-[1.4]">
-          Patterns appréciés par les moteurs génératifs (Perplexity, ChatGPT…) pour citer le contenu.
+          {t("panel.section.geo.info")}
         </p>
-        <GeoChecklistItem label={GEO_LABELS.table} ok={score.geo.table.ok} />
-        <GeoChecklistItem label={GEO_LABELS.bulletList} ok={score.geo.bulletList.ok} />
-        <GeoChecklistItem label={GEO_LABELS.quickSummary} ok={score.geo.quickSummary.ok} />
-        <GeoChecklistItem label={GEO_LABELS.faq} ok={score.geo.faq.ok} />
-        <GeoChecklistItem label={GEO_LABELS.statistics} ok={score.geo.statistics.ok} last />
+        <GeoChecklistItem label={t(GEO_LABEL_KEYS.table)} ok={score.geo.table.ok} />
+        <GeoChecklistItem label={t(GEO_LABEL_KEYS.bulletList)} ok={score.geo.bulletList.ok} />
+        <GeoChecklistItem label={t(GEO_LABEL_KEYS.quickSummary)} ok={score.geo.quickSummary.ok} />
+        <GeoChecklistItem label={t(GEO_LABEL_KEYS.faq)} ok={score.geo.faq.ok} />
+        <GeoChecklistItem label={t(GEO_LABEL_KEYS.statistics)} ok={score.geo.statistics.ok} last />
       </Section>
 
       {nlp?.semanticClusters && nlp.semanticClusters.length > 0 && (
-        <Section title="Clusters thématiques (IA)" dotColor="var(--blue)">
+        <Section title={t("panel.section.clusters")} dotColor="var(--blue)">
           <div className="text-[10px] text-[var(--text-muted)] mb-[8px] italic">
-            Termes regroupés par champ lexical via embeddings.
+            {t("panel.section.clusters.info")}
           </div>
           {nlp.semanticClusters.map((c) => (
             <div key={c.label} className="mb-[10px]">
@@ -1655,7 +1668,7 @@ function EditorSidebar({
       )}
 
       {nlp?.sections && nlp.sections.length > 0 && (
-        <Section title="Sections concurrentes" dotColor="var(--orange)">
+        <Section title={t("panel.section.competitorSections")} dotColor="var(--orange)">
           <CompetitorSections
             sections={nlp.sections}
             editorH2s={editorH2s}
@@ -1666,16 +1679,16 @@ function EditorSidebar({
       )}
 
       {nlp?.opportunities && nlp.opportunities.length > 0 && (
-        <Section title="Opportunités de différentiation" dotColor="var(--green)">
+        <Section title={t("panel.section.opportunities")} dotColor="var(--green)">
           <div className="text-[10px] text-[var(--text-muted)] mb-[8px] italic">
-            Questions PAA non couvertes par les concurrents. Cliquer pour insérer comme H2.
+            {t("panel.section.opportunities.info")}
           </div>
           <div className="flex flex-col gap-1">
             {nlp.opportunities.map((o, i) => (
               <button
                 key={i}
                 onClick={() => insertPaaAsH2(o.text)}
-                title={`Couvert par seulement ${o.competitorCoverage}% des concurrents — angle unique`}
+                title={t("panel.opportunity.tooltip", { coverage: o.competitorCoverage })}
                 className="flex items-center gap-2 px-[10px] py-[7px] bg-[var(--green-bg)] border border-[var(--green)] rounded-[var(--radius-xs)] text-left text-[12px] leading-[1.4] hover:opacity-80 transition-opacity"
                 style={{ color: "var(--text)" }}
               >
@@ -1691,7 +1704,7 @@ function EditorSidebar({
       )}
 
       {nlp?.entities && nlp.entities.length > 0 && (
-        <Section title="Entités à mentionner" dotColor="var(--green)">
+        <Section title={t("panel.section.entities")} dotColor="var(--green)">
           <EntityList entities={nlp.entities} editorText={editorText} onInsert={insertTermAtCursor} />
         </Section>
       )}
@@ -1700,7 +1713,7 @@ function EditorSidebar({
         <Section
           title="People Also Ask"
           dotColor="var(--blue)"
-          info="Questions affichées par Google dans le bloc 'Autres questions posées' sur ce KW. Couvrir ces questions dans les H2 améliore la pertinence et peut déclencher un rich snippet."
+          info={t("panel.section.paa.info")}
         >
           <PaaCoverageList paa={paa} editorText={editorText} keyword={ek?.keyword ?? ""} onInsert={insertPaaAsH2} />
         </Section>
@@ -1708,23 +1721,23 @@ function EditorSidebar({
 
       {nlp && (
         <Section
-          title="Benchmarks SERP"
+          title={t("panel.section.benchmarks")}
           dotColor="var(--green)"
-          info="Statistiques calculées sur les 10 premières pages Google (concurrents). Sert de référence pour calibrer le contenu : viser dans la fourchette est généralement bon, viser la moyenne est sûr."
+          info={t("panel.section.benchmarks.info")}
         >
-          <BenchRow label="Plage de mots" value={`${nlp.minWordCount} à ${nlp.maxWordCount}`} />
-          <BenchRow label="Moyenne" value={String(nlp.avgWordCount)} />
-          <BenchRow label="Titres" value={String(nlp.avgHeadings)} />
-          <BenchRow label="Paragraphes" value={String(nlp.avgParagraphs)} last />
+          <BenchRow label={t("panel.bench.wordRange")} value={t("panel.bench.wordRange.value", { min: nlp.minWordCount, max: nlp.maxWordCount })} />
+          <BenchRow label={t("panel.bench.average")} value={String(nlp.avgWordCount)} />
+          <BenchRow label={t("panel.bench.headings")} value={String(nlp.avgHeadings)} />
+          <BenchRow label={t("panel.bench.paragraphs")} value={String(nlp.avgParagraphs)} last />
           {serp.length > 0 && (
             <div className="mt-[10px] pt-[10px] border-t border-[var(--border)]">
               <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-                Concurrents top {serp.length}
+                {t("panel.bench.topCompetitors", { count: serp.length })}
               </div>
               <div className="flex flex-col gap-[2px]">
                 {serp.map((r) => {
                   const wc = r.wordCount ?? 0;
-                  const wcLabel = wc > 0 ? `${wc.toLocaleString("fr-FR")} mots` : "—";
+                  const wcLabel = wc > 0 ? t("panel.bench.words", { count: formatNumber(wc, locale) }) : "—";
                   let host = "";
                   try { host = new URL(r.link).hostname.replace(/^www\./, ""); } catch {}
                   const fav = host ? faviconUrl(host) : null;
@@ -1843,6 +1856,7 @@ function Section({
 // Bouton de copie compact à insérer dans le header d'une Section. Stoppe la
 // propagation du click pour ne pas déclencher le toggle de la Section parent.
 function CopyTermsButton({ terms }: { terms: string[] }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1868,7 +1882,7 @@ function CopyTermsButton({ terms }: { terms: string[] }) {
           handleClick(e as unknown as React.MouseEvent);
         }
       }}
-      title={copied ? "Copié" : `Copier les ${terms.length} mots-clés`}
+      title={copied ? t("common.copied") : t("panel.copyTerms.tooltip", { count: terms.length })}
       className="inline-flex items-center gap-[3px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-[6px] py-[2px] text-[9px] font-semibold normal-case tracking-normal text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
     >
       {copied ? (
@@ -1876,7 +1890,7 @@ function CopyTermsButton({ terms }: { terms: string[] }) {
           <svg width="10" height="10" viewBox="0 0 20 20" fill="none" aria-hidden>
             <path d="M5 10l3 3 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Copié
+          {t("common.copied")}
         </>
       ) : (
         <>
@@ -1884,7 +1898,7 @@ function CopyTermsButton({ terms }: { terms: string[] }) {
             <rect x="6" y="6" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
             <path d="M4 14V5a1 1 0 0 1 1-1h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
           </svg>
-          Copier
+          {t("common.copy")}
         </>
       )}
     </span>
@@ -1923,6 +1937,7 @@ function CompetitorSections({
   editorH3s: string[];
   onInsert: (text: string) => void;
 }) {
+  const t = useT();
   const userHeadings = [...editorH2s, ...editorH3s].map((h) => normalize(h));
   // Une section est couverte si au moins un key term (ou sa forme) apparaît
   // dans un H2/H3 de l'utilisateur. normalize() des deux côtés pour matcher
@@ -1942,7 +1957,8 @@ function CompetitorSections({
   return (
     <div>
       <div className="text-[11px] text-[var(--text-muted)] mb-[8px]">
-        <span className="font-semibold text-[var(--text)]">{coveredCount}/{sections.length}</span> sections couvertes. Cliquer pour insérer comme H2.
+        <span className="font-semibold text-[var(--text)]">{coveredCount}/{sections.length}</span>{" "}
+        {t("panel.sections.covered")}
       </div>
       <div className="flex flex-col gap-1">
         {sorted.map(({ section, covered }) => {
@@ -2009,8 +2025,9 @@ function EntityList({
 }: {
   entities: Entity[];
   editorText: string;
-  onInsert: (t: string) => void;
+  onInsert: (term: string) => void;
 }) {
+  const t = useT();
   const lower = normalize(editorText);
   const rows = entities.map((e) => ({
     entity: e,
@@ -2020,13 +2037,14 @@ function EntityList({
   return (
     <div>
       <div className="text-[11px] text-[var(--text-muted)] mb-[8px]">
-        <span className="font-semibold text-[var(--text)]">{mentioned}/{entities.length}</span> entités citées. Marques, organismes et acronymes vus chez les concurrents.
+        <span className="font-semibold text-[var(--text)]">{mentioned}/{entities.length}</span>{" "}
+        {t("panel.entities.mentioned")}
       </div>
       <div className="flex flex-wrap gap-[5px]">
         {rows.map(({ entity, mentioned }) => (
           <span
             key={entity.label}
-            title={`Cité par ${entity.hits}/${entity.total} concurrents (${entity.totalOccurrences} occurrences)`}
+            title={t("panel.entity.tooltip", { hits: entity.hits, total: entity.total, occurrences: entity.totalOccurrences })}
             className="inline-flex items-center gap-[5px] px-[9px] py-[3px] rounded-full text-[11px] font-medium border"
             style={{
               background: mentioned ? "var(--green-bg)" : "var(--bg-card)",
@@ -2057,6 +2075,7 @@ function PaaCoverageList({
   keyword: string;
   onInsert: (q: string) => void;
 }) {
+  const t = useT();
   const QUESTION_WORDS = new Set([
     "est", "ce", "qui", "que", "quoi", "qu", "qu'est", "qu'il", "où", "quand",
     "comment", "pourquoi", "combien", "quel", "quelle", "quels", "quelles",
@@ -2106,14 +2125,15 @@ function PaaCoverageList({
   return (
     <div>
       <div className="text-[11px] text-[var(--text-muted)] mb-[8px]">
-        <span className="font-semibold text-[var(--text)]">{coveredCount}/{rows.length}</span> questions traitées.
+        <span className="font-semibold text-[var(--text)]">{coveredCount}/{rows.length}</span>{" "}
+        {t("panel.paa.covered")}
       </div>
       <div className="flex flex-col gap-1">
         {rows.map(({ q, covered }, i) => (
           <button
             key={i}
             onClick={() => onInsert(q.question)}
-            title="Cliquer pour insérer comme H2"
+            title={t("panel.insertAsH2")}
             className="group flex items-start gap-2 px-[10px] py-2 border rounded-[var(--radius-xs)] text-left text-[12px] leading-[1.4] hover:bg-[var(--bg-olive-light)] transition-colors"
             style={{
               background: covered ? "var(--green-bg)" : "var(--bg-card)",
@@ -2148,6 +2168,7 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert, info, kwTe
       (chip noir pour exact, chip kaki/bleu pour part/extension). */
   kwTerms?: KeywordTerm[];
 }) {
+  const t = useT();
   if (!terms.length && !(kwTerms?.length ?? 0)) return null;
   // Un terme est "utilisé" si sa forme affichée OU l'une de ses variantes
   // morphologiques apparaît dans le contenu. normalize() des deux côtés pour
@@ -2213,10 +2234,10 @@ function TierTags({ label, color, bg, border, terms, lower, onInsert, info, kwTe
               key={`kw-${k.term}`}
               title={
                 k.kind === "extension"
-                  ? `Extension détectée chez ${k.presence}% des concurrents`
+                  ? t("panel.kw.extension", { presence: k.presence })
                   : k.kind === "exact"
-                    ? "Mot-clé principal"
-                    : "Sous-partie du mot-clé"
+                    ? t("panel.kw.exact")
+                    : t("panel.kw.partial")
               }
               className="inline-flex items-center gap-[6px] px-[10px] py-[5px] rounded-full text-[12px] font-medium border"
               style={style}
@@ -2412,6 +2433,7 @@ function KeywordChip({
     [term, variants],
   );
 
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [idx, setIdx] = useState(0);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
@@ -2485,7 +2507,7 @@ function KeywordChip({
         onMouseLeave={scheduleClose}
         onFocus={onEnter}
         onBlur={scheduleClose}
-        aria-label={`Voir les citations concurrentes pour ${term}`}
+        aria-label={t("panel.citation.aria", { term })}
         className="inline-flex items-center gap-[5px] px-[10px] py-[4px] rounded-full text-[11px] font-medium border hover:scale-[1.03] transition-transform"
         style={style}
       >
@@ -2552,6 +2574,7 @@ function CitationPopover({
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
+  const t = useT();
   const POPOVER_W = 340;
   const margin = 8;
   const vw =
@@ -2593,7 +2616,7 @@ function CitationPopover({
           </a>
         ) : (
           <div className="text-[11px] font-semibold text-[var(--text-muted)] mb-[6px]">
-            Source non disponible
+            {t("panel.citation.noSource")}
           </div>
         )}
         <div className="text-[var(--text)]">
@@ -2605,18 +2628,18 @@ function CitationPopover({
           <button
             type="button"
             onClick={onPrev}
-            aria-label="Citation précédente"
+            aria-label={t("panel.citation.prev")}
             className="px-2 py-[3px] rounded-[var(--radius-xs)] text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] transition-colors"
           >
             ←
           </button>
           <span className="text-[10px] text-[var(--text-muted)]">
-            {total} citation{total > 1 ? "s" : ""}
+            {total > 1 ? t("panel.citation.count.plural", { count: total }) : t("panel.citation.count", { count: total })}
           </span>
           <button
             type="button"
             onClick={onNext}
-            aria-label="Citation suivante"
+            aria-label={t("panel.citation.next")}
             className="px-2 py-[3px] rounded-[var(--radius-xs)] text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] transition-colors"
           >
             →
@@ -2634,8 +2657,9 @@ function KeywordTermsList({
 }: {
   terms: KeywordTerm[];
   lower: string;
-  onInsert: (t: string) => void;
+  onInsert: (term: string) => void;
 }) {
+  const t = useT();
   if (!terms.length) return null;
   return (
     <div className="flex flex-wrap gap-[5px]">
@@ -2684,10 +2708,10 @@ function KeywordTermsList({
             key={k.term}
             title={
               k.kind === "extension"
-                ? `Extension détectée chez ${k.presence}% des concurrents`
+                ? t("panel.kw.extension", { presence: k.presence })
                 : k.kind === "exact"
-                  ? "Keyword exact"
-                  : "Sous-partie du keyword"
+                  ? t("panel.kw.exact")
+                  : t("panel.kw.partial")
             }
             className="inline-flex items-center gap-[6px] px-[10px] py-[5px] rounded-full text-[12px] font-medium border"
             style={style}
@@ -2805,6 +2829,7 @@ function InsightsPane({
    *  domaine côté client. Calculée par BriefEditor. */
   selfLabel: string;
 }) {
+  const { locale, t } = useI18n();
   const vp = serp.filter((r) => (r.wordCount ?? 0) > 0);
   const aW = vp.length ? Math.round(vp.reduce((s, r) => s + (r.wordCount ?? 0), 0) / vp.length) : 0;
 
@@ -2820,54 +2845,54 @@ function InsightsPane({
 
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4 max-w-[1100px]">
-      <InsightCard title="Données mot-clé" dotColor="var(--accent)">
+      <InsightCard title={t("insights.keywordData")} dotColor="var(--accent)">
         {haloHasData ? (
           <>
             {halo?.search_volume != null && (
               <InsightMetric
-                label="Volume mensuel"
-                value={halo.search_volume.toLocaleString("fr-FR")}
-                tooltip="Volume mensuel moyen de recherches Google France sur ce mot-clé exact (source Haloscan, moyenne sur les 12 derniers mois). C'est la demande potentielle : en top 3, on peut espérer capter ~30% à 40% de ce volume."
+                label={t("insights.volume")}
+                value={formatNumber(halo.search_volume, locale)}
+                tooltip={t("insights.volume.tooltip")}
               />
             )}
             {halo?.cpc != null && (
-              <InsightMetric label="CPC" value={`${halo.cpc.toFixed(2)} €`} tooltip="Coût par clic Google Ads (Haloscan)" />
+              <InsightMetric label="CPC" value={`${halo.cpc.toFixed(2)} €`} tooltip={t("insights.cpc.tooltip")} />
             )}
             {halo?.kgr != null && (
               <InsightMetric
                 label="KGR"
                 value={halo.kgr.toFixed(2)}
-                tooltip="Keyword Golden Ratio = nombre de pages indexées contenant le mot-clé exact dans leur title (allintitle), divisé par le volume de recherche mensuel. Indicateur de facilité à se positionner : < 0.25 = très facile (golden), entre 0.25 et 1 = correct, > 1 = mot-clé saturé, difficile à attaquer sans autorité de domaine."
+                tooltip={t("insights.kgr.tooltip")}
               />
             )}
             {halo?.allintitleCount != null && (
               <InsightMetric
                 label="Allintitle"
-                value={halo.allintitleCount.toLocaleString("fr-FR")}
-                tooltip="Pages avec le mot-clé exact dans le title (Haloscan)"
+                value={formatNumber(halo.allintitleCount, locale)}
+                tooltip={t("insights.allintitle.tooltip")}
               />
             )}
             {halo?.difficulty != null && (
-              <InsightMetric label="Difficulté" value={`${halo.difficulty}/100`} tooltip="Difficulté SEO estimée (Haloscan)" />
+              <InsightMetric label={t("insights.difficulty")} value={`${halo.difficulty}/100`} tooltip={t("insights.difficulty.tooltip")} />
             )}
             {halo?.visibilityIndex != null && (
               <InsightMetric
-                label="Visibilité"
+                label={t("insights.visibility")}
                 value={halo.visibilityIndex.toFixed(1)}
-                tooltip="Indice de visibilité du mot-clé (Haloscan)"
+                tooltip={t("insights.visibility.tooltip")}
               />
             )}
             {halo?.resultCount != null && (
               <InsightMetric
-                label="Résultats Google"
-                value={halo.resultCount.toLocaleString("fr-FR")}
-                tooltip="Nombre total de pages indexées Google sur le mot-clé"
+                label={t("insights.results")}
+                value={formatNumber(halo.resultCount, locale)}
+                tooltip={t("insights.results.tooltip")}
               />
             )}
           </>
         ) : (
           <p className="text-[12px] text-[var(--text-muted)]">
-            Aucune donnée Haloscan trouvée pour ce mot-clé.
+            {t("insights.noHaloscan")}
           </p>
         )}
       </InsightCard>
@@ -2882,13 +2907,13 @@ function InsightsPane({
         </InsightCard>
       )}
 
-      <InsightCard title="Stats SERP" dotColor="var(--green)">
-        <InsightMetric label="Pages crawlées" value={`${vp.length}/${serp.length}`} />
-        <InsightMetric label="Mots moyen" value={aW.toLocaleString("fr-FR")} />
+      <InsightCard title={t("insights.serpStats")} dotColor="var(--green)">
+        <InsightMetric label={t("insights.crawledPages")} value={`${vp.length}/${serp.length}`} />
+        <InsightMetric label={t("insights.avgWords")} value={formatNumber(aW, locale)} />
       </InsightCard>
 
       {myUrl && (
-        <InsightCard title="Ma page importée" dotColor="var(--orange)">
+        <InsightCard title={t("insights.myPage")} dotColor="var(--orange)">
           <a
             href={myUrl}
             target="_blank"
@@ -2897,9 +2922,9 @@ function InsightsPane({
           >
             {myUrl}
           </a>
-          <InsightMetric label="Mes mots" value={userWordCount.toLocaleString("fr-FR")} />
-          <InsightMetric label="Mes H2 / H3" value={`${userH2Count} / ${userH3Count}`} />
-          <InsightMetric label="Mon score" value={`${userScore}/100`} />
+          <InsightMetric label={t("insights.myWords")} value={formatNumber(userWordCount, locale)} />
+          <InsightMetric label={t("insights.myHeadings")} value={`${userH2Count} / ${userH3Count}`} />
+          <InsightMetric label={t("insights.myScore")} value={`${userScore}/100`} />
         </InsightCard>
       )}
 
@@ -2945,6 +2970,7 @@ function SerpAnalyticsCharts({
   userH3Count: number;
   selfLabel: string;
 }) {
+  const { locale, t } = useI18n();
   const crawled = serp.filter((r) => (r.wordCount ?? 0) > 0);
   // Si la page analysee ressort elle-meme dans le SERP, on la retire du panel
   // concurrent : sinon elle apparait deux fois dans le graphique, et elle se
@@ -2998,30 +3024,58 @@ function SerpAnalyticsCharts({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <ChartCard title="Score SEO/GEO vs concurrents" dotColor="var(--accent)" subtitle={`Moyenne SERP : ${avg(scoreSeries.competitors.map((c) => c.value))}/100 — ${myLabel} : ${userSeoScore}/100`}>
+      <ChartCard
+        title={t("charts.score.title")}
+        dotColor="var(--accent)"
+        subtitle={t("charts.score.subtitle", {
+          avg: avg(scoreSeries.competitors.map((c) => c.value)),
+          label: myLabel,
+          value: userSeoScore,
+        })}
+      >
         <BarChartVertical series={scoreSeries} max={100} suffix="/100" myPosition={myPosition} />
       </ChartCard>
 
-      <ChartCard title="Volume de contenu" dotColor="var(--green)" subtitle={`Moyenne SERP : ${avg(wcSeries.competitors.map((c) => c.value)).toLocaleString("fr-FR")} mots — ${myLabel} : ${userWordCount.toLocaleString("fr-FR")} mots`}>
+      <ChartCard
+        title={t("charts.words.title")}
+        dotColor="var(--green)"
+        subtitle={t("charts.words.subtitle", {
+          avg: formatNumber(avg(wcSeries.competitors.map((c) => c.value)), locale),
+          label: myLabel,
+          value: formatNumber(userWordCount, locale),
+        })}
+      >
         <BarChartVertical
           series={wcSeries}
           max={Math.max(userWordCount, ...wcSeries.competitors.map((c) => c.value))}
-          suffix=" mots"
+          suffix={t("charts.words.suffix")}
           colorMode="goldilocks"
           myPosition={myPosition}
         />
       </ChartCard>
 
-      <ChartCard title="Sous-titres (H2 + H3)" dotColor="var(--brand-yellow)" subtitle={`Moyenne SERP : ${avg(headingSeries.competitors.map((c) => c.value))} — ${myLabel} : ${userH2Count + userH3Count}`}>
+      <ChartCard
+        title={t("charts.headings.title")}
+        dotColor="var(--brand-yellow)"
+        subtitle={t("charts.headings.subtitle", {
+          avg: avg(headingSeries.competitors.map((c) => c.value)),
+          label: myLabel,
+          value: userH2Count + userH3Count,
+        })}
+      >
         <BarChartVerticalStacked series={headingSeries} myPosition={myPosition} />
       </ChartCard>
 
-      <ChartCard title="Score vs Volume" dotColor="var(--purple)" subtitle="Plus en haut à droite = mieux">
+      <ChartCard title={t("charts.scatter.title")} dotColor="var(--purple)" subtitle={t("charts.scatter.subtitle")}>
         <ScatterChart points={scatterPoints} />
       </ChartCard>
 
       <div className="lg:col-span-2">
-        <ChartCard title="Positionnement" dotColor={userScore >= avg(scoreSeries.competitors.map((c) => c.value)) ? "var(--green)" : "var(--orange)"} subtitle={positioningSubtitle(userSeoScore, scoreSeries.competitors.map((c) => c.value))}>
+        <ChartCard
+          title={t("charts.positioning.title")}
+          dotColor={userScore >= avg(scoreSeries.competitors.map((c) => c.value)) ? "var(--green)" : "var(--orange)"}
+          subtitle={positioningSubtitle(userSeoScore, scoreSeries.competitors.map((c) => c.value), t)}
+        >
           <PositioningGauge userScore={userSeoScore} competitors={scoreSeries.competitors.map((c) => c.value)} myLabel={myLabel} />
         </ChartCard>
       </div>
@@ -3055,12 +3109,12 @@ function hostOf(url: string, fallbackPosition: number): string {
  * comme les concurrents, plutot qu'un « Toi » qui ne veut rien dire une fois
  * la capture envoyee au client.
  */
-function myHostOf(url?: string | null): string {
-  if (!url) return "Cette page";
+function myHostOf(url: string | null | undefined, t: Translator): string {
+  if (!url) return t("charts.thisPage");
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
-    return "Cette page";
+    return t("charts.thisPage");
   }
 }
 
@@ -3074,11 +3128,15 @@ function sameHost(a: string, b: string): boolean {
   }
 }
 
-function positioningSubtitle(userScore: number, competitors: number[]): string {
+function positioningSubtitle(
+  userScore: number,
+  competitors: number[],
+  t: Translator,
+): string {
   if (competitors.length === 0) return "";
   const sorted = [...competitors, userScore].sort((a, b) => b - a);
   const rank = sorted.indexOf(userScore) + 1;
-  return `Classé #${rank} sur ${sorted.length} (avec ${userScore}/100)`;
+  return t("charts.positioning.subtitle", { rank, total: sorted.length, score: userScore });
 }
 
 function ChartCard({
@@ -3189,6 +3247,7 @@ function BarChartVerticalStacked({
   series: { competitors: StackedBarPoint[]; me: StackedBarPoint; max: number };
   myPosition?: number | null;
 }) {
+  const t = useT();
   const all = [...series.competitors].sort((a, b) => a.position - b.position);
   const localMax = Math.max(series.max, 1);
   const competitorTotals = series.competitors.map((c) => c.value);
@@ -3231,8 +3290,8 @@ function BarChartVerticalStacked({
       </div>
       <BarAxisLabels competitors={all} me={series.me} myPosition={myPosition} />
       <div className="flex gap-3 mt-2 text-[10px] text-[var(--text-inverse-muted)]">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--brand-blue)]" /> H2 (couleur pleine)</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--brand-blue)] opacity-50" /> H3 (couleur tamisée)</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--brand-blue)]" /> {t("charts.legend.h2")}</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--brand-blue)] opacity-50" /> {t("charts.legend.h3")}</span>
       </div>
     </div>
   );
@@ -3279,6 +3338,7 @@ function ScatterChart({
 }: {
   points: { x: number; y: number; label: string; isMe: boolean }[];
 }) {
+  const t = useT();
   const maxX = Math.max(...points.map((p) => p.x), 1);
   const W = 320;
   const H = 220;
@@ -3318,8 +3378,8 @@ function ScatterChart({
           </g>
         );
       })}
-      <text x={W / 2} y={H - 4} fontSize="9" fill="var(--text-inverse-muted)" textAnchor="middle">Mots</text>
-      <text x={3} y={12} fontSize="9" fill="var(--text-inverse-muted)">Score</text>
+      <text x={W / 2} y={H - 4} fontSize="9" fill="var(--text-inverse-muted)" textAnchor="middle">{t("charts.axis.words")}</text>
+      <text x={3} y={12} fontSize="9" fill="var(--text-inverse-muted)">{t("charts.axis.score")}</text>
     </svg>
   );
 }
@@ -3327,11 +3387,12 @@ function ScatterChart({
 function PositioningGauge({
   userScore,
   competitors,
-  myLabel = "Cette page",
+  myLabel,
 }: {
   userScore: number;
   competitors: number[];
-  myLabel?: string;
+  /** Libellé déjà traduit de « notre » page. */
+  myLabel: string;
 }) {
   const all = [...competitors, userScore].sort((a, b) => a - b);
   const min = Math.min(...all);
@@ -3404,6 +3465,7 @@ function colorByVolumeDeviation(value: number, mean: number): string {
 }
 
 function CompetitorScoreRow({ scoreTotal, serp }: { scoreTotal: number; serp: SerpResult[] }) {
+  const t = useT();
   const scored = serp.filter((r): r is SerpResult & { score: number } => typeof r.score === "number");
   if (scored.length === 0) return null;
   // Exclure les pages mal crawlées (score effondré) du calcul de la moyenne,
@@ -3430,22 +3492,27 @@ function CompetitorScoreRow({ scoreTotal, serp }: { scoreTotal: number; serp: Se
   return (
     <div className="bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] p-3 mb-5">
       <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-inverse-muted)] mb-2">
-        Concurrence SERP
+        {t("compare.title")}
       </div>
       <div className="grid grid-cols-2 gap-2">
         <CompareCell
-          label="Moyenne"
+          label={t("compare.avg")}
           value={`${avg}/100`}
           gap={gapAvg}
           tone={tone(gapAvg)}
-          tooltip={`Moyenne du score SEO sur les ${forAvg.length} concurrents correctement crawlés${forAvg.length < scored.length ? ` (${scored.length - forAvg.length} exclu(s), crawl incomplet)` : ""}.`}
+          tooltip={
+            t("compare.avg.tooltip", { count: forAvg.length }) +
+            (forAvg.length < scored.length
+              ? " " + t("compare.avg.tooltip.excluded", { count: scored.length - forAvg.length })
+              : "")
+          }
         />
         <CompareCell
-          label="Meilleur"
+          label={t("compare.best")}
           value={`${best.score}/100`}
           gap={gapBest}
           tone={tone(gapBest)}
-          tooltip={`Meilleur score : ${bestHost} (position ${best.position}).`}
+          tooltip={t("compare.best.tooltip", { host: bestHost, position: best.position })}
         />
       </div>
     </div>
@@ -3529,6 +3596,7 @@ function KeywordStatsRow({
   onPreload: ((url: string) => void) | null;
   folderWebsite: string | null;
 }) {
+  const t = useT();
   // Échelle position : top 3 vert foncé, top 10 vert, top 30 orange, au-delà rouge.
   const positionTone =
     position == null
@@ -3544,19 +3612,19 @@ function KeywordStatsRow({
   return (
     <div className="grid grid-cols-1 gap-2 mb-5">
       <KeyStat
-        label="Position"
-        value={position != null ? `#${position}` : "N/A"}
+        label={t("stat.position")}
+        value={position != null ? `#${position}` : t("brief.pill.na")}
         tooltip={
           folderWebsite
-            ? `Position de ${folderWebsite} dans Google (top 100). N/A = au-delà du top 100.`
-            : "Rattache un client avec un site pour suivre ta position."
+            ? t("stat.position.tooltip", { website: folderWebsite })
+            : t("stat.position.noFolder")
         }
         tone={positionTone}
       />
       {position != null && rankingUrl && (
         <div className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2">
           <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[2px]">
-            Page qui ranke
+            {t("stat.rankingPage")}
           </div>
           <a
             href={rankingUrl}
@@ -3573,7 +3641,7 @@ function KeywordStatsRow({
               onClick={() => onPreload(rankingUrl)}
               className="mt-2 w-full rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
             >
-              Charger cette page dans l&apos;éditeur
+              {t("stat.loadPage")}
             </button>
           )}
         </div>
@@ -3774,6 +3842,7 @@ function SerpScoreChart({
 const SERP_METRIC_CELL = "w-[52px] shrink-0";
 
 function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const hasStructure = (r.h1?.length ?? 0) + (r.h2?.length ?? 0) + (r.h3?.length ?? 0) > 0;
   // Le critère est juste wordCount > 0 (et pas hasStructure) parce que
@@ -3797,7 +3866,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
               ? "bg-[var(--bg-olive-light)] text-[var(--text)]"
               : "bg-[var(--bg-warm)] text-[var(--text-secondary)]"
           }`}
-          aria-label={`Ouvrir le résultat ${r.position}`}
+          aria-label={t("serp.openResult", { position: r.position })}
         >
           {r.position}
         </a>
@@ -3822,7 +3891,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             const isPdf = /\.pdf(?:$|[?#])/i.test(r.link ?? "");
             if (isPdf) {
               return (
-                <div className={SERP_METRIC_CELL} title="Document PDF : pas de structure HTML (titres, images) donc le score automatique n'est pas comparable. Le contenu textuel a bien été crawlé et alimente les mots-clés / NLP. Exclu du calcul de la médiane de référence.">
+                <div className={SERP_METRIC_CELL} title={t("serp.pdf.tooltip")}>
                   <div className="font-mono text-[13px] font-semibold text-[var(--red)]">
                     PDF
                   </div>
@@ -3835,17 +3904,17 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             return r.score < MIN_VALID_COMPETITOR_SCORE ? (
               <div
                 className={SERP_METRIC_CELL}
-                title="Score non fiable : page probablement mal crawlée (rendu JavaScript non capté, blocage anti-bot...). Exclue du calcul de la moyenne. Ce n'est pas un jugement sur la qualité réelle du concurrent."
+                title={t("serp.badCrawl.tooltip")}
               >
                 <div className="font-mono text-[13px] font-semibold text-[var(--text-muted)]">
                   ⚠
                 </div>
                 <div className="text-[9px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-semibold">
-                  crawl ✗
+                  {t("serp.badCrawl")}
                 </div>
               </div>
             ) : (
-              <div className={SERP_METRIC_CELL} title="Score SEO/GEO du concurrent (même algorithme que la rédaction)">
+              <div className={SERP_METRIC_CELL} title={t("serp.score.tooltip")}>
                 {/* Le chiffre reste en noir, la puce porte le niveau. Elle est
                     posée hors du flux : si elle restait dans la ligne, sa
                     largeur décalerait le chiffre par rapport à son libellé. */}
@@ -3859,25 +3928,25 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
                   </span>
                 </div>
                 <div className="text-[9px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-semibold">
-                  score
+                  {t("serp.score")}
                 </div>
               </div>
             );
           })()}
           <div className={SERP_METRIC_CELL}>
             <div className="font-mono text-[13px] font-semibold">
-              {r.wordCount ? r.wordCount : "N/A"}
+              {r.wordCount ? r.wordCount : t("brief.pill.na")}
             </div>
             <div className="text-[9px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-semibold">
-              mots
+              {t("serp.words")}
             </div>
           </div>
           <div className={SERP_METRIC_CELL}>
             <div className="font-mono text-[13px] font-semibold">
-              {r.headings ?? "N/A"}
+              {r.headings ?? t("brief.pill.na")}
             </div>
             <div className="text-[9px] uppercase tracking-[0.2px] text-[var(--text-muted)] font-semibold">
-              titres
+              {t("serp.headings")}
             </div>
           </div>
           <button
@@ -3885,7 +3954,7 @@ function SerpCard({ r, briefId }: { r: SerpResult; briefId: string }) {
             disabled={!hasStructure}
             className="px-3 py-[6px] rounded-[var(--radius-xs)] text-[11px] font-semibold border border-[var(--border)] hover:bg-[var(--bg-warm)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {open ? "▲ Structure" : "▼ Structure"}
+            {open ? `▲ ${t("serp.structure")}` : `▼ ${t("serp.structure")}`}
           </button>
           <CompetitorDownloadMenu
             briefId={briefId}
@@ -3997,6 +4066,7 @@ function ImportUrlModal({
   onClose: () => void;
   onImported: (html: string, url: string) => void;
 }) {
+  const t = useT();
   const [url, setUrl] = useState(initialUrl);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -4012,7 +4082,7 @@ function ImportUrlModal({
   async function runImport() {
     const target = url.trim();
     if (!/^https?:\/\//i.test(target)) {
-      setError("Colle une URL complète en http(s)://");
+      setError(t("import.error.badUrl"));
       return;
     }
     setError(null);
@@ -4029,13 +4099,13 @@ function ImportUrlModal({
         error?: string;
       };
       if (!r.ok || !data.html) {
-        setError(data.error ?? `Erreur ${r.status}`);
+        setError(data.error ?? t("import.error.http", { status: r.status }));
         setLoading(false);
         return;
       }
       onImported(data.html, data.url ?? target);
     } catch {
-      setError("Erreur réseau, réessaie.");
+      setError(t("import.error.network"));
       setLoading(false);
     }
   }
@@ -4050,11 +4120,10 @@ function ImportUrlModal({
         className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] shadow-[var(--shadow-lg)] w-[480px] max-w-full p-6"
       >
         <h3 className="df-title text-[18px] mb-1">
-          Importer le contenu d&apos;une URL
+          {t("import.title")}
         </h3>
         <p className="text-[12px] text-[var(--text-muted)] mb-4">
-          On récupère la page (rendu JS inclus) et on injecte ses titres et
-          paragraphes dans l&apos;éditeur pour scorer le contenu existant.
+          {t("import.description")}
         </p>
         <input
           type="url"
@@ -4068,13 +4137,12 @@ function ImportUrlModal({
               void runImport();
             }
           }}
-          placeholder="https://exemple.fr/ma-page"
+          placeholder={t("import.placeholder")}
           className="w-full px-3 py-[10px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[13px] font-mono mb-3 disabled:opacity-60"
         />
         {hasContent && !loading && (
           <p className="text-[12px] text-[var(--text)] bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] px-3 py-2 mb-3">
-            L&apos;éditeur contient déjà du texte : l&apos;import le remplacera
-            entièrement.
+            {t("import.warning.replace")}
           </p>
         )}
         {error && (
@@ -4089,7 +4157,7 @@ function ImportUrlModal({
             disabled={loading}
             className="px-4 py-[9px] rounded-[var(--radius-sm)] text-[13px] font-semibold border border-[var(--border)] hover:bg-[var(--bg-warm)] transition-colors disabled:opacity-50"
           >
-            Annuler
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -4100,7 +4168,7 @@ function ImportUrlModal({
             {loading && (
               <span className="w-[12px] h-[12px] border-2 border-white/40 border-t-white rounded-full animate-spin" />
             )}
-            {loading ? "Récupération en cours… (jusqu'à 1 min)" : "Importer →"}
+            {loading ? t("import.loading") : t("import.cta")}
           </button>
         </div>
       </div>

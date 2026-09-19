@@ -3,24 +3,26 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FolderSelect, type FolderOption } from "./folder-select";
+import { useT } from "@/lib/i18n/context";
+import type { TranslationKey } from "@/lib/i18n";
 
-const COUNTRIES = [
-  { value: "fr", label: "France" },
-  { value: "es", label: "Espagne" },
-  { value: "us", label: "États-Unis" },
-  { value: "uk", label: "Royaume-Uni" },
-  { value: "de", label: "Allemagne" },
-  { value: "it", label: "Italie" },
+const COUNTRIES: Array<{ value: string; labelKey: TranslationKey }> = [
+  { value: "fr", labelKey: "country.fr" },
+  { value: "es", labelKey: "country.es" },
+  { value: "us", labelKey: "country.us" },
+  { value: "uk", labelKey: "country.uk" },
+  { value: "de", labelKey: "country.de" },
+  { value: "it", labelKey: "country.it" },
 ];
 
 const MAX_BATCH = 5;
 
-const LOADING_STEPS: Array<{ key: string; label: string; sub: string }> = [
-  { key: "fetching_serp", label: "Récupération du top 10 Google", sub: "Interrogation SERP via CrazySerp" },
-  { key: "crawling", label: "Crawl des 10 sites concurrents", sub: "Rendering JS via IPs résidentielles (Bright Data Web Unlocker)" },
-  { key: "analyzing_nlp", label: "Extraction du champ sémantique", sub: "TF-IDF + entités nommées" },
-  { key: "scoring", label: "Calcul du score concurrentiel", sub: "Scoring détaillé de chaque concurrent + position SERP" },
-  { key: "saving", label: "Préparation du brief", sub: "Génération de l'éditeur et écriture en base" },
+const LOADING_STEPS: Array<{ key: string; labelKey: TranslationKey; subKey: TranslationKey }> = [
+  { key: "fetching_serp", labelKey: "newBrief.step.serp", subKey: "newBrief.step.serp.sub" },
+  { key: "crawling", labelKey: "newBrief.step.crawl", subKey: "newBrief.step.crawl.sub" },
+  { key: "analyzing_nlp", labelKey: "newBrief.step.nlp", subKey: "newBrief.step.nlp.sub" },
+  { key: "scoring", labelKey: "newBrief.step.scoring", subKey: "newBrief.step.scoring.sub" },
+  { key: "saving", labelKey: "newBrief.step.saving", subKey: "newBrief.step.saving.sub" },
 ];
 
 function stepIndex(analysisStep: string | null): number {
@@ -88,6 +90,7 @@ export function NewBriefForm({
   folders: FolderOption[];
   defaultFolderId?: string;
 }) {
+  const t = useT();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("simple");
 
@@ -155,7 +158,7 @@ export function NewBriefForm({
 
     if (mode === "bulk") {
       if (validRows.length === 0) {
-        setError("Renseigne au moins un mot-clé");
+        setError(t("newBrief.error.noKeyword"));
         setLoading(false);
         return;
       }
@@ -166,7 +169,7 @@ export function NewBriefForm({
       const results = await Promise.all(resolved.map(postOne));
       const failed = results.filter((r): r is { error: string } => "error" in r);
       if (failed.length === results.length) {
-        setError(`Aucun brief n'a été créé : ${failed[0].error}`);
+        setError(t("newBrief.error.noneCreated", { error: failed[0].error }));
         setLoading(false);
         return;
       }
@@ -208,7 +211,7 @@ export function NewBriefForm({
             };
             setStep(stepIndex(data.analysisStep));
             const p = stepProgress(data.analysisStep);
-            setProgressLabel(p ? `${p.done}/${p.total} sites traités` : null);
+            setProgressLabel(p ? t("newBrief.progress.sites", { done: p.done, total: p.total }) : null);
             if (data.status === "ready" && data.redirect) {
               stopPolling();
               router.push(data.redirect);
@@ -216,7 +219,7 @@ export function NewBriefForm({
             }
             if (data.status === "failed") {
               stopPolling();
-              setError(data.errorMessage ?? "L'analyse a échoué");
+              setError(data.errorMessage ?? t("card.analysisFailed"));
               setLoading(false);
               return;
             }
@@ -275,17 +278,17 @@ export function NewBriefForm({
         >
           {loading
             ? mode === "bulk"
-              ? `Création de ${validRows.length} briefs…`
-              : "Analyse en cours…"
+              ? t("newBrief.creating", { count: validRows.length })
+              : t("newBrief.analysing")
             : mode === "bulk"
-              ? `Lancer ${validRows.length || ""} ${validRows.length > 1 ? "analyses" : "analyse"} →`
-              : "Lancer l'analyse →"}
+              ? t("newBrief.submit.bulk", { count: validRows.length || "" })
+              : t("newBrief.submit")}
         </button>
 
         <p className="text-[11px] text-[var(--text-muted)] mt-5 text-center">
           {mode === "bulk"
-            ? "Les briefs sont enfilés dans la queue d'analyse (~60-90s par brief, séquentiel)."
-            : "L'analyse prend environ 30-45 secondes (SERP + crawl résidentiel + NLP)."}
+            ? t("newBrief.note.bulk")
+            : t("newBrief.note")}
         </p>
       </fieldset>
 
@@ -295,23 +298,23 @@ export function NewBriefForm({
           {mode === "bulk" ? (
             <>
               <div className="df-title text-[22px] tracking-[-0.3px]">
-                Création de {validRows.length} briefs…
+                {t("newBrief.creating", { count: validRows.length })}
               </div>
               <p className="text-[13px] text-[var(--text-muted)] max-w-[340px] text-center">
-                Redirection vers la liste pour suivre la progression individuelle de chaque brief.
+                {t("newBrief.bulk.redirect")}
               </p>
             </>
           ) : (
             <>
               <div className="df-title text-[22px] tracking-[-0.3px]">
-                Analyse en cours…
+                {t("newBrief.analysing")}
               </div>
               <ul className="flex flex-col gap-[10px] max-w-[340px]">
                 {LOADING_STEPS.map((s, i) => {
                   const state = i === step ? "current" : i < step ? "done" : "pending";
                   return (
                     <li
-                      key={s.label}
+                      key={s.key}
                       className={`flex items-start gap-[10px] ${
                         state === "current"
                           ? "text-[var(--text)]"
@@ -337,12 +340,12 @@ export function NewBriefForm({
                       </span>
                       <div className="flex flex-col">
                         <span className={`text-[13px] ${state === "current" ? "font-semibold" : ""}`}>
-                          {s.label}
+                          {t(s.labelKey)}
                         </span>
                         <span className="text-[11px] text-[var(--text-muted)]">
                           {state === "current" && progressLabel && s.key === "crawling"
                             ? progressLabel
-                            : s.sub}
+                            : t(s.subKey)}
                         </span>
                       </div>
                     </li>
@@ -366,12 +369,13 @@ function ModeToggle({
   onChange: (m: Mode) => void;
   bulkCount: number;
 }) {
+  const t = useT();
   return (
     <div className="flex gap-1 p-[3px] bg-[var(--bg-warm)] rounded-[var(--radius-sm)] mb-6 w-fit">
       {(
         [
-          { value: "simple", label: "Brief" },
-          { value: "bulk", label: "Batch" },
+          { value: "simple", label: t("newBrief.mode.single") },
+          { value: "bulk", label: t("newBrief.mode.bulk") },
         ] as const
       ).map((opt) => (
         <button
@@ -386,7 +390,9 @@ function ModeToggle({
         >
           {opt.label}
           {opt.value === "bulk" && bulkCount > 0 && mode !== "bulk" && (
-            <span className="ml-2 text-[10px] text-[var(--text-muted)]">{bulkCount} prêt{bulkCount > 1 ? "s" : ""}</span>
+            <span className="ml-2 text-[10px] text-[var(--text-muted)]">
+              {bulkCount > 1 ? t("newBrief.ready.plural", { count: bulkCount }) : t("newBrief.ready", { count: bulkCount })}
+            </span>
           )}
         </button>
       ))}
@@ -403,10 +409,11 @@ function SimpleSection({
   patch: (p: Partial<BriefInput>) => void;
   folders: FolderOption[];
 }) {
+  const t = useT();
   return (
     <>
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Mot-clé cible
+        {t("newBrief.keyword")}
       </label>
       <input
         type="text"
@@ -414,27 +421,27 @@ function SimpleSection({
         autoFocus
         value={input.keyword}
         onChange={(e) => patch({ keyword: e.target.value })}
-        placeholder="Ex. chaussures de running homme"
+        placeholder={t("newBrief.keyword.placeholder")}
         className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-5 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Mots-clés secondaires (optionnel)
+        {t("newBrief.secondary")}
       </label>
       <input
         type="text"
         value={input.secondaryKeywords}
         onChange={(e) => patch({ secondaryKeywords: e.target.value })}
         maxLength={1200}
-        placeholder="Ex. running femme, chaussures trail (séparés par des virgules)"
+        placeholder={t("newBrief.secondary.placeholder")}
         className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-[6px] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
       <p className="text-[11px] text-[var(--text-muted)] mb-5">
-        Ajoutés au champ sémantique du brief (termes essentiels) : leur usage est suivi dans l&apos;éditeur et compté dans le score.
+        {t("newBrief.secondary.hint")}
       </p>
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Marché
+        {t("newBrief.market")}
       </label>
       <div className="grid grid-cols-3 gap-2 mb-5">
         {COUNTRIES.map((c) => (
@@ -451,13 +458,13 @@ function SimpleSection({
             <span className="font-mono text-[11px] mr-2">
               {c.value.toUpperCase()}
             </span>
-            {c.label}
+            {t(c.labelKey)}
           </button>
         ))}
       </div>
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Client (optionnel)
+        {t("newBrief.folder")}
       </label>
       <div className="mb-5">
         <FolderSelect
@@ -469,17 +476,17 @@ function SimpleSection({
       </div>
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Mon URL existante (optionnel)
+        {t("newBrief.myUrl")}
       </label>
       <input
         type="url"
         value={input.myUrl}
         onChange={(e) => patch({ myUrl: e.target.value })}
-        placeholder="https://exemple.fr/page-existante"
+        placeholder={t("newBrief.myUrl.placeholder")}
         className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-[6px] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
       <p className="text-[11px] text-[var(--text-muted)] mb-8">
-        Avec une URL, on récupère le contenu pour l&apos;injecter dans l&apos;éditeur et donner le score initial face à la SERP.
+        {t("newBrief.myUrl.hint")}
       </p>
     </>
   );
@@ -498,18 +505,19 @@ function BulkSection({
   onAdd: () => void;
   onRemove: (i: number) => void;
 }) {
+  const t = useT();
   const head = rows[0];
   const canAdd = rows.length < MAX_BATCH;
   return (
     <div className="flex flex-col gap-3 mb-5">
       <div className="flex items-baseline justify-between">
         <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
-          Briefs à lancer
+          {t("newBrief.bulk.title")}
         </label>
         <span className="text-[11px] text-[var(--text-muted)]">
           {rows.length === 1
-            ? "Ajoute jusqu'à 5 briefs. Pays/client du Brief 1 sert de défaut."
-            : `${rows.length}/${MAX_BATCH} briefs.`}
+            ? t("newBrief.bulk.hint", { max: MAX_BATCH })
+            : t("newBrief.bulk.count", { count: rows.length, max: MAX_BATCH })}
         </span>
       </div>
       {rows.map((row, i) => (
@@ -531,7 +539,9 @@ function BulkSection({
         className="self-start flex items-center gap-2 px-3 py-[7px] text-[12px] font-medium text-[var(--text-secondary)] border border-dashed border-[var(--border-strong)] rounded-[var(--radius-sm)] hover:bg-[var(--bg-warm)] hover:text-[var(--text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
         <span className="text-[14px] leading-none">+</span>
-        {canAdd ? `Ajouter un brief (${rows.length}/${MAX_BATCH})` : `Maximum ${MAX_BATCH} briefs atteint`}
+        {canAdd
+          ? t("newBrief.bulk.add", { count: rows.length, max: MAX_BATCH })
+          : t("newBrief.bulk.max", { max: MAX_BATCH })}
       </button>
     </div>
   );
@@ -554,6 +564,7 @@ function BulkRow({
   folders: FolderOption[];
   autoFocus?: boolean;
 }) {
+  const t = useT();
   const isActive = row.keyword.trim().length > 0;
   const isHead = index === 0;
   // Pour les rows non-head, si le champ est vide, on affiche ce qui sera hérité
@@ -563,7 +574,9 @@ function BulkRow({
       ? folders.find((f) => f.id === head.folderId)?.name ?? null
       : null;
   const inheritedCountryLabel = !isHead && !row.country ? `↑ ${(head.country || "fr").toUpperCase()}` : null;
-  const inheritedFolderLabel = !isHead && !row.folderId ? `↑ ${headFolderName ?? "Aucun"} (Brief 1)` : null;
+  const inheritedFolderLabel = !isHead && !row.folderId
+    ? `↑ ${headFolderName ?? t("common.none")} ${t("newBrief.bulk.inherited")}`
+    : null;
 
   return (
     <div
@@ -588,15 +601,15 @@ function BulkRow({
           autoFocus={autoFocus}
           value={row.keyword}
           onChange={(e) => patch({ keyword: e.target.value })}
-          placeholder={`Mot-clé${isHead ? " (obligatoire)" : ""}`}
+          placeholder={isHead ? t("newBrief.bulk.keyword.required") : t("newBrief.bulk.keyword")}
           className="flex-1 px-3 py-[9px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
         />
         {onRemove && (
           <button
             type="button"
             onClick={onRemove}
-            aria-label={`Supprimer le brief ${index + 1}`}
-            title="Supprimer ce brief"
+            aria-label={t("newBrief.bulk.remove.aria", { index: index + 1 })}
+            title={t("card.delete.title")}
             className="w-[24px] h-[24px] rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition-colors text-[14px] leading-none shrink-0"
           >
             ×
@@ -609,14 +622,14 @@ function BulkRow({
           value={row.secondaryKeywords}
           onChange={(e) => patch({ secondaryKeywords: e.target.value })}
           maxLength={1200}
-          placeholder="Mots-clés secondaires (virgules)"
+          placeholder={t("newBrief.bulk.secondary.placeholder")}
           className="px-3 py-[7px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[12px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
         />
         <input
           type="url"
           value={row.myUrl}
           onChange={(e) => patch({ myUrl: e.target.value })}
-          placeholder="URL existante (optionnel)"
+          placeholder={t("newBrief.bulk.myUrl.placeholder")}
           className="px-3 py-[7px] border-2 border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)] transition-colors text-[12px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
         />
         <select
@@ -640,8 +653,8 @@ function BulkRow({
           folders={folders}
           value={row.folderId}
           onChange={(v) => patch({ folderId: v })}
-          emptyLabel={isHead ? "Aucun client" : inheritedFolderLabel ?? "Aucun client"}
-          emptyPlaceholder={isHead ? "Aucun client" : inheritedFolderLabel ?? "Aucun client"}
+          emptyLabel={isHead ? t("newBrief.folder.empty") : inheritedFolderLabel ?? t("newBrief.folder.empty")}
+          emptyPlaceholder={isHead ? t("newBrief.folder.empty") : inheritedFolderLabel ?? t("newBrief.folder.empty")}
         />
       </div>
     </div>

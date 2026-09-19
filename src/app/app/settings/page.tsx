@@ -10,6 +10,8 @@ import { ProfileForm } from "./profile-form";
 import { PasswordForm } from "./password-form";
 import { ApiKeysForm } from "./api-keys-form";
 import { LevelCard } from "./level-card";
+import { resolveLocale } from "@/lib/i18n/server";
+import { createTranslator } from "@/lib/i18n";
 import {
   levelFromXp,
   parseXpAwarded,
@@ -19,6 +21,8 @@ import {
 } from "@/lib/xp";
 
 export default async function SettingsPage() {
+  const locale = await resolveLocale();
+  const t = createTranslator(locale);
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
@@ -85,16 +89,18 @@ export default async function SettingsPage() {
   return (
     <div className="px-10 py-10 max-w-[720px]">
       <PageHeader
-        title={<>Paramètres<span className="df-accent">.</span></>}
-        subtitle="Profil, identifiants et clés API."
+        title={<>{t("settings.title")}<span className="df-accent">.</span></>}
+        subtitle={t("settings.subtitle")}
       />
 
       <section className="mb-10">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
           <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent-dark)]" />
-          Mon niveau
+          {t("settings.level")}
         </h2>
         <LevelCard
+          t={t}
+          locale={locale}
           totalXp={totalXp}
           level={lvl.level}
           xpInLevel={lvl.xpInLevel}
@@ -123,7 +129,7 @@ export default async function SettingsPage() {
       <section className="mb-10">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
           <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent)]" />
-          Profil
+          {t("settings.profile")}
         </h2>
         <ProfileForm initial={{ firstName, lastName, email: session.user.email }} />
       </section>
@@ -131,7 +137,7 @@ export default async function SettingsPage() {
       <section className="mb-10">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-4 flex items-center gap-2">
           <span className="w-[5px] h-[5px] rounded-full bg-[var(--brand-blue)]" />
-          Sécurité
+          {t("settings.security")}
         </h2>
         <PasswordForm />
       </section>
@@ -140,13 +146,13 @@ export default async function SettingsPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] flex items-center gap-2">
             <span className="w-[5px] h-[5px] rounded-full bg-[var(--accent)]" />
-            Clés API
+            {t("settings.apiKeys")}
           </h2>
           <Link
             href="/app/settings/api-docs"
             className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
           >
-            Voir la documentation →
+            {t("settings.viewDocs")}
           </Link>
         </div>
         <ApiKeysForm keys={keys} />

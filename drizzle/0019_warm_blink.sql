@@ -1,0 +1,1 @@
+ALTER TABLE `client` ADD `locale` text DEFAULT 'fr' NOT NULL;

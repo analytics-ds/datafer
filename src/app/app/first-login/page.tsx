@@ -5,10 +5,12 @@ import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { user as userTable } from "@/db/schema";
 import { FirstLoginForm } from "./form";
+import { getTranslator } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function FirstLoginPage() {
+  const t = await getTranslator();
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
@@ -26,14 +28,13 @@ export default async function FirstLoginPage() {
     <main className="min-h-screen flex items-center justify-center bg-[var(--bg)] px-4 py-12">
       <div className="w-full max-w-[460px]">
         <span className="inline-flex items-center px-3 py-1 bg-[var(--orange-bg)] text-[var(--text)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px] uppercase mb-5">
-          Premier login
+          {t("firstLogin.badge")}
         </span>
         <h1 className="df-title text-[40px] leading-[1.05] tracking-[-1px] mb-2">
-          Choisissez votre mot de passe<span className="df-accent">.</span>
+          {t("firstLogin.title")}<span className="df-accent">.</span>
         </h1>
         <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-8">
-          Votre compte a été créé avec un mot de passe temporaire. Définissez-en un nouveau
-          pour continuer.
+          {t("firstLogin.description")}
         </p>
 
         <FirstLoginForm />

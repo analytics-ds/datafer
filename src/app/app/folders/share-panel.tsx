@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { enableShareAction, revokeShareAction } from "./actions";
 import { ShareIcon, XIcon } from "@/components/icons";
+import { useT } from "@/lib/i18n/context";
 
 export function SharePanel({
   folderId,
@@ -11,6 +12,7 @@ export function SharePanel({
   folderId: string;
   initialToken: string | null;
 }) {
+  const t = useT();
   const [token, setToken] = useState<string | null>(initialToken);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -70,7 +72,7 @@ export function SharePanel({
         className="inline-flex items-center gap-2 px-4 py-[9px] rounded-[var(--radius-sm)] text-[13px] font-semibold border bg-[var(--bg)] border-[var(--border)] hover:border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors"
       >
         <ShareIcon size={14} />
-        {token ? "Lien client actif" : "Partager au client"}
+        {token ? t("share.active") : t("share.cta")}
       </button>
 
       {open && (
@@ -78,15 +80,14 @@ export function SharePanel({
           <button
             type="button"
             onClick={() => setOpen(false)}
-            aria-label="Fermer"
+            aria-label={t("common.close")}
             className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
           >
             <XIcon size={14} />
           </button>
-          <div className="font-semibold text-[14px] mb-1">Partager ce client</div>
+          <div className="font-semibold text-[14px] mb-1">{t("share.folder.title")}</div>
           <p className="text-[12px] text-[var(--text-secondary)] leading-[1.5] mb-4">
-            Génère un lien public à envoyer au client. Il pourra consulter
-            tous les briefs du client en lecture seule, sans compte.
+            {t("share.folder.description")}
           </p>
 
           {token ? (
@@ -102,7 +103,7 @@ export function SharePanel({
                   onClick={copy}
                   className="px-3 py-[9px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-xs)] text-[12px] font-semibold hover:bg-[var(--bg-dark)] transition-colors shrink-0"
                 >
-                  {copied ? "✓" : "Copier"}
+                  {copied ? "✓" : t("common.copy")}
                 </button>
               </div>
               <button
@@ -110,7 +111,7 @@ export function SharePanel({
                 disabled={pending}
                 className="w-full text-[12px] text-[var(--red)] hover:bg-[var(--red-bg)] border border-[var(--red)]/30 rounded-[var(--radius-xs)] py-[9px] font-semibold disabled:opacity-50 transition-colors"
               >
-                Révoquer le lien
+                {t("share.revoke")}
               </button>
             </>
           ) : (
@@ -119,7 +120,7 @@ export function SharePanel({
               disabled={pending}
               className="w-full bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-xs)] py-[10px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] disabled:opacity-50 transition-colors"
             >
-              Générer un lien de partage
+              {t("share.generate")}
             </button>
           )}
         </div>

@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CommentAuthor, CommentDTO } from "./comment-layer-types";
+import { useI18n, useT } from "@/lib/i18n/context";
+import { intlLocale } from "@/lib/relative-date";
+import type { Locale } from "@/lib/i18n/types";
 
 export type { CommentAuthor, CommentDTO };
 
@@ -381,6 +384,7 @@ export function CommentLayer({
 }
 
 function SelectionButton({ rect, onClick }: { rect: DOMRect; onClick: () => void }) {
+  const t = useT();
   if (typeof window === "undefined") return null;
   const top = rect.bottom + window.scrollY + 6;
   const left = rect.right + window.scrollX - 28;
@@ -391,7 +395,7 @@ function SelectionButton({ rect, onClick }: { rect: DOMRect; onClick: () => void
       onClick={onClick}
       className="df-comment-btn"
       style={{ position: "absolute", top, left, zIndex: 50 }}
-      title="Commenter cette sélection"
+      title={t("comments.selection.tooltip")}
     >
       <span aria-hidden>💬</span>
     </button>,
@@ -410,6 +414,7 @@ function NewCommentPopover({
   onSubmit: (body: string) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [body, setBody] = useState("");
   if (typeof window === "undefined") return null;
   const top = rect.bottom + window.scrollY + 8;
@@ -421,13 +426,13 @@ function NewCommentPopover({
         autoFocus
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        placeholder="Votre commentaire…"
+        placeholder={t("comments.new.placeholder")}
         rows={3}
         className="df-comment-textarea"
       />
       <div className="df-comment-actions">
         <button type="button" onClick={onCancel} className="df-comment-secondary">
-          Annuler
+          {t("common.cancel")}
         </button>
         <button
           type="button"
@@ -435,7 +440,7 @@ function NewCommentPopover({
           disabled={!body.trim()}
           className="df-comment-primary"
         >
-          Commenter
+          {t("comments.submit")}
         </button>
       </div>
     </div>,
@@ -460,6 +465,7 @@ function ThreadPopover({
   onToggleResolved: (commentId: string, current: boolean) => void;
   onDelete: (commentId: string) => void;
 }) {
+  const { locale, t } = useI18n();
   const [reply, setReply] = useState("");
   const root = thread.find((c) => !c.parentId);
   const replies = thread.filter((c) => c.parentId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -477,9 +483,13 @@ function ThreadPopover({
     <div className="df-comment-popover df-comment-thread" style={{ position: "absolute", top, left, zIndex: 51 }}>
       <header className="df-comment-thread-header">
         <span className="df-comment-thread-title">
-          {resolved ? "Résolu" : `${thread.length} commentaire${thread.length > 1 ? "s" : ""}`}
+          {resolved
+            ? t("comments.resolved")
+            : t(thread.length > 1 ? "comments.thread.count.plural" : "comments.thread.count", {
+                count: thread.length,
+              })}
         </span>
-        <button type="button" onClick={onClose} className="df-comment-close" aria-label="Fermer">
+        <button type="button" onClick={onClose} className="df-comment-close" aria-label={t("common.close")}>
           ×
         </button>
       </header>
@@ -495,8 +505,8 @@ function ThreadPopover({
               <div className="df-comment-content">
                 <div className="df-comment-meta">
                   <strong>{c.authorName}</strong>
-                  <span className="df-comment-date">{formatDate(c.createdAt)}</span>
-                  {c.authorType === "client" && <span className="df-comment-tag">client</span>}
+                  <span className="df-comment-date">{formatDate(c.createdAt, locale)}</span>
+                  {c.authorType === "client" && <span className="df-comment-tag">{t("comments.clientTag")}</span>}
                 </div>
                 <div className="df-comment-body">{c.body}</div>
                 {canEdit(c) && (
@@ -505,10 +515,10 @@ function ThreadPopover({
                       type="button"
                       className="df-comment-link"
                       onClick={() => {
-                        if (window.confirm("Supprimer ce commentaire ?")) onDelete(c.id);
+                        if (window.confirm(t("comments.delete.confirm"))) onDelete(c.id);
                       }}
                     >
-                      Supprimer
+                      {t("common.delete")}
                     </button>
                   </div>
                 )}
@@ -522,7 +532,7 @@ function ThreadPopover({
           <textarea
             value={reply}
             onChange={(e) => setReply(e.target.value)}
-            placeholder="Répondre…"
+            placeholder={t("comments.add.placeholder")}
             rows={2}
             className="df-comment-textarea"
           />
@@ -532,7 +542,7 @@ function ThreadPopover({
               onClick={() => onToggleResolved(root.id, resolved)}
               className="df-comment-secondary"
             >
-              Résoudre
+              {t("comments.resolve")}
             </button>
             <button
               type="button"
@@ -545,7 +555,7 @@ function ThreadPopover({
               disabled={!reply.trim()}
               className="df-comment-primary"
             >
-              Répondre
+              {t("comments.reply")}
             </button>
           </div>
         </div>
@@ -557,7 +567,7 @@ function ThreadPopover({
             onClick={() => onToggleResolved(root.id, resolved)}
             className="df-comment-secondary"
           >
-            Rouvrir
+            {t("comments.reopen")}
           </button>
         </div>
       )}
@@ -872,12 +882,13 @@ function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: Locale): string {
   const d = new Date(iso);
   const today = new Date();
   const sameDay = d.toDateString() === today.toDateString();
-  if (sameDay) return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  const intl = intlLocale(locale);
+  if (sameDay) return d.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString(intl, { day: "numeric", month: "short" });
 }
 
 function cryptoRandomId(): string {

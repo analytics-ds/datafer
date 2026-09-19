@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { changePasswordAction } from "../settings/actions";
+import { useT } from "@/lib/i18n/context";
 
 export function FirstLoginForm() {
+  const t = useT();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,19 +32,19 @@ export function FirstLoginForm() {
       className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-8 shadow-[var(--shadow)]"
     >
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Mot de passe actuel
+        {t("password.current")}
       </label>
       <input
         type="password"
         name="currentPassword"
         required
         autoComplete="current-password"
-        placeholder="Le mdp temporaire fourni par votre admin"
+        placeholder={t("firstLogin.temp.placeholder")}
         className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-5 outline-none focus:border-[var(--bg-black)] transition-colors text-[14px] bg-[var(--bg-card)] placeholder:text-[var(--text-muted)]"
       />
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Nouveau mot de passe
+        {t("password.new")}
       </label>
       <input
         type="password"
@@ -54,7 +56,7 @@ export function FirstLoginForm() {
       />
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Confirmer
+        {t("password.confirm")}
       </label>
       <input
         type="password"
@@ -75,7 +77,7 @@ export function FirstLoginForm() {
         disabled={loading}
         className="w-full bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] py-[13px] text-[14px] font-semibold hover:bg-[var(--bg-dark)] disabled:opacity-50 transition-colors"
       >
-        {loading ? "Mise à jour…" : "Valider et accéder à l'outil →"}
+        {loading ? t("password.updating") : t("firstLogin.submit")}
       </button>
     </form>
   );

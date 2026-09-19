@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TAG_COLORS, normalizeTagColor } from "@/lib/tags-service";
+import { useT } from "@/lib/i18n/context";
 
 export type TagDTO = { id: string; name: string; color: string };
 
@@ -84,7 +85,7 @@ export function TagPicker({
   onCreate,
   onDeleteTag,
   size = "md",
-  buttonLabel = "+ Tag",
+  buttonLabel,
   disabledReason = null,
 }: {
   attached: TagDTO[];
@@ -96,9 +97,11 @@ export function TagPicker({
    *  absent, l'icône poubelle ne s'affiche pas (mode lecture / share). */
   onDeleteTag?: (tagId: string) => void | Promise<void>;
   size?: "sm" | "md";
+  /** Libellé déjà traduit du bouton. Non fourni : « + Tag ». */
   buttonLabel?: string;
   disabledReason?: string | null;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [color, setColor] = useState<string>(TAG_COLORS[0]);
@@ -157,7 +160,7 @@ export function TagPicker({
               : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] cursor-pointer"
           }`}
         >
-          {buttonLabel}
+          {buttonLabel ?? t("tags.add")}
         </button>
 
         {open && (
@@ -177,30 +180,30 @@ export function TagPicker({
                     if (canCreate) void handleCreate();
                   }
                 }}
-                placeholder="Rechercher ou créer…"
+                placeholder={t("tags.searchOrCreate")}
                 className="w-full px-2 py-[6px] text-[12px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] outline-none focus:border-[var(--bg-black)]"
               />
             </div>
 
             <div className="max-h-[180px] overflow-y-auto">
-              {filtered.map((t) => (
+              {filtered.map((tag) => (
                 <div
-                  key={t.id}
+                  key={tag.id}
                   className="group flex items-center gap-2 px-3 py-[6px] text-[12px] hover:bg-[var(--bg-warm)] transition-colors"
                 >
                   <button
                     type="button"
                     onClick={() => {
-                      void onAttach(t.id);
+                      void onAttach(tag.id);
                       setQuery("");
                     }}
                     className="flex-1 flex items-center gap-2 text-left cursor-pointer"
                   >
                     <span
                       className="w-[8px] h-[8px] rounded-full shrink-0"
-                      style={{ background: normalizeTagColor(t.color) }}
+                      style={{ background: normalizeTagColor(tag.color) }}
                     />
-                    <span className="flex-1 truncate">{t.name}</span>
+                    <span className="flex-1 truncate">{tag.name}</span>
                   </button>
                   {onDeleteTag && (
                     <button
@@ -208,12 +211,12 @@ export function TagPicker({
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (confirm(`Supprimer définitivement le tag « ${t.name} » ?`)) {
-                          void onDeleteTag(t.id);
+                        if (confirm(t("tags.delete.confirm", { name: tag.name }))) {
+                          void onDeleteTag(tag.id);
                         }
                       }}
-                      title="Supprimer le tag"
-                      aria-label={`Supprimer le tag ${t.name}`}
+                      title={t("tags.delete")}
+                      aria-label={t("tags.delete.named", { name: tag.name })}
                       className="w-5 h-5 inline-flex items-center justify-center rounded-[var(--radius-xs)] text-[var(--text-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition-all"
                     >
                       <svg width="11" height="11" viewBox="0 0 20 20" fill="none">
@@ -231,7 +234,7 @@ export function TagPicker({
               ))}
               {filtered.length === 0 && !canCreate && (
                 <div className="px-3 py-[8px] text-[12px] text-[var(--text-muted)] italic">
-                  Aucun tag disponible.
+                  {t("tags.empty")}
                 </div>
               )}
             </div>
@@ -239,7 +242,7 @@ export function TagPicker({
             {canCreate && (
               <div className="border-t border-[var(--border)] mt-1 pt-2 px-2">
                 <div className="text-[10px] uppercase tracking-[0.2px] text-[var(--text-muted)] mb-1 px-1">
-                  Nouveau tag
+                  {t("tags.new")}
                 </div>
                 <div className="flex items-center gap-1 px-1 mb-2">
                   {TAG_COLORS.map((c) => (
@@ -247,7 +250,7 @@ export function TagPicker({
                       key={c}
                       type="button"
                       onClick={() => setColor(c)}
-                      aria-label={`Couleur ${c}`}
+                      aria-label={t("tags.color", { color: c })}
                       className={`w-[16px] h-[16px] rounded-full border-2 transition-transform ${color === c ? "scale-110" : ""}`}
                       style={{
                         background: c,
@@ -265,7 +268,7 @@ export function TagPicker({
                     className="w-[8px] h-[8px] rounded-full shrink-0"
                     style={{ background: color }}
                   />
-                  Créer « {query.trim()} »
+                  {t("tags.create", { name: query.trim() })}
                 </button>
               </div>
             )}

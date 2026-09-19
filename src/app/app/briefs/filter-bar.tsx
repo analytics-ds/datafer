@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { normalizeTagColor } from "@/lib/tags-service";
 import {
   WORKFLOW_STATUSES,
-  WORKFLOW_STATUS_LABELS,
+  WORKFLOW_STATUS_KEYS,
   type WorkflowStatus,
 } from "./workflow-status";
 import type { TagDTO } from "./tag-picker";
 import { CaretDownIcon } from "@/components/icons";
+import { useT } from "@/lib/i18n/context";
 
 export type FilterState = {
   query: string;
@@ -34,13 +35,16 @@ export function FilterBar({
   state,
   onChange,
   availableTags,
-  searchPlaceholder = "Rechercher par mot-clé, client, auteur…",
+  searchPlaceholder,
 }: {
   state: FilterState;
   onChange: (next: FilterState) => void;
   availableTags: TagDTO[];
+  /** Placeholder déjà traduit. Non fourni, on retombe sur celui de la liste
+   *  de briefs interne. */
   searchPlaceholder?: string;
 }) {
+  const t = useT();
   const update = <K extends keyof FilterState>(key: K, value: FilterState[K]) =>
     onChange({ ...state, [key]: value });
 
@@ -58,7 +62,7 @@ export function FilterBar({
         <SearchInput
           value={state.query}
           onChange={(v) => update("query", v)}
-          placeholder={searchPlaceholder}
+          placeholder={searchPlaceholder ?? t("filters.search.placeholder")}
         />
         <StatusFilter
           selected={state.statuses}
@@ -89,7 +93,7 @@ export function FilterBar({
             onClick={() => onChange({ ...EMPTY_FILTERS, query: state.query })}
             className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] underline px-2"
           >
-            Réinitialiser ({activeCount})
+            {t("filters.reset", { count: activeCount })}
           </button>
         )}
       </div>
@@ -106,6 +110,7 @@ function SearchInput({
   onChange: (v: string) => void;
   placeholder: string;
 }) {
+  const t = useT();
   return (
     <div className="relative flex-1 min-w-[220px]">
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none">
@@ -125,7 +130,7 @@ function SearchInput({
         <button
           type="button"
           onClick={() => onChange("")}
-          aria-label="Effacer la recherche"
+          aria-label={t("filters.search.clear")}
           className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)]"
         >
           ×
@@ -190,11 +195,12 @@ function StatusFilter({
   selected: WorkflowStatus[];
   onChange: (next: WorkflowStatus[]) => void;
 }) {
+  const t = useT();
   const toggle = (s: WorkflowStatus) =>
     onChange(selected.includes(s) ? selected.filter((x) => x !== s) : [...selected, s]);
 
   return (
-    <FilterDropdown label="Statut" count={selected.length}>
+    <FilterDropdown label={t("filters.status")} count={selected.length}>
       {() => (
         <>
           {WORKFLOW_STATUSES.map((s) => (
@@ -205,7 +211,7 @@ function StatusFilter({
               className="w-full flex items-center gap-2 px-3 py-[7px] text-[13px] text-left hover:bg-[var(--bg-warm)] transition-colors"
             >
               <Checkbox checked={selected.includes(s)} />
-              <span>{WORKFLOW_STATUS_LABELS[s]}</span>
+              <span>{t(WORKFLOW_STATUS_KEYS[s])}</span>
             </button>
           ))}
         </>
@@ -223,31 +229,32 @@ function TagsFilter({
   selected: string[];
   onChange: (next: string[]) => void;
 }) {
+  const t = useT();
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
 
   return (
-    <FilterDropdown label="Tags" count={selected.length}>
+    <FilterDropdown label={t("filters.tags")} count={selected.length}>
       {() => (
         <div className="max-h-[260px] overflow-y-auto">
           {tags.length === 0 ? (
             <div className="px-3 py-[8px] text-[12px] text-[var(--text-muted)] italic">
-              Aucun tag.
+              {t("filters.tags.empty")}
             </div>
           ) : (
-            tags.map((t) => (
+            tags.map((tag) => (
               <button
-                key={t.id}
+                key={tag.id}
                 type="button"
-                onClick={() => toggle(t.id)}
+                onClick={() => toggle(tag.id)}
                 className="w-full flex items-center gap-2 px-3 py-[7px] text-[13px] text-left hover:bg-[var(--bg-warm)] transition-colors"
               >
-                <Checkbox checked={selected.includes(t.id)} />
+                <Checkbox checked={selected.includes(tag.id)} />
                 <span
                   className="w-[8px] h-[8px] rounded-full shrink-0"
-                  style={{ background: normalizeTagColor(t.color) }}
+                  style={{ background: normalizeTagColor(tag.color) }}
                 />
-                <span className="flex-1 truncate">{t.name}</span>
+                <span className="flex-1 truncate">{tag.name}</span>
               </button>
             ))
           )}
@@ -266,13 +273,14 @@ function DateRangeFilter({
   to: string | null;
   onChange: (from: string | null, to: string | null) => void;
 }) {
+  const t = useT();
   const count = (from ? 1 : 0) + (to ? 1 : 0);
   return (
-    <FilterDropdown label="Date" count={count}>
+    <FilterDropdown label={t("filters.date")} count={count}>
       {() => (
         <div className="px-3 py-2 space-y-2 w-[230px]">
           <label className="block text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)]">
-            Du
+            {t("filters.date.from")}
             <input
               type="date"
               value={from ?? ""}
@@ -281,7 +289,7 @@ function DateRangeFilter({
             />
           </label>
           <label className="block text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)]">
-            Au
+            {t("filters.date.to")}
             <input
               type="date"
               value={to ?? ""}
@@ -295,7 +303,7 @@ function DateRangeFilter({
               onClick={() => onChange(null, null)}
               className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text)] underline"
             >
-              Effacer
+              {t("filters.clear")}
             </button>
           )}
         </div>
@@ -313,6 +321,7 @@ function ScoreRangeFilter({
   max: number | null;
   onChange: (min: number | null, max: number | null) => void;
 }) {
+  const t = useT();
   const count = (min != null ? 1 : 0) + (max != null ? 1 : 0);
   const parse = (s: string): number | null => {
     if (s === "") return null;
@@ -321,11 +330,11 @@ function ScoreRangeFilter({
     return Math.max(0, Math.min(100, Math.round(n)));
   };
   return (
-    <FilterDropdown label="Score" count={count}>
+    <FilterDropdown label={t("filters.score")} count={count}>
       {() => (
         <div className="px-3 py-2 space-y-2 w-[230px]">
           <label className="block text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)]">
-            Min
+            {t("filters.score.min")}
             <input
               type="number"
               min={0}
@@ -337,7 +346,7 @@ function ScoreRangeFilter({
             />
           </label>
           <label className="block text-[11px] uppercase tracking-[0.2px] text-[var(--text-muted)]">
-            Max
+            {t("filters.score.max")}
             <input
               type="number"
               min={0}
@@ -354,7 +363,7 @@ function ScoreRangeFilter({
               onClick={() => onChange(null, null)}
               className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text)] underline"
             >
-              Effacer
+              {t("filters.clear")}
             </button>
           )}
         </div>

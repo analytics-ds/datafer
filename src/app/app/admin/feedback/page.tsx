@@ -6,12 +6,14 @@ import { feedback as feedbackTable } from "@/db/schema";
 import { getAuth } from "@/lib/auth";
 import { PageHeader } from "../../_ui";
 import { FeedbackList, type FeedbackRow } from "./feedback-list";
+import { getTranslator } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 const ADMIN_EMAIL = "pierre@datashake.fr";
 
 export default async function AdminFeedbackPage() {
+  const t = await getTranslator();
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
   // Page admin gated : seul Pierre y accède pour l'instant. Si on doit
@@ -56,24 +58,24 @@ export default async function AdminFeedbackPage() {
   return (
     <div className="px-10 py-10 max-w-[1100px]">
       <PageHeader
-        title={<>Feedback<span className="df-accent">.</span></>}
-        subtitle="Les retours envoyés par les consultants depuis le widget en bas à droite."
+        title={<>{t("feedback.title")}<span className="df-accent">.</span></>}
+        subtitle={t("admin.subtitle")}
       />
 
       {feedbacks.length === 0 ? (
         <div className="bg-[var(--bg-card)] border border-dashed border-[var(--border-strong)] rounded-[var(--radius)] px-7 py-12 text-center">
-          <div className="font-semibold text-[14px] mb-1">Aucun feedback pour l&apos;instant</div>
+          <div className="font-semibold text-[14px] mb-1">{t("admin.empty.title")}</div>
           <p className="text-[var(--text-secondary)] text-[13px]">
-            Les messages des consultants apparaîtront ici dès qu&apos;ils utiliseront le widget.
+            {t("admin.empty.description")}
           </p>
         </div>
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <StatCard label="Total" value={stats.total} />
-            <StatCard label="Nouveaux" value={stats.new} highlight={stats.new > 0} />
-            <StatCard label="En cours" value={stats.inProgress} />
-            <StatCard label="Résolus" value={stats.resolved} muted />
+            <StatCard label={t("admin.stat.total")} value={stats.total} />
+            <StatCard label={t("admin.stat.new")} value={stats.new} highlight={stats.new > 0} />
+            <StatCard label={t("workflow.in_progress")} value={stats.inProgress} />
+            <StatCard label={t("comments.filter.resolved")} value={stats.resolved} muted />
           </div>
           <FeedbackList feedbacks={feedbacks} />
         </>

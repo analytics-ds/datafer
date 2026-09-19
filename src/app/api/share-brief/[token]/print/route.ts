@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
 import { renderPrintDocument } from "@/lib/export-content";
+import { resolveLocale } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export async function GET(req: Request, context: { params: Promise<{ token: stri
     .limit(1);
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  return new Response(renderPrintDocument(row.keyword, row.editorHtml ?? ""), {
+  return new Response(renderPrintDocument(row.keyword, row.editorHtml ?? "", await resolveLocale()), {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
 }

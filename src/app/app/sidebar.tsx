@@ -16,6 +16,8 @@ import {
   TrayIcon,
   GearIcon,
 } from "@/components/icons";
+import { useT } from "@/lib/i18n/context";
+import { LocaleSwitcher } from "@/components/locale-switcher";
 
 type Favorite = { id: string; name: string; website: string | null };
 
@@ -27,6 +29,7 @@ type SidebarProps = {
 };
 
 export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
+  const t = useT();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -64,8 +67,8 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
         <aside className="w-[20px] shrink-0 h-screen sticky top-0 bg-[var(--bg-card)] border-r border-[var(--border)]">
           <button
             onClick={toggleCollapsed}
-            title="Afficher le menu"
-            aria-label="Afficher le menu"
+            title={t("nav.menu.show")}
+            aria-label={t("nav.menu.show")}
             className="w-full h-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
           >
             <CaretRightIcon size={14} />
@@ -73,8 +76,8 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
         </aside>
         <button
           onClick={toggleCollapsed}
-          title="Afficher le menu"
-          aria-label="Afficher le menu"
+          title={t("nav.menu.show")}
+          aria-label={t("nav.menu.show")}
           className="fixed left-[32px] top-[16px] z-40 w-9 h-9 flex items-center justify-center rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)] shadow-[var(--shadow-sm)] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
         >
           <SidebarIcon size={16} />
@@ -89,8 +92,8 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
         <LogoApp height={17} />
         <button
           onClick={toggleCollapsed}
-          title="Masquer le menu"
-          aria-label="Masquer le menu"
+          title={t("nav.menu.hide")}
+          aria-label={t("nav.menu.hide")}
           className="w-8 h-8 flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)] transition-colors"
         >
           <SidebarIcon size={16} />
@@ -103,31 +106,31 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
           className="group flex items-center justify-center gap-2 w-full bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] py-[11px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] transition-colors shadow-[var(--shadow-sm)]"
         >
           <PlusIcon size={14} className="group-hover:rotate-90 transition-transform duration-200" />
-          Nouveau brief
+          {t("nav.newBrief")}
         </Link>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 pb-4 text-[13px]">
         <NavItem href="/app" icon={<HouseIcon size={16} />} active={pathname === "/app"}>
-          Accueil
+          {t("nav.home")}
         </NavItem>
         <NavItem
           href="/app/briefs"
           icon={<FileTextIcon size={16} />}
           active={pathname === "/app/briefs" || pathname?.startsWith("/app/briefs/")}
         >
-          Tous les briefs
+          {t("nav.allBriefs")}
         </NavItem>
         <NavItem
           href="/app/folders"
           icon={<FoldersIcon size={16} />}
           active={pathname === "/app/folders" || pathname?.startsWith("/app/folders/")}
         >
-          Tous les clients
+          {t("nav.allFolders")}
         </NavItem>
 
         {favorites.length > 0 && (
-          <NavSection title="Favoris">
+          <NavSection title={t("nav.favorites")}>
             {favorites.map((f) => (
               <FolderItem
                 key={f.id}
@@ -142,7 +145,7 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
         )}
 
         {isAdmin && (
-          <NavSection title="Admin">
+          <NavSection title={t("nav.admin")}>
             <NavItem
               href="/app/admin/feedback"
               icon={<TrayIcon size={16} />}
@@ -182,7 +185,7 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
               </span>
               <span
                 className="shrink-0 inline-flex items-center justify-center px-1.5 py-0.5 rounded-[var(--radius-pill)] text-[10px] font-bold tracking-[0.2px] bg-[var(--bg-olive-light)] text-[var(--text)] leading-none"
-                title={`Niveau ${user.level} · Voir le détail dans les paramètres`}
+                title={t("nav.level.tooltip", { level: user.level })}
               >
                 Lv {user.level}
               </span>
@@ -193,11 +196,14 @@ export function Sidebar({ user, favorites, isAdmin = false }: SidebarProps) {
           </div>
           <GearIcon size={16} className="text-[var(--text-muted)] shrink-0" />
         </Link>
+        <div className="mt-2 flex justify-center">
+          <LocaleSwitcher compact />
+        </div>
         <button
           onClick={onLogout}
           className="mt-2 w-full text-[11px] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors py-1"
         >
-          Déconnexion
+          {t("nav.logout")}
         </button>
       </div>
     </aside>

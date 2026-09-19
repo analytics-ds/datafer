@@ -21,19 +21,19 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 
   const db = getDb();
   const [row] = await db
-    .select({ keyword: brief.keyword, editorHtml: brief.editorHtml })
+    .select({ keyword: brief.keyword, editorHtml: brief.editorHtml, country: brief.country })
     .from(brief)
     .where(eq(brief.id, id))
     .limit(1);
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  return buildResponse(row.keyword, row.editorHtml ?? "", format);
+  return buildResponse(row.keyword, row.editorHtml ?? "", format, row.country);
 }
 
-function buildResponse(keyword: string, html: string, format: "html" | "docx") {
+function buildResponse(keyword: string, html: string, format: "html" | "docx", country: string) {
   const slug = safeFilename(keyword);
   if (format === "html") {
-    return new Response(renderHtmlDocument(keyword, html), {
+    return new Response(renderHtmlDocument(keyword, html, country), {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Content-Disposition": `attachment; filename="${slug}.html"`,

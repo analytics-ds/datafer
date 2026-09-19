@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/lib/i18n/context";
 
 const BUBBLE_WIDTH = 260;
 const GAP = 8;
@@ -26,6 +27,7 @@ export function InfoBubble({
   text: string;
   className?: string;
 }) {
+  const t = useT();
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const wrapperRef = useRef<HTMLSpanElement>(null);
   const open = pos !== null;
@@ -82,7 +84,7 @@ export function InfoBubble({
           e.stopPropagation();
           toggle();
         }}
-        aria-label="Plus d'infos"
+        aria-label={t("common.moreInfo")}
         aria-expanded={open}
         className={`ml-1 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border text-[10px] font-bold leading-none transition-colors ${
           open

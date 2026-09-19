@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ChatCircleIcon } from "@/components/icons";
+import { useT } from "@/lib/i18n/context";
+import type { TranslationKey } from "@/lib/i18n";
 
 /* Widget feedback "chatbot" : un bouton sticky en bas à droite, présent sur
    toutes les pages /app. Clic = ouvre un panneau slide-over à droite avec
@@ -24,13 +26,19 @@ const MAX_MESSAGE_LEN = 4000;
 
 type Category = "bug" | "suggestion" | "question";
 
-const CATEGORIES: Array<{ value: Category; label: string; emoji: string; hint: string }> = [
-  { value: "bug", label: "Bug", emoji: "🐛", hint: "Quelque chose ne fonctionne pas comme attendu" },
-  { value: "suggestion", label: "Suggestion", emoji: "💡", hint: "Une idée pour améliorer l'outil" },
-  { value: "question", label: "Question", emoji: "❓", hint: "Savoir comment faire quelque chose" },
+const CATEGORIES: Array<{
+  value: Category;
+  labelKey: TranslationKey;
+  emoji: string;
+  hintKey: TranslationKey;
+}> = [
+  { value: "bug", labelKey: "feedback.cat.bug", emoji: "🐛", hintKey: "feedback.cat.bug.hint" },
+  { value: "suggestion", labelKey: "feedback.cat.suggestion", emoji: "💡", hintKey: "feedback.cat.suggestion.hint" },
+  { value: "question", labelKey: "feedback.cat.question", emoji: "❓", hintKey: "feedback.cat.question.hint" },
 ];
 
 export function FeedbackWidget() {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -55,7 +63,7 @@ export function FeedbackWidget() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Signaler un bug ou faire un retour"
+        aria-label={t("feedback.aria")}
         className="fixed z-40 right-5 bottom-5 inline-flex items-center gap-2 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] pl-3 pr-4 py-[10px] text-[13px] font-semibold shadow-[var(--shadow-lg)] hover:bg-[var(--bg-dark)] hover:scale-[1.03] transition-all"
       >
         <ChatCircleIcon size={16} />
@@ -67,6 +75,7 @@ export function FeedbackWidget() {
 }
 
 function FeedbackPanel({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const [category, setCategory] = useState<Category>("bug");
   const [message, setMessage] = useState("");
   const [screenshots, setScreenshots] = useState<string[]>([]);
@@ -88,7 +97,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
     const arr = Array.from(files);
     for (const file of arr) {
       if (!file.type.startsWith("image/")) {
-        setError("Seules les images sont acceptées en pièce jointe.");
+        setError(t("feedback.error.imagesOnly"));
         continue;
       }
       if (file.size > MAX_BYTES_PER_FILE) {
@@ -139,11 +148,11 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
   async function submit() {
     setError(null);
     if (message.trim().length < 5) {
-      setError("Le message doit faire au moins 5 caractères.");
+      setError(t("feedback.error.tooShort"));
       return;
     }
     if (message.length > MAX_MESSAGE_LEN) {
-      setError(`Le message est trop long (max ${MAX_MESSAGE_LEN} caractères).`);
+      setError(t("feedback.error.tooLong", { max: MAX_MESSAGE_LEN }));
       return;
     }
     setSubmitting(true);
@@ -163,7 +172,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Échec de l'envoi, réessaie dans un instant.");
+        setError(data.error ?? t("feedback.error.send"));
         setSubmitting(false);
         return;
       }
@@ -171,7 +180,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
       setSubmitting(false);
       setTimeout(() => onClose(), 1800);
     } catch {
-      setError("Erreur réseau, vérifie ta connexion.");
+      setError(t("feedback.error.network"));
       setSubmitting(false);
     }
   }
@@ -192,16 +201,16 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
-              Feedback
+              {t("feedback.title")}
             </div>
             <div className="df-title text-[18px] tracking-[-0.4px] font-semibold">
-              On t&apos;écoute<span className="df-accent">.</span>
+              {t("feedback.headline")}<span className="df-accent">.</span>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Fermer"
+            aria-label={t("common.close")}
             className="w-8 h-8 flex items-center justify-center rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-warm)]"
           >
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
@@ -216,10 +225,10 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
               ✓
             </div>
             <div className="df-title text-[20px] font-semibold mt-2">
-              Merci pour votre retour !
+              {t("feedback.thanks")}
             </div>
             <p className="text-[13px] text-[var(--text-secondary)] leading-[1.5] max-w-[300px]">
-              Pierre a reçu un mail avec vos infos. On revient vers vous si on a besoin de précisions.
+              {t("feedback.thanks.body")}
             </p>
           </div>
         ) : (
@@ -227,7 +236,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
             {/* Catégorie */}
             <div className="mb-4">
               <label className="block text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-                Type
+                {t("feedback.type")}
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {CATEGORIES.map((c) => (
@@ -242,19 +251,19 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
                     }`}
                   >
                     <span className="text-[18px]">{c.emoji}</span>
-                    <span className="text-[11px] font-semibold">{c.label}</span>
+                    <span className="text-[11px] font-semibold">{t(c.labelKey)}</span>
                   </button>
                 ))}
               </div>
               <div className="text-[11px] text-[var(--text-muted)] mt-[6px] italic">
-                {CATEGORIES.find((c) => c.value === category)?.hint}
+                {t(CATEGORIES.find((c) => c.value === category)!.hintKey)}
               </div>
             </div>
 
             {/* Message */}
             <div className="mb-4">
               <label className="block text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-                Votre message
+                {t("feedback.message")}
               </label>
               <textarea
                 ref={textareaRef}
@@ -263,24 +272,24 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
                 rows={5}
                 placeholder={
                   category === "bug"
-                    ? "Décrivez ce que vous avez essayé de faire et ce qui s'est passé à la place…"
+                    ? t("feedback.placeholder.bug")
                     : category === "suggestion"
-                      ? "Quelle idée souhaitez-vous nous partager ?"
-                      : "Pose ta question ici…"
+                      ? t("feedback.placeholder.suggestion")
+                      : t("feedback.placeholder.question")
                 }
                 className="w-full px-3 py-[9px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] outline-none focus:border-[var(--bg-black)] transition-colors text-[13px] resize-none leading-[1.5]"
               />
               <div className={`text-[10px] mt-1 text-right font-mono ${tooLong ? "text-[var(--red)]" : "text-[var(--text-muted)]"}`}>
-                {remaining} car. restants
+                {t("feedback.remaining", { count: remaining })}
               </div>
             </div>
 
             {/* Screenshots */}
             <div className="mb-4">
               <label className="block text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-                Captures d&apos;écran
+                {t("feedback.screenshots")}
                 <span className="ml-[5px] font-normal normal-case text-[var(--text-muted)]">
-                  (facultatif, {screenshots.length}/{MAX_SCREENSHOTS})
+                  {t("feedback.screenshots.count", { count: screenshots.length, max: MAX_SCREENSHOTS })}
                 </span>
               </label>
               {screenshots.length > 0 && (
@@ -292,7 +301,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
                       <button
                         type="button"
                         onClick={() => setScreenshots((curr) => curr.filter((_, idx) => idx !== i))}
-                        aria-label="Retirer cette capture"
+                        aria-label={t("feedback.screenshot.remove")}
                         className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[var(--bg-black)] text-[var(--text-inverse)] flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         ×
@@ -318,10 +327,10 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
                   }`}
                 >
                   <div className="text-[12px] font-semibold mb-[2px]">
-                    Glisse, clique, ou colle (⌘V)
+                    {t("feedback.dropzone")}
                   </div>
                   <div className="text-[10px] text-[var(--text-muted)]">
-                    PNG, JPG, WebP · max {(MAX_BYTES_PER_FILE / 1024 / 1024).toFixed(1)} Mo
+                    {t("feedback.formats", { limit: (MAX_BYTES_PER_FILE / 1024 / 1024).toFixed(1) })}
                   </div>
                   <input
                     ref={fileInputRef}
@@ -338,11 +347,11 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
             {/* Contexte (URL + envoyé en tant que) */}
             <div className="mb-4 rounded-[var(--radius-xs)] bg-[var(--bg-warm)] border border-[var(--border)] px-3 py-2 text-[11px] text-[var(--text-secondary)]">
               <div className="flex items-start gap-2 mb-[3px]">
-                <span className="text-[var(--text-muted)] shrink-0">Page :</span>
+                <span className="text-[var(--text-muted)] shrink-0">{t("feedback.page")}</span>
                 <span className="font-mono break-all">{shortPath(currentUrl)}</span>
               </div>
               <div className="text-[10px] text-[var(--text-muted)]">
-                Votre nom, votre email et l&apos;URL ci-dessus seront envoyés avec votre message.
+                {t("feedback.context")}
               </div>
             </div>
 
@@ -362,7 +371,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
               disabled={submitting}
               className="px-4 py-[9px] rounded-[var(--radius-sm)] text-[13px] font-semibold border border-[var(--border)] hover:bg-[var(--bg-warm)] disabled:opacity-50 transition-colors"
             >
-              Annuler
+              {t("common.cancel")}
             </button>
             <button
               type="button"
@@ -370,7 +379,7 @@ function FeedbackPanel({ onClose }: { onClose: () => void }) {
               disabled={submitting || tooLong || message.trim().length < 5}
               className="px-5 py-[9px] rounded-[var(--radius-sm)] text-[13px] font-semibold bg-[var(--bg-black)] text-[var(--text-inverse)] hover:bg-[var(--bg-dark)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              {submitting ? "Envoi…" : "Envoyer →"}
+              {submitting ? t("feedback.sending") : t("feedback.send")}
             </button>
           </div>
         )}

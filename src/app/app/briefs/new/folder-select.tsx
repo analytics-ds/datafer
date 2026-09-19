@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { faviconUrl } from "@/lib/favicon";
 import { CaretDownIcon } from "@/components/icons";
+import { useT } from "@/lib/i18n/context";
 
 export type FolderOption = {
   id: string;
@@ -15,18 +16,19 @@ export function FolderSelect({
   value,
   onChange,
   name,
-  emptyLabel = "Aucun client",
-  emptyPlaceholder = "Aucun client (commence à taper pour rechercher)",
+  emptyLabel,
+  emptyPlaceholder,
 }: {
   folders: FolderOption[];
   value: string;
   onChange: (v: string) => void;
   name: string;
-  /** Texte affiché pour la valeur vide (par défaut "Aucun client"). */
+  /** Texte affiché pour la valeur vide (par défaut t("newBrief.folder.empty")). */
   emptyLabel?: string;
   /** Placeholder de l'input quand aucune valeur n'est sélectionnée. */
   emptyPlaceholder?: string;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
@@ -56,7 +58,7 @@ export function FolderSelect({
     );
   }, [folders, query]);
 
-  const totalOptions = 1 + filtered.length; // 1 = "Aucun client"
+  const totalOptions = 1 + filtered.length; // 1 = l'option « aucun client »
 
   function commitIndex(i: number) {
     if (i === 0) {
@@ -115,7 +117,7 @@ export function FolderSelect({
           }}
           onFocus={onFocus}
           onKeyDown={onKeyDown}
-          placeholder={emptyPlaceholder}
+          placeholder={emptyPlaceholder ?? t("folderSelect.placeholder")}
           className="w-full pl-[40px] pr-9 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] outline-none text-[14px] bg-[var(--bg-card)] hover:border-[var(--border-strong)] focus:border-[var(--bg-black)] transition-colors placeholder:text-[var(--text-muted)]"
         />
         <button
@@ -126,7 +128,7 @@ export function FolderSelect({
             inputRef.current?.focus();
           }}
           className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)]"
-          aria-label="Ouvrir la liste"
+          aria-label={t("folderSelect.open")}
         >
           <CaretDownIcon size={10} />
         </button>
@@ -135,7 +137,7 @@ export function FolderSelect({
       {open && (
         <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] shadow-[var(--shadow-lg)] max-h-[260px] overflow-y-auto py-1">
           <Option
-            label={emptyLabel}
+            label={emptyLabel ?? t("newBrief.folder.empty")}
             selected={!value}
             active={activeIdx === 0}
             muted
@@ -144,7 +146,7 @@ export function FolderSelect({
           />
           {filtered.length === 0 && query && (
             <div className="px-3 py-[8px] text-[12px] text-[var(--text-muted)] italic">
-              Aucun client ne correspond à « {query} ».
+              {t("foldersPage.noMatch", { query })}
             </div>
           )}
           {filtered.map((f, i) => (

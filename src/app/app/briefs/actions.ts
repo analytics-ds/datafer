@@ -7,6 +7,7 @@ import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
 import { generateShareToken } from "@/lib/share-links";
+import { getTranslator } from "@/lib/i18n/server";
 import {
   attachTagToBrief,
   createTag,
@@ -34,9 +35,9 @@ export async function enableBriefShareAction(briefId: string): Promise<
   { ok: true; token: string } | { ok: false; error: string }
 > {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
   if (!(await assertAccess(briefId)))
-    return { ok: false, error: "Brief introuvable" };
+    return { ok: false, error: (await getTranslator())("error.briefNotFound") };
 
   const token = generateShareToken();
   const db = getDb();
@@ -49,9 +50,9 @@ export async function revokeBriefShareAction(briefId: string): Promise<
   { ok: true } | { ok: false; error: string }
 > {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
   if (!(await assertAccess(briefId)))
-    return { ok: false, error: "Brief introuvable" };
+    return { ok: false, error: (await getTranslator())("error.briefNotFound") };
 
   const db = getDb();
   await db.update(brief).set({ shareToken: null, updatedAt: new Date() }).where(eq(brief.id, briefId));
@@ -63,9 +64,9 @@ export async function deleteBriefAction(briefId: string): Promise<
   { ok: true } | { ok: false; error: string }
 > {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
   if (!(await assertAccess(briefId)))
-    return { ok: false, error: "Brief introuvable" };
+    return { ok: false, error: (await getTranslator())("error.briefNotFound") };
 
   const db = getDb();
   await db.delete(brief).where(eq(brief.id, briefId));
@@ -81,11 +82,11 @@ export async function updateWorkflowStatusAction(
   status: WorkflowStatus,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
   if (!WORKFLOW_STATUSES.includes(status))
     return { ok: false, error: "Statut invalide" };
   if (!(await assertAccess(briefId)))
-    return { ok: false, error: "Brief introuvable" };
+    return { ok: false, error: (await getTranslator())("error.briefNotFound") };
 
   const db = getDb();
   await db
@@ -123,13 +124,13 @@ export async function createTagAction(
   color: string,
 ): Promise<{ ok: true; tag: { id: string; name: string; color: string } } | { ok: false; error: string }> {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
   if (!(TAG_COLORS as readonly string[]).includes(color))
     return { ok: false, error: "Couleur invalide" };
 
   const clientId = await getBriefClientId(briefId);
   if (!clientId)
-    return { ok: false, error: "Rattache le brief à un client pour créer des tags." };
+    return { ok: false, error: (await getTranslator())("error.tagNeedsFolder") };
 
   const res = await createTag(clientId, name, color, "agency");
   if (!res.ok) return res;
@@ -142,7 +143,7 @@ export async function deleteTagAction(
   tagId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
   await deleteTagGlobally(tagId);
   revalidatePath("/app/briefs");
   revalidatePath("/app/folders");
@@ -154,9 +155,9 @@ export async function attachTagAction(
   tagId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
   if (!(await assertAccess(briefId)))
-    return { ok: false, error: "Brief introuvable" };
+    return { ok: false, error: (await getTranslator())("error.briefNotFound") };
   const res = await attachTagToBrief(briefId, tagId);
   if (!res.ok) return res;
   revalidatePath("/app/briefs");
@@ -169,9 +170,9 @@ export async function detachTagAction(
   tagId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
   if (!(await assertAccess(briefId)))
-    return { ok: false, error: "Brief introuvable" };
+    return { ok: false, error: (await getTranslator())("error.briefNotFound") };
   await detachTagFromBrief(briefId, tagId);
   revalidatePath("/app/briefs");
   revalidatePath(`/app/briefs/${briefId}`);

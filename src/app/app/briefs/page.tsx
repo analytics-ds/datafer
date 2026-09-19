@@ -9,6 +9,7 @@ import { PageHeader, EmptyState } from "../_ui";
 import { SearchableBriefList } from "./searchable-brief-list";
 import { listAllTags, listTagsForBriefs } from "@/lib/tags-service";
 import type { WorkflowStatus } from "./workflow-status";
+import { getTranslator } from "@/lib/i18n/server";
 
 // Toujours dynamique : le score en BDD bouge à chaque édition,
 // la liste doit refléter la dernière valeur sans cache.
@@ -21,6 +22,7 @@ export default async function BriefsPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const t = await getTranslator();
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
@@ -73,23 +75,23 @@ export default async function BriefsPage({
   return (
     <div className="px-10 py-10 max-w-[1100px]">
       <PageHeader
-        title={<>Tous les briefs<span className="df-accent">.</span></>}
-        subtitle="Historique complet des analyses sémantiques."
+        title={<>{t("briefsPage.title")}<span className="df-accent">.</span></>}
+        subtitle={t("briefsPage.subtitle")}
         action={
           <Link
             href="/app/briefs/new"
             className="inline-flex items-center gap-2 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] px-4 py-[9px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] transition-colors"
           >
-            + Nouveau brief
+            {t("briefsPage.new")}
           </Link>
         }
       />
 
       {total === 0 ? (
         <EmptyState
-          title="Aucun brief"
-          description="Créez un premier brief pour démarrer une analyse sémantique."
-          ctaLabel="Nouveau brief"
+          title={t("briefsPage.empty.title")}
+          description={t("briefsPage.empty.description")}
+          ctaLabel={t("briefsPage.empty.cta")}
           ctaHref="/app/briefs/new"
         />
       ) : (

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { getAuth } from "@/lib/auth";
 import { createTag, deleteTagGlobally, TAG_COLORS } from "@/lib/tags-service";
+import { getTranslator } from "@/lib/i18n/server";
 
 /**
  * Création d'un tag depuis la fiche dossier (le clientId est explicite,
@@ -17,7 +18,7 @@ export async function createFolderTagAction(
   { ok: true; tag: { id: string; name: string; color: string } } | { ok: false; error: string }
 > {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
   if (!(TAG_COLORS as readonly string[]).includes(color))
     return { ok: false, error: "Couleur invalide" };
 
@@ -32,7 +33,7 @@ export async function deleteTagAction(
   tagId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
   await deleteTagGlobally(tagId);
   revalidatePath("/app/folders");
   revalidatePath("/app/briefs");

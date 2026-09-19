@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { relativeDate } from "@/lib/relative-date";
+import { formatNumber, relativeDate } from "@/lib/relative-date";
 import {
   EMPTY_FILTERS,
   FilterBar,
@@ -13,6 +13,7 @@ import { StatusPicker } from "@/app/app/briefs/status-picker";
 import { TagPicker, type TagDTO } from "@/app/app/briefs/tag-picker";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
 import { scoreColor } from "@/lib/score-color";
+import { useI18n, useT } from "@/lib/i18n/context";
 
 export type SharedBriefRow = {
   id: string;
@@ -37,6 +38,7 @@ export function SharedBriefList({
   briefs: SharedBriefRow[];
   availableTags: TagDTO[];
 }) {
+  const t = useT();
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
 
   const filtered = useMemo(() => {
@@ -74,12 +76,12 @@ export function SharedBriefList({
         state={filters}
         onChange={setFilters}
         availableTags={availableTags}
-        searchPlaceholder="Rechercher un mot-clé, un tag, un statut…"
+        searchPlaceholder={t("share.list.searchPlaceholder")}
       />
       {filtered.length === 0 ? (
         <div className="bg-[var(--bg-card)] border border-dashed border-[var(--border-strong)] rounded-[var(--radius)] px-7 py-12 text-center">
           <p className="text-[13px] text-[var(--text-muted)]">
-            Aucun brief ne correspond aux filtres.
+            {t("share.list.noMatch")}
           </p>
         </div>
       ) : (
@@ -107,6 +109,7 @@ function SharedBriefCard({
   brief: SharedBriefRow;
   availableTags: TagDTO[];
 }) {
+  const { locale, t } = useI18n();
   const router = useRouter();
   const [status, setStatus] = useState<WorkflowStatus>(brief.workflowStatus);
   const [tags, setTags] = useState<TagDTO[]>(brief.tags);
@@ -184,15 +187,15 @@ function SharedBriefCard({
               {brief.country}
             </span>
             <Pill
-              label="Vol"
-              value={brief.volume != null ? brief.volume.toLocaleString("fr-FR") : "N/A"}
-              tooltip="Volume de recherche mensuel"
+              label={t("brief.pill.volume")}
+              value={brief.volume != null ? formatNumber(brief.volume, locale) : t("brief.pill.na")}
+              tooltip={t("brief.pill.volume.tooltip")}
               tone={brief.volume != null ? "info" : "muted"}
             />
             <Pill
               label="KD"
-              value={brief.difficulty != null ? `${brief.difficulty}/100` : "N/A"}
-              tooltip="Keyword Difficulty (Haloscan)"
+              value={brief.difficulty != null ? `${brief.difficulty}/100` : t("brief.pill.na")}
+              tooltip={t("brief.pill.difficulty.tooltip")}
               tone={
                 brief.difficulty == null
                   ? "muted"
@@ -206,13 +209,13 @@ function SharedBriefCard({
             <Pill
               label="KGR"
               value={brief.kgr != null ? brief.kgr.toFixed(2) : "—"}
-              tooltip="Keyword Golden Ratio."
+              tooltip={t("brief.pill.kgr.tooltip")}
               tone={brief.kgr != null && brief.kgr < 0.25 ? "good" : "muted"}
             />
             <Pill
-              label="Pos"
-              value={brief.position != null ? `#${brief.position}` : "N/A"}
-              tooltip="Position du site dans Google (top 100)"
+              label={t("brief.pill.position")}
+              value={brief.position != null ? `#${brief.position}` : t("brief.pill.na")}
+              tooltip={t("brief.pill.position.tooltip")}
               tone={positionTone(brief.position)}
             />
           </div>
@@ -220,7 +223,7 @@ function SharedBriefCard({
       </Link>
       <div className="flex flex-col items-end gap-[6px] shrink-0">
         <span className="text-[12px] text-[var(--text-muted)] font-mono">
-          {relativeDate(brief.createdAt)}
+          {relativeDate(brief.createdAt, locale)}
         </span>
         <div className="flex items-center gap-[5px] flex-wrap justify-end">
           <StatusPicker status={status} onChange={onStatusChange} size="sm" />

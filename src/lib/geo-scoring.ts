@@ -63,7 +63,10 @@ export function extractGeoSignals(editorRoot: HTMLElement): GeoSignals {
   //    a) un paragraphe en italique parmi les 3 premiers blocs
   //    b) ou un H2/H3 qui contient "résumé" / "tldr" / "tl;dr" / "en bref"
   //       / "synthèse" / "à retenir"
-  const summaryKeywords = ["résumé", "resume", "tldr", "tl;dr", "tl ; dr", "en bref", "synthèse", "synthese", "à retenir", "a retenir"];
+  const summaryKeywords = ["résumé", "resume", "tldr", "tl;dr", "tl ; dr", "en bref", "synthèse", "synthese", "à retenir", "a retenir",
+    // Équivalents anglais, pour les briefs us/uk : sans eux, un contenu
+    // anglophone parfaitement structuré perdait le point Quick summary.
+    "key takeaways", "takeaways", "summary", "in short", "at a glance", "in a nutshell"];
   let hasQuickSummary = false;
   // a) paragraphe en italique en début
   const earlyBlocks = Array.from(editorRoot.children).slice(0, 3);
@@ -210,7 +213,10 @@ export function geoSignalsFromHtml(html: string): GeoSignals {
     return stripHtmlTags(b).trim().length > 30;
   });
   if (!hasQuickSummary) {
-    const summaryKw = ["résumé", "resume", "tldr", "tl;dr", "tl ; dr", "en bref", "synthèse", "synthese", "à retenir", "a retenir"];
+    const summaryKw = ["résumé", "resume", "tldr", "tl;dr", "tl ; dr", "en bref", "synthèse", "synthese", "à retenir", "a retenir",
+    // Équivalents anglais, pour les briefs us/uk : sans eux, un contenu
+    // anglophone parfaitement structuré perdait le point Quick summary.
+    "key takeaways", "takeaways", "summary", "in short", "at a glance", "in a nutshell"];
     const headings = html.match(/<h[23][^>]*>([\s\S]*?)<\/h[23]>/gi) ?? [];
     hasQuickSummary = headings.some((h) => {
       const t = stripHtmlTags(h).toLowerCase();
@@ -245,10 +251,11 @@ function stripHtmlTags(html: string): string {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 }
 
-export const GEO_LABELS = {
-  table: "Tableau structuré",
-  bulletList: "Liste à puces (≥3 items)",
-  quickSummary: "Quick summary / TL;DR",
-  faq: "Section FAQ (≥2 questions)",
-  statistics: "Données chiffrées (≥3)",
+/** Clés i18n des 5 signaux GEO : le libellé se résout à l'affichage. */
+export const GEO_LABEL_KEYS = {
+  table: "geo.table",
+  bulletList: "geo.bulletList",
+  quickSummary: "geo.quickSummary",
+  faq: "geo.faq",
+  statistics: "geo.statistics",
 } as const;

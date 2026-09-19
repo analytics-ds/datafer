@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateProfileAction } from "./actions";
+import { useT } from "@/lib/i18n/context";
 
 export function ProfileForm({
   initial,
 }: {
   initial: { firstName: string; lastName: string; email: string };
 }) {
+  const t = useT();
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export function ProfileForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
         <div>
           <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-            Prénom
+            {t("profile.firstName")}
           </label>
           <input
             type="text"
@@ -49,7 +51,7 @@ export function ProfileForm({
         </div>
         <div>
           <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-            Nom
+            {t("profile.lastName")}
           </label>
           <input
             type="text"
@@ -62,7 +64,7 @@ export function ProfileForm({
       </div>
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Email
+        {t("login.email")}
       </label>
       <input
         type="email"
@@ -84,11 +86,11 @@ export function ProfileForm({
           disabled={status === "saving"}
           className="inline-flex items-center justify-center gap-2 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] px-5 py-[10px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] disabled:opacity-50 transition-colors"
         >
-          {status === "saving" ? "Enregistrement…" : "Enregistrer"}
+          {status === "saving" ? t("common.saving") : t("common.save")}
         </button>
         {status === "saved" && (
           <span className="text-[12px] text-[var(--text)] font-semibold">
-            ✓ Modifications enregistrées
+            {t("profile.saved")}
           </span>
         )}
       </div>

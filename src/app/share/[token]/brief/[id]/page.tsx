@@ -10,6 +10,9 @@ import { BriefEditor } from "@/app/app/briefs/[id]/brief-editor";
 import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
 import { LogoApp } from "@/components/brand";
+import { LocaleProvider } from "@/lib/i18n/context";
+import { resolveLocale } from "@/lib/i18n/server";
+import { LocaleSwitcher } from "@/components/locale-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -48,68 +51,73 @@ export default async function SharedBriefPage({
     folder ? listTagsForClient(folder.id) : Promise.resolve([]),
   ]);
 
-  return (
-    <div className="min-h-screen bg-[var(--bg)] flex flex-col">
-      <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 h-14 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-4">
-          <LogoApp height={20} className="text-[var(--text)]" />
-          {folder && (
-            <>
-              <div className="w-px h-6 bg-[var(--border)]" />
-              <Link
-                href={`/share/${token}`}
-                className="flex items-center gap-2 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text)]"
-              >
-                {folder.website && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={faviconUrl(folder.website, 32) ?? ""}
-                    alt=""
-                    width={16}
-                    height={16}
-                    className="rounded-[3px]"
-                  />
-                )}
-                ← {folder.name}
-              </Link>
-            </>
-          )}
-        </div>
-      </header>
+  const locale = await resolveLocale(folder?.locale);
 
-      <div className="flex-1 flex flex-col">
-        <BriefEditor
-          id={b.id}
-          keyword={b.keyword}
-          country={b.country}
-          folder={
-            folder
-              ? {
-                  id: folder.id,
-                  name: folder.name,
-                  website: folder.website,
-                  scope: folder.scope,
-                }
-              : null
-          }
-          initialHtml={b.editorHtml ?? ""}
-          nlp={nlp}
-          serp={serp}
-          paa={paa}
-          haloscan={haloscan}
-          position={overridden.position}
-          positionUrl={b.positionUrl ?? null}
-          workflowStatus={b.workflowStatus as WorkflowStatus}
-          initialTags={initialTags}
-          availableTags={availableTags}
-          saveEndpoint={`/api/share/${token}/briefs/${b.id}`}
-          tagsEndpoint={`/api/share/${token}/briefs/${b.id}/tags`}
-          tagsCreateEndpoint={`/api/share/${token}/tags`}
-          exportEndpoint={`/api/share/${token}/briefs/${b.id}/export`}
-          printUrl={`/api/share/${token}/briefs/${b.id}/print`}
-          hideNewAnalysis
-        />
+  return (
+    <LocaleProvider locale={locale}>
+      <div className="min-h-screen bg-[var(--bg)] flex flex-col">
+        <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 h-14 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-4">
+            <LogoApp height={20} className="text-[var(--text)]" />
+            {folder && (
+              <>
+                <div className="w-px h-6 bg-[var(--border)]" />
+                <Link
+                  href={`/share/${token}`}
+                  className="flex items-center gap-2 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text)]"
+                >
+                  {folder.website && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={faviconUrl(folder.website, 32) ?? ""}
+                      alt=""
+                      width={16}
+                      height={16}
+                      className="rounded-[3px]"
+                    />
+                  )}
+                  ← {folder.name}
+                </Link>
+              </>
+            )}
+          </div>
+          <LocaleSwitcher />
+        </header>
+
+        <div className="flex-1 flex flex-col">
+          <BriefEditor
+            id={b.id}
+            keyword={b.keyword}
+            country={b.country}
+            folder={
+              folder
+                ? {
+                    id: folder.id,
+                    name: folder.name,
+                    website: folder.website,
+                    scope: folder.scope,
+                  }
+                : null
+            }
+            initialHtml={b.editorHtml ?? ""}
+            nlp={nlp}
+            serp={serp}
+            paa={paa}
+            haloscan={haloscan}
+            position={overridden.position}
+            positionUrl={b.positionUrl ?? null}
+            workflowStatus={b.workflowStatus as WorkflowStatus}
+            initialTags={initialTags}
+            availableTags={availableTags}
+            saveEndpoint={`/api/share/${token}/briefs/${b.id}`}
+            tagsEndpoint={`/api/share/${token}/briefs/${b.id}/tags`}
+            tagsCreateEndpoint={`/api/share/${token}/tags`}
+            exportEndpoint={`/api/share/${token}/briefs/${b.id}/export`}
+            printUrl={`/api/share/${token}/briefs/${b.id}/print`}
+            hideNewAnalysis
+          />
+        </div>
       </div>
-    </div>
+    </LocaleProvider>
   );
 }

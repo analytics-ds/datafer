@@ -1,11 +1,16 @@
+import type { TranslationKey } from "@/lib/i18n";
+
 export type WorkflowStatus = "pending" | "in_progress" | "drafted" | "published";
 
-export const WORKFLOW_STATUS_LABELS: Record<WorkflowStatus, string> = {
-  pending: "En attente",
-  in_progress: "En cours",
-  drafted: "Rédigé",
-  published: "Publié",
-};
+/** Clés i18n des statuts : le libellé se résout à l'affichage, jamais ici,
+ *  pour qu'un même brief se lise en français chez nous et en anglais chez le
+ *  client qui ouvre le lien de partage. */
+export const WORKFLOW_STATUS_KEYS = {
+  pending: "workflow.pending",
+  in_progress: "workflow.in_progress",
+  drafted: "workflow.drafted",
+  published: "workflow.published",
+} as const satisfies Record<WorkflowStatus, TranslationKey>;
 
 // Logique progressive : gris (pas commencé) → bleu (en action) → jaune
 // (presque fini, à valider) → kaki (terminé).

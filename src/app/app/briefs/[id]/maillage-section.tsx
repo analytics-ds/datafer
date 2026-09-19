@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useT } from "@/lib/i18n/context";
 
 type Suggestion = {
   url: string;
@@ -37,6 +38,7 @@ type Props = {
 // ne jamais cibler un heading (h1/h2/h3). Côté UI on n'insère que dans le
 // <p> correspondant à paragraphIndex.
 export function MaillageSection({ endpoint, getEditorHtml, onInsertLink, readOnly }: Props) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -56,7 +58,7 @@ export function MaillageSection({ endpoint, getEditorHtml, onInsertLink, readOnl
       });
       const data = (await res.json()) as FetchResponse;
       if (!res.ok) {
-        setError(data.error || "Erreur lors du fetch");
+        setError(data.error || t("maillage.error.fetch"));
         setSuggestions([]);
       } else {
         setSuggestions(data.suggestions ?? []);
@@ -100,7 +102,7 @@ export function MaillageSection({ endpoint, getEditorHtml, onInsertLink, readOnl
       >
         <span className="flex items-center gap-2 text-[13px] font-semibold text-[var(--text)]">
           <Chevron open={open} />
-          Maillage interne
+          {t("maillage.title")}
           {open && suggestions.length > 0 && (
             <span className="rounded-full bg-[var(--bg-warm)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)]">
               {suggestions.length}
@@ -116,7 +118,7 @@ export function MaillageSection({ endpoint, getEditorHtml, onInsertLink, readOnl
             }}
             role="button"
           >
-            {loading ? "Analyse…" : "Recalculer"}
+            {loading ? t("maillage.loading") : t("maillage.recompute")}
           </span>
         )}
       </button>
@@ -124,7 +126,7 @@ export function MaillageSection({ endpoint, getEditorHtml, onInsertLink, readOnl
       {open && (
         <div className="px-6 pb-5">
           {loading && suggestions.length === 0 && (
-            <p className="py-2 text-[12px] text-[var(--text-muted)]">Analyse des paragraphes en cours…</p>
+            <p className="py-2 text-[12px] text-[var(--text-muted)]">{t("maillage.analysing")}</p>
           )}
           {!loading && error && (
             <p className="py-2 text-[12px] text-red-600">{error}</p>
@@ -151,7 +153,7 @@ export function MaillageSection({ endpoint, getEditorHtml, onInsertLink, readOnl
                           {s.url}
                         </div>
                         <div className="mt-2 text-[12px] text-[var(--text-secondary)]">
-                          Ancre proposée :{" "}
+                          {t("maillage.anchor")}{" "}
                           <span className="rounded bg-[var(--bg-warm)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text)]">
                             {s.anchor}
                           </span>
@@ -171,7 +173,7 @@ export function MaillageSection({ endpoint, getEditorHtml, onInsertLink, readOnl
                               : "shrink-0 rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--text)] hover:bg-[var(--bg-warm)]"
                           }
                         >
-                          {inserted ? "Inséré" : "Insérer"}
+                          {inserted ? t("maillage.inserted") : t("maillage.insert")}
                         </button>
                       )}
                     </div>
@@ -201,37 +203,38 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 function EmptyState({ reason }: { reason: string }) {
+  const t = useT();
   if (reason === "no_client") {
     return (
       <p className="py-2 text-[12px] text-[var(--text-muted)]">
-        Ce brief n&apos;est rattaché à aucun client. Rattachez-le pour activer les suggestions.
+        {t("maillage.empty.noClient")}
       </p>
     );
   }
   if (reason === "no_index") {
     return (
       <p className="py-2 text-[12px] text-[var(--text-muted)]">
-        Aucune URL indexée pour ce client. Configurez le sitemap dans les paramètres du client.
+        {t("maillage.empty.noIndex")}
       </p>
     );
   }
   if (reason === "no_paragraphs") {
     return (
       <p className="py-2 text-[12px] text-[var(--text-muted)]">
-        Aucun paragraphe rédigé pour le moment. Rédigez quelques paragraphes (30+ mots) pour obtenir des suggestions.
+        {t("maillage.empty.noParagraphs")}
       </p>
     );
   }
   if (reason === "no_ai") {
     return (
       <p className="py-2 text-[12px] text-[var(--text-muted)]">
-        Service IA indisponible.
+        {t("maillage.empty.noAi")}
       </p>
     );
   }
   return (
     <p className="py-2 text-[12px] text-[var(--text-muted)]">
-      Aucune suggestion pertinente pour le moment. Continuez à rédiger puis recalculez.
+      {t("maillage.empty.noSuggestion")}
     </p>
   );
 }

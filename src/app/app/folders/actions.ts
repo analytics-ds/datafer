@@ -9,15 +9,21 @@ import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { client, folderFavorite } from "@/db/schema";
 import { generateShareToken } from "@/lib/share-links";
+import { getTranslator } from "@/lib/i18n/server";
+import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/types";
 
 export async function createFolderAction(formData: FormData) {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) throw new Error("Non authentifié");
+  if (!session) throw new Error((await getTranslator())("error.unauthenticated"));
 
   const name = String(formData.get("name") ?? "").trim();
   const website = String(formData.get("website") ?? "").trim() || null;
+  const rawLocale = String(formData.get("locale") ?? "");
+  // Langue du dossier : elle pilote l'affichage des briefs et du lien de
+  // partage envoyé au client, cf. src/lib/i18n/server.ts.
+  const locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
 
-  if (!name) throw new Error("Nom requis");
+  if (!name) throw new Error((await getTranslator())("error.folderNameRequired"));
 
   const id = randomUUID();
   const db = getDb();
@@ -28,6 +34,7 @@ export async function createFolderAction(formData: FormData) {
     scope: "agency",
     name,
     website,
+    locale,
   });
 
   redirect(`/app/folders/${id}`);
@@ -37,7 +44,7 @@ export async function toggleFavoriteAction(folderId: string): Promise<
   { ok: true; favorited: boolean } | { ok: false; error: string }
 > {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
 
   const db = getDb();
   const [existing] = await db
@@ -66,7 +73,7 @@ export async function enableShareAction(folderId: string): Promise<
   { ok: true; token: string } | { ok: false; error: string }
 > {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
 
   const token = generateShareToken();
   const db = getDb();
@@ -83,7 +90,7 @@ export async function revokeShareAction(folderId: string): Promise<
   { ok: true } | { ok: false; error: string }
 > {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
 
   const db = getDb();
   await db
@@ -100,7 +107,7 @@ export async function deleteFolderAction(
   confirmation: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getAuth().api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "Non authentifié" };
+  if (!session) return { ok: false, error: (await getTranslator())("error.unauthenticated") };
 
   const db = getDb();
   const [folder] = await db
@@ -109,7 +116,7 @@ export async function deleteFolderAction(
     .where(eq(client.id, folderId))
     .limit(1);
 
-  if (!folder) return { ok: false, error: "Client introuvable" };
+  if (!folder) return { ok: false, error: (await getTranslator())("error.folderNotFound") };
 
   // Confirmation : le consultant doit retaper le site (ou à défaut le nom du
   // dossier s'il n'a pas de site).

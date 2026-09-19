@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { changePasswordAction } from "./actions";
+import { useT } from "@/lib/i18n/context";
 
 export function PasswordForm() {
+  const t = useT();
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +32,7 @@ export function PasswordForm() {
       className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-8 shadow-[var(--shadow-sm)]"
     >
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Mot de passe actuel
+        {t("password.current")}
       </label>
       <input
         type="password"
@@ -41,7 +43,7 @@ export function PasswordForm() {
       />
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Nouveau mot de passe
+        {t("password.new")}
       </label>
       <input
         type="password"
@@ -53,7 +55,7 @@ export function PasswordForm() {
       />
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Confirmer le nouveau mot de passe
+        {t("password.confirmNew")}
       </label>
       <input
         type="password"
@@ -75,11 +77,11 @@ export function PasswordForm() {
           disabled={status === "saving"}
           className="inline-flex items-center justify-center gap-2 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] px-5 py-[10px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] disabled:opacity-50 transition-colors"
         >
-          {status === "saving" ? "Mise à jour…" : "Changer le mot de passe"}
+          {status === "saving" ? t("password.updating") : t("password.submit")}
         </button>
         {status === "saved" && (
           <span className="text-[12px] text-[var(--text)] font-semibold">
-            ✓ Mot de passe mis à jour
+            {t("password.saved")}
           </span>
         )}
       </div>

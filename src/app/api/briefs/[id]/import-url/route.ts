@@ -7,6 +7,7 @@ import { getDb } from "@/db";
 import { brief } from "@/db/schema";
 import { crawlPage, type CrawlDiag } from "@/lib/analysis";
 import type { CorpusEnv } from "@/lib/corpus-env";
+import { getTranslator } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -58,14 +59,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     // Browser 403 sur 100% des URLs, alors que la page cible était lisible en
     // navigateur. Le message générique envoyait chercher la cause du mauvais
     // côté, on nomme donc la vraie.
+    const t = await getTranslator();
     const providerStatus = [diag.level2Status, diag.level3Status].find(
       (s) => s === 401 || s === 402 || s === 403,
     );
     return NextResponse.json(
       {
         error: providerStatus
-          ? `Le service de déblocage anti-bot ne répond plus (Bright Data HTTP ${providerStatus}) : compte à vérifier. La page est protégée, pas vide.`
-          : "Impossible de récupérer un contenu exploitable sur cette URL (page vide, bloquée ou rendue côté client).",
+          ? t("import.error.unlocker", { status: providerStatus })
+          : t("import.error.noContent"),
         diag,
       },
       { status: 502 },

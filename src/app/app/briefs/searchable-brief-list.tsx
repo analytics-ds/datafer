@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { BriefCard, type BriefCardData, type FolderOption } from "./brief-card";
 import { FilterBar, EMPTY_FILTERS, type FilterState } from "./filter-bar";
 import type { TagDTO } from "./tag-picker";
+import { useT } from "@/lib/i18n/context";
 
 export type ScopedTag = TagDTO & { clientId: string };
 
@@ -11,7 +12,7 @@ export function SearchableBriefList({
   briefs,
   folders,
   availableTags,
-  searchPlaceholder = "Rechercher un mot-clé, un client, un auteur, un tag…",
+  searchPlaceholder,
 }: {
   briefs: BriefCardData[];
   folders: FolderOption[];
@@ -20,6 +21,7 @@ export function SearchableBriefList({
   availableTags: ScopedTag[];
   searchPlaceholder?: string;
 }) {
+  const t = useT();
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
 
   // Tags par client : on regroupe une fois pour éviter de filtrer sur chaque
@@ -81,7 +83,7 @@ export function SearchableBriefList({
         state={filters}
         onChange={setFilters}
         availableTags={flatTags}
-        searchPlaceholder={searchPlaceholder}
+        searchPlaceholder={searchPlaceholder ?? t("briefsPage.search")}
       />
       {filtered.length === 0 ? (
         <div className="text-center py-10 text-[13px] text-[var(--text-muted)]">

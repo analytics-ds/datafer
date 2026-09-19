@@ -13,10 +13,14 @@ import { BriefCard } from "./briefs/brief-card";
 import { FolderFavicon } from "./folders/page";
 import { listAllTags, listTagsForBriefs } from "@/lib/tags-service";
 import type { WorkflowStatus } from "./briefs/workflow-status";
+import { getTranslator } from "@/lib/i18n/server";
+import type { Translator } from "@/lib/i18n";
 
 export default async function AppHome() {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
+
+  const t = await getTranslator();
 
   const db = getDb();
   const startOfMonth = Math.floor(new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() / 1000);
@@ -97,8 +101,8 @@ export default async function AppHome() {
   return (
     <div className="px-10 py-10 max-w-[1100px]">
       <PageHeader
-        title={<>Bonjour <span className="df-accent">{session.user.name.split(" ")[0]}.</span></>}
-        subtitle="Reprends un brief en cours, démarre une nouvelle analyse ou ajoute un client."
+        title={<>{t("home.greeting")} <span className="df-accent">{session.user.name.split(" ")[0]}.</span></>}
+        subtitle={t("home.subtitle")}
       />
 
       {/* Action bar : 2 grandes cartes côte à côte */}
@@ -109,10 +113,10 @@ export default async function AppHome() {
         >
           <div>
             <div className="text-[11px] font-semibold tracking-[0.2px] uppercase text-[var(--text-inverse-muted)] mb-[2px]">
-              Nouvelle analyse
+              {t("home.newAnalysis.label")}
             </div>
             <div className="df-title text-[28px] leading-tight">
-              Démarrer un nouveau brief
+              {t("home.newAnalysis.cta")}
             </div>
           </div>
           <span className="text-[15px] group-hover:translate-x-1 transition-transform">→</span>
@@ -123,10 +127,10 @@ export default async function AppHome() {
         >
           <div>
             <div className="text-[11px] font-semibold tracking-[0.2px] uppercase text-[var(--text-muted)] mb-[2px]">
-              Dossier client
+              {t("home.newFolder.label")}
             </div>
             <div className="df-title text-[24px] leading-tight">
-              Nouveau client
+              {t("home.newFolder.cta")}
             </div>
           </div>
           <span className="text-[15px] text-[var(--text-muted)] group-hover:translate-x-1 transition-transform">+</span>
@@ -135,7 +139,7 @@ export default async function AppHome() {
 
       {/* Stats du mois : donut + leaderboard équipe */}
       <section className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-3 mb-12">
-        <ShareDonut share={myShare} myBriefs={myBriefsThisMonth} totalBriefs={totalBriefsThisMonth} />
+        <ShareDonut share={myShare} myBriefs={myBriefsThisMonth} totalBriefs={totalBriefsThisMonth} t={t} />
         <Leaderboard
           users={visibleLeaderboard.map((u) => ({
             id: u.userId,
@@ -145,24 +149,25 @@ export default async function AppHome() {
             count: Number(u.count),
             isMe: u.userId === session.user.id,
           }))}
+          t={t}
         />
       </section>
 
       {/* Clients */}
       <section className="mb-12">
         <div className="flex items-center justify-between mb-4">
-          <SectionTitle>Clients</SectionTitle>
+          <SectionTitle>{t("home.clients")}</SectionTitle>
           {foldersWithCount.length > 0 && (
             <Link href="/app/folders" className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] font-semibold">
-              Voir tous →
+              {t("home.seeAll")}
             </Link>
           )}
         </div>
         {foldersWithCount.length === 0 ? (
           <EmptyState
-            title="Aucun client pour l'instant"
-            description="Créez un premier dossier client pour organiser les briefs."
-            ctaLabel="Nouveau client"
+            title={t("home.clients.empty.title")}
+            description={t("home.clients.empty.description")}
+            ctaLabel={t("home.newFolder.cta")}
             ctaHref="/app/folders/new"
           />
         ) : (
@@ -179,7 +184,7 @@ export default async function AppHome() {
                     {f.name}
                     {f.scope === "agency" && (
                       <span className="text-[9px] uppercase tracking-[0.2px] px-[5px] py-[1px] rounded-[var(--radius-pill)] bg-[var(--bg-olive-light)] text-[var(--text)]">
-                        agence
+                        {t("home.scope.agency")}
                       </span>
                     )}
                   </div>
@@ -197,18 +202,18 @@ export default async function AppHome() {
       {/* Briefs récents */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <SectionTitle>Briefs récents</SectionTitle>
+          <SectionTitle>{t("home.recentBriefs")}</SectionTitle>
           {recentBriefs.length > 0 && (
             <Link href="/app/briefs" className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] font-semibold">
-              Voir tous →
+              {t("home.seeAll")}
             </Link>
           )}
         </div>
         {recentBriefs.length === 0 ? (
           <EmptyState
-            title="Aucun brief pour l'instant"
-            description="Le premier brief apparaîtra ici. Lancez une analyse pour commencer."
-            ctaLabel="Créer un brief"
+            title={t("home.briefs.empty.title")}
+            description={t("home.briefs.empty.description")}
+            ctaLabel={t("home.briefs.empty.cta")}
             ctaHref="/app/briefs/new"
           />
         ) : (
@@ -247,7 +252,17 @@ export default async function AppHome() {
   );
 }
 
-function ShareDonut({ share, myBriefs, totalBriefs }: { share: number; myBriefs: number; totalBriefs: number }) {
+function ShareDonut({
+  share,
+  myBriefs,
+  totalBriefs,
+  t,
+}: {
+  share: number;
+  myBriefs: number;
+  totalBriefs: number;
+  t: Translator;
+}) {
   const R = 56;
   const C = 2 * Math.PI * R;
   const offset = C * (1 - share);
@@ -255,10 +270,10 @@ function ShareDonut({ share, myBriefs, totalBriefs }: { share: number; myBriefs:
   return (
     <div className="bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius)] p-7 flex flex-col">
       <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-inverse-muted)] mb-1">
-        Votre part ce mois
+        {t("home.share.title")}
       </div>
       <div className="text-[12px] text-[var(--text-inverse-secondary)] mb-6 leading-[1.4]">
-        Briefs que vous avez créés vs reste de l&apos;équipe.
+        {t("home.share.subtitle")}
       </div>
       <div className="flex items-center gap-5">
         <div className="relative w-[140px] h-[140px] shrink-0">
@@ -282,8 +297,8 @@ function ShareDonut({ share, myBriefs, totalBriefs }: { share: number; myBriefs:
           </div>
         </div>
         <div className="flex-1 min-w-0 flex flex-col gap-3">
-          <Stat label="Vos briefs" value={String(myBriefs)} accent />
-          <Stat label="Équipe" value={String(totalBriefs)} />
+          <Stat label={t("home.share.mine")} value={String(myBriefs)} accent />
+          <Stat label={t("home.share.team")} value={String(totalBriefs)} />
         </div>
       </div>
     </div>
@@ -309,18 +324,20 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
 
 function Leaderboard({
   users,
+  t,
 }: {
   users: { id: string; name: string; firstName: string | null; image: string | null; count: number; isMe: boolean }[];
+  t: Translator;
 }) {
   const top = users.slice(0, 5);
   const max = Math.max(1, ...top.map((u) => u.count));
   return (
     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-6">
       <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-4">
-        Classement de l&apos;équipe ce mois
+        {t("home.leaderboard.title")}
       </div>
       {top.length === 0 || top.every((u) => u.count === 0) ? (
-        <div className="text-[12px] text-[var(--text-muted)] italic">Aucun brief créé ce mois pour l&apos;instant.</div>
+        <div className="text-[12px] text-[var(--text-muted)] italic">{t("home.leaderboard.empty")}</div>
       ) : (
         <div className="flex flex-col gap-[10px]">
           {top.map((u, i) => {
@@ -337,7 +354,7 @@ function Leaderboard({
                 <Avatar image={u.image} name={display} isMe={u.isMe} />
                 <div className="flex-1 min-w-0">
                   <div className={`text-[12px] truncate ${u.isMe ? "font-bold" : "font-medium"}`}>
-                    {display}{u.isMe ? " (vous)" : ""}
+                    {display}{u.isMe ? ` ${t("home.leaderboard.you")}` : ""}
                   </div>
                   <div className="h-[4px] bg-[var(--bg)] rounded-full mt-[3px] overflow-hidden">
                     <div

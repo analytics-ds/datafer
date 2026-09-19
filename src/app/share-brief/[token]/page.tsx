@@ -7,6 +7,9 @@ import { BriefEditor } from "@/app/app/briefs/[id]/brief-editor";
 import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
 import { LogoApp } from "@/components/brand";
+import { LocaleProvider } from "@/lib/i18n/context";
+import { resolveLocale } from "@/lib/i18n/server";
+import { LocaleSwitcher } from "@/components/locale-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -39,43 +42,48 @@ export default async function SharedSingleBriefPage({
     b.clientId ? listTagsForClient(b.clientId) : Promise.resolve([]),
   ]);
 
-  return (
-    <div className="min-h-screen bg-[var(--bg)] flex flex-col">
-      <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 h-14 flex items-center justify-between shrink-0">
-        <LogoApp height={20} className="text-[var(--text)]" />
-      </header>
+  const locale = await resolveLocale(folder?.locale);
 
-      <div className="flex-1 flex flex-col">
-        <BriefEditor
-          id={b.id}
-          keyword={b.keyword}
-          country={b.country}
-          folder={
-            folder
-              ? { id: folder.id, name: folder.name, website: folder.website, scope: folder.scope }
-              : null
-          }
-          initialHtml={b.editorHtml ?? ""}
-          nlp={nlp}
-          serp={serp}
-          paa={paa}
-          haloscan={haloscan}
-          position={b.position ?? null}
-          positionUrl={b.positionUrl ?? null}
-          workflowStatus={b.workflowStatus as WorkflowStatus}
-          initialTags={initialTags}
-          availableTags={availableTags}
-          saveEndpoint={`/api/share-brief/${token}`}
-          tagsEndpoint={`/api/share-brief/${token}/tags`}
-          tagsCreateEndpoint={`/api/share-brief/${token}/tags-create`}
-          exportEndpoint={`/api/share-brief/${token}/export`}
-          maillageEndpoint={`/api/share-brief/${token}/maillage`}
-          printUrl={`/api/share-brief/${token}/print`}
-          commentsEndpoint={`/api/share-brief/${token}/comments`}
-          commentAuthor={{ type: "client", name: folder?.name?.trim() || "Client" }}
-          hideNewAnalysis
-        />
+  return (
+    <LocaleProvider locale={locale}>
+      <div className="min-h-screen bg-[var(--bg)] flex flex-col">
+        <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 h-14 flex items-center justify-between shrink-0">
+          <LogoApp height={20} className="text-[var(--text)]" />
+          <LocaleSwitcher />
+        </header>
+
+        <div className="flex-1 flex flex-col">
+          <BriefEditor
+            id={b.id}
+            keyword={b.keyword}
+            country={b.country}
+            folder={
+              folder
+                ? { id: folder.id, name: folder.name, website: folder.website, scope: folder.scope }
+                : null
+            }
+            initialHtml={b.editorHtml ?? ""}
+            nlp={nlp}
+            serp={serp}
+            paa={paa}
+            haloscan={haloscan}
+            position={b.position ?? null}
+            positionUrl={b.positionUrl ?? null}
+            workflowStatus={b.workflowStatus as WorkflowStatus}
+            initialTags={initialTags}
+            availableTags={availableTags}
+            saveEndpoint={`/api/share-brief/${token}`}
+            tagsEndpoint={`/api/share-brief/${token}/tags`}
+            tagsCreateEndpoint={`/api/share-brief/${token}/tags-create`}
+            exportEndpoint={`/api/share-brief/${token}/export`}
+            maillageEndpoint={`/api/share-brief/${token}/maillage`}
+            printUrl={`/api/share-brief/${token}/print`}
+            commentsEndpoint={`/api/share-brief/${token}/comments`}
+            commentAuthor={{ type: "client", name: folder?.name?.trim() || "Client" }}
+            hideNewAnalysis
+          />
+        </div>
       </div>
-    </div>
+    </LocaleProvider>
   );
 }

@@ -16,7 +16,7 @@ export async function GET(req: Request, context: { params: Promise<{ token: stri
 
   const db = getDb();
   const [row] = await db
-    .select({ keyword: brief.keyword, editorHtml: brief.editorHtml })
+    .select({ keyword: brief.keyword, editorHtml: brief.editorHtml, country: brief.country })
     .from(brief)
     .where(eq(brief.shareToken, token))
     .limit(1);
@@ -24,7 +24,7 @@ export async function GET(req: Request, context: { params: Promise<{ token: stri
 
   const slug = safeFilename(row.keyword);
   if (format === "html") {
-    return new Response(renderHtmlDocument(row.keyword, row.editorHtml ?? ""), {
+    return new Response(renderHtmlDocument(row.keyword, row.editorHtml ?? "", row.country), {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Content-Disposition": `attachment; filename="${slug}.html"`,

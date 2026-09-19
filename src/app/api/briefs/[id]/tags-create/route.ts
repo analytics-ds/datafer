@@ -5,6 +5,7 @@ import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
 import { createTag, TAG_COLORS } from "@/lib/tags-service";
+import { getTranslator } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (!row.clientId)
     return NextResponse.json(
-      { error: "Rattache le brief à un client pour créer des tags." },
+      { error: (await getTranslator())("error.tagNeedsFolder") },
       { status: 400 },
     );
 

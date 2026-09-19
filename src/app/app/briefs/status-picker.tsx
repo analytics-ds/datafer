@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CaretDownIcon } from "@/components/icons";
+import { useT } from "@/lib/i18n/context";
 import {
   WORKFLOW_STATUSES,
-  WORKFLOW_STATUS_LABELS,
+  WORKFLOW_STATUS_KEYS,
   WORKFLOW_STATUS_TONES,
   type WorkflowStatus,
 } from "./workflow-status";
@@ -16,6 +17,7 @@ export function StatusBadge({
   status: WorkflowStatus;
   size?: "sm" | "md";
 }) {
+  const t = useT();
   const tone = WORKFLOW_STATUS_TONES[status];
   const sz =
     size === "sm"
@@ -34,7 +36,7 @@ export function StatusBadge({
         className="inline-block w-[6px] h-[6px] rounded-full"
         style={{ background: tone.color }}
       />
-      {WORKFLOW_STATUS_LABELS[status]}
+      {t(WORKFLOW_STATUS_KEYS[status])}
     </span>
   );
 }
@@ -50,6 +52,7 @@ export function StatusPicker({
   disabled?: boolean;
   size?: "sm" | "md";
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -71,7 +74,7 @@ export function StatusPicker({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        title="Changer le statut éditorial"
+        title={t("briefs.status.change")}
         className={`inline-flex items-center gap-1 transition-opacity ${disabled ? "opacity-60 cursor-default" : "hover:opacity-80 cursor-pointer"}`}
       >
         <StatusBadge status={status} size={size} />

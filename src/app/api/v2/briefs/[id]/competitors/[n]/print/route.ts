@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
 import { renderPrintDocument } from "@/lib/export-content";
+import { resolveLocale } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
   } catch {}
   const title = `${competitor.title || competitor.link} — Position ${position} (${host}) — ${row.keyword}`;
 
-  return new Response(renderPrintDocument(title, bodyHtml), {
+  return new Response(renderPrintDocument(title, bodyHtml, await resolveLocale()), {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
 }

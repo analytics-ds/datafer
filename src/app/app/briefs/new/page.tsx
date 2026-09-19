@@ -6,12 +6,14 @@ import { client } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { PageHeader } from "../../_ui";
 import { NewBriefForm } from "./form";
+import { getTranslator } from "@/lib/i18n/server";
 
 export default async function NewBriefPage({
   searchParams,
 }: {
   searchParams: Promise<{ folder?: string }>;
 }) {
+  const t = await getTranslator();
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
@@ -26,8 +28,8 @@ export default async function NewBriefPage({
   return (
     <div className="px-10 py-10 max-w-[720px]">
       <PageHeader
-        title={<>Nouveau brief<span className="df-accent">.</span></>}
-        subtitle="Renseignez le mot-clé cible et le marché. Jusqu'à 5 mots-clés, un par ligne, pour lancer un batch d'analyses en file d'attente."
+        title={<>{t("newBrief.page.title")}<span className="df-accent">.</span></>}
+        subtitle={t("newBrief.page.subtitle")}
       />
 
       <NewBriefForm folders={folders} defaultFolderId={defaultFolderId} />

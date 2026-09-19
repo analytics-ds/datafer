@@ -1,4 +1,12 @@
+import type { Translator } from "@/lib/i18n";
+import type { Locale } from "@/lib/i18n/types";
+import { formatNumber } from "@/lib/relative-date";
+
 type Props = {
+  /** Traducteur et locale passés par la page : ce composant est rendu côté
+   *  serveur, il n'a pas accès au contexte client. */
+  t: Translator;
+  locale: Locale;
   totalXp: number;
   level: number;
   xpInLevel: number;
@@ -24,6 +32,8 @@ type Props = {
 };
 
 export function LevelCard({
+  t,
+  locale,
   totalXp,
   level,
   xpInLevel,
@@ -57,10 +67,10 @@ export function LevelCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline justify-between gap-2 mb-1">
             <span className="text-[14px] font-semibold">
-              {totalXp.toLocaleString("fr-FR")} XP
+              {formatNumber(totalXp, locale)} XP
             </span>
             <span className="text-[11px] text-[var(--text-muted)] font-mono">
-              {xpToNextLevel.toLocaleString("fr-FR")} XP avant Lv {level + 1}
+              {t("level.toNext", { xp: formatNumber(xpToNextLevel, locale), level: level + 1 })}
             </span>
           </div>
           <div className="h-2 bg-[var(--bg-warm)] rounded-full overflow-hidden">
@@ -71,10 +81,10 @@ export function LevelCard({
           </div>
           <div className="flex justify-between mt-1">
             <span className="text-[10px] text-[var(--text-muted)] font-mono">
-              {currentLevelAt.toLocaleString("fr-FR")}
+              {formatNumber(currentLevelAt, locale)}
             </span>
             <span className="text-[10px] text-[var(--text-muted)] font-mono">
-              {nextLevelAt.toLocaleString("fr-FR")}
+              {formatNumber(nextLevelAt, locale)}
             </span>
           </div>
         </div>
@@ -83,21 +93,24 @@ export function LevelCard({
       {/* Règles + breakdown */}
       <div className="grid grid-cols-3 gap-3">
         <RuleCard
-          label="Briefs créés"
+          t={t}
+          label={t("level.rule.created")}
           count={nCreated}
           unitXp={xpRules.created}
           totalXp={nCreated * xpRules.created}
           color="var(--blue)"
         />
         <RuleCard
-          label="Score ≥ médiane"
+          t={t}
+          label={t("level.rule.median")}
           count={nAboveMedian}
           unitXp={xpRules.aboveMedian}
           totalXp={nAboveMedian * xpRules.aboveMedian}
           color="var(--brand-yellow)"
         />
         <RuleCard
-          label="Score > best"
+          t={t}
+          label={t("level.rule.best")}
           count={nAboveBest}
           unitXp={xpRules.aboveBest}
           totalXp={nAboveBest * xpRules.aboveBest}
@@ -106,17 +119,18 @@ export function LevelCard({
       </div>
 
       <p className="text-[11px] text-[var(--text-muted)] leading-snug">
-        +{xpRules.created} XP par brief créé, +{xpRules.aboveMedian} XP quand le
-        score atteint la médiane des concurrents top 10, +{xpRules.aboveBest} XP
-        s&apos;il dépasse le meilleur concurrent. Chaque palier ne se gagne
-        qu&apos;une fois par brief.
+        {t("level.rules", {
+          created: xpRules.created,
+          median: xpRules.aboveMedian,
+          best: xpRules.aboveBest,
+        })}
       </p>
 
       {/* Top 5 lifetime */}
       {topUsers.length > 0 && (
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-2">
-            Top 5 de l&apos;équipe (cumul lifetime)
+            {t("level.top5")}
           </div>
           <div className="flex flex-col">
             {topUsers.map((u, i) => {
@@ -146,13 +160,13 @@ export function LevelCard({
                     </span>
                   )}
                   <span className="flex-1 text-[12px] truncate">
-                    {u.name} {isMe && <span className="text-[var(--text-muted)] font-normal">(vous)</span>}
+                    {u.name} {isMe && <span className="text-[var(--text-muted)] font-normal">{t("home.leaderboard.you")}</span>}
                   </span>
                   <span className="text-[10px] text-[var(--text-muted)] font-mono">
                     Lv {u.level}
                   </span>
                   <span className="text-[11px] font-mono font-semibold w-16 text-right">
-                    {u.xp.toLocaleString("fr-FR")} XP
+                    {formatNumber(u.xp, locale)} XP
                   </span>
                 </div>
               );
@@ -165,12 +179,14 @@ export function LevelCard({
 }
 
 function RuleCard({
+  t,
   label,
   count,
   unitXp,
   totalXp,
   color,
 }: {
+  t: Translator;
   label: string;
   count: number;
   unitXp: number;
@@ -195,7 +211,7 @@ function RuleCard({
           {totalXp > 0 ? `+${totalXp}` : "—"} XP
         </span>
       </div>
-      <span className="text-[10px] text-[var(--text-muted)]">+{unitXp} XP / unité</span>
+      <span className="text-[10px] text-[var(--text-muted)]">{t("level.perUnit", { xp: unitXp })}</span>
     </div>
   );
 }

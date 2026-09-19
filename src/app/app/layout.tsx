@@ -9,12 +9,18 @@ import { FirstLoginGate } from "./first-login-gate";
 import { EasterEgg } from "./easter-egg";
 import { FeedbackWidget } from "@/components/feedback/feedback-widget";
 import { levelFromXp } from "@/lib/xp";
+import { LocaleProvider } from "@/lib/i18n/context";
+import { resolveLocale } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
+
+  // Côté consultant il n'y a pas de dossier au niveau du layout : la langue
+  // vient du cookie posé par le sélecteur, sinon français.
+  const locale = await resolveLocale();
 
   const db = getDb();
 
@@ -32,11 +38,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (me?.mustChangePassword) {
     return (
-      <div className="min-h-screen bg-[var(--bg)]">
-        <EasterEgg />
-        <FirstLoginGate />
-        {children}
-      </div>
+      <LocaleProvider locale={locale}>
+        <div className="min-h-screen bg-[var(--bg)]">
+          <EasterEgg />
+          <FirstLoginGate />
+          {children}
+        </div>
+      </LocaleProvider>
     );
   }
 
@@ -52,21 +60,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     [me?.firstName, me?.lastName].filter(Boolean).join(" ") || session.user.name;
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] flex">
-      <EasterEgg />
-      <Sidebar
-        user={{
-          id: session.user.id,
-          email: session.user.email,
-          name: displayName,
-          image: me?.image ?? null,
-          level: levelFromXp(me?.totalXp ?? 0).level,
-        }}
-        favorites={favorites}
-        isAdmin={session.user.email.toLowerCase() === "pierre@datashake.fr"}
-      />
-      <main className="flex-1 min-w-0">{children}</main>
-      <FeedbackWidget />
-    </div>
+    <LocaleProvider locale={locale}>
+      <div className="min-h-screen bg-[var(--bg)] flex">
+        <EasterEgg />
+        <Sidebar
+          user={{
+            id: session.user.id,
+            email: session.user.email,
+            name: displayName,
+            image: me?.image ?? null,
+            level: levelFromXp(me?.totalXp ?? 0).level,
+          }}
+          favorites={favorites}
+          isAdmin={session.user.email.toLowerCase() === "pierre@datashake.fr"}
+        />
+        <main className="flex-1 min-w-0">{children}</main>
+        <FeedbackWidget />
+      </div>
+    </LocaleProvider>
   );
 }

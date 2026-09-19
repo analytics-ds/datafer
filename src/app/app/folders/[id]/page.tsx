@@ -12,9 +12,11 @@ import { FavoriteButton } from "../favorite-button";
 import { SharePanel } from "../share-panel";
 import { DeleteFolderButton } from "../delete-folder";
 import { SitemapPanel } from "./sitemap-panel";
+import { LocalePanel } from "./locale-panel";
 import { SearchableBriefList } from "../../briefs/searchable-brief-list";
 import { listTagsForBriefs, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "../../briefs/workflow-status";
+import { getTranslator } from "@/lib/i18n/server";
 
 // Feature flag : maillage interne masqué côté UI le 2026-05-26 sur demande
 // de Pierre (projet en pause). Repasse à `true` pour réactiver le
@@ -24,6 +26,7 @@ const MAILLAGE_ENABLED = false;
 export const dynamic = "force-dynamic";
 
 export default async function FolderDetail({ params }: { params: Promise<{ id: string }> }) {
+  const t = await getTranslator();
   const { id } = await params;
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
@@ -113,11 +116,13 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
               href={`/app/briefs/new?folder=${folder.id}`}
               className="inline-flex items-center gap-2 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] px-4 py-[9px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] transition-colors"
             >
-              + Nouveau brief
+              {t("briefsPage.new")}
             </Link>
           </div>
         }
       />
+
+      <LocalePanel clientId={folder.id} initialLocale={folder.locale} />
 
       {/* Feature maillage interne mise de côté 2026-05-26. Le code reste
           en place pour réactivation rapide via le flag MAILLAGE_ENABLED. */}
@@ -134,16 +139,16 @@ export default async function FolderDetail({ params }: { params: Promise<{ id: s
 
       {briefs.length === 0 ? (
         <EmptyState
-          title="Aucun brief pour ce client"
-          description="Crée un brief et assigne-le à ce client pour le retrouver ici."
-          ctaLabel="Nouveau brief"
+          title={t("folderDetail.empty.title")}
+          description={t("folderDetail.empty.description")}
+          ctaLabel={t("briefsPage.empty.cta")}
           ctaHref={`/app/briefs/new?folder=${folder.id}`}
         />
       ) : (
         <SearchableBriefList
           folders={folders}
           availableTags={scopedAvailableTags}
-          searchPlaceholder="Rechercher un mot-clé, un tag, un statut…"
+          searchPlaceholder={t("share.list.searchPlaceholder")}
           briefs={briefs.map((b) => ({
             id: b.id,
             keyword: b.keyword,

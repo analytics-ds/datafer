@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { faviconUrl } from "@/lib/favicon";
-import { relativeDate } from "@/lib/relative-date";
+import { formatNumber, relativeDate } from "@/lib/relative-date";
 import {
   attachTagAction,
   createTagAction,
@@ -18,6 +18,8 @@ import { StatusPicker } from "./status-picker";
 import { TagPicker, type TagDTO } from "./tag-picker";
 import { TrashIcon, FolderIcon, GlobeIcon } from "@/components/icons";
 import { scoreColor } from "@/lib/score-color";
+import { useI18n, useT } from "@/lib/i18n/context";
+import type { TranslationKey, Translator } from "@/lib/i18n";
 
 export type BriefCardData = {
   id: string;
@@ -40,19 +42,19 @@ export type BriefCardData = {
 
 /** Mapping step backend → progression % + label utilisateur. Aligné avec
  *  LOADING_STEPS du formulaire de création (form.tsx). */
-const PROGRESS_STEPS: Array<{ key: string; pct: number; label: string }> = [
-  { key: "fetching_serp", pct: 15, label: "Récupération SERP" },
-  { key: "crawling", pct: 40, label: "Crawl des concurrents" },
-  { key: "analyzing_nlp", pct: 65, label: "Analyse sémantique" },
-  { key: "scoring", pct: 85, label: "Calcul du score" },
-  { key: "saving", pct: 95, label: "Finalisation" },
+const PROGRESS_STEPS: Array<{ key: string; pct: number; labelKey: TranslationKey }> = [
+  { key: "fetching_serp", pct: 15, labelKey: "progress.serp" },
+  { key: "crawling", pct: 40, labelKey: "progress.crawl" },
+  { key: "analyzing_nlp", pct: 65, labelKey: "progress.nlp" },
+  { key: "scoring", pct: 85, labelKey: "progress.scoring" },
+  { key: "saving", pct: 95, labelKey: "progress.saving" },
 ];
 
-function progressFromStep(step: string | null): { pct: number; label: string } {
-  if (!step) return { pct: 5, label: "En attente" };
+function progressFromStep(step: string | null, t: Translator): { pct: number; label: string } {
+  if (!step) return { pct: 5, label: t("progress.waiting") };
   const key = step.split(":")[0];
   const found = PROGRESS_STEPS.find((s) => s.key === key);
-  if (!found) return { pct: 5, label: "En attente" };
+  if (!found) return { pct: 5, label: t("progress.waiting") };
   // crawling:X/10 → on raffine le label en montrant la progression du crawl
   if (key === "crawling") {
     const m = step.match(/:(\d+)\/(\d+)$/);
@@ -60,10 +62,10 @@ function progressFromStep(step: string | null): { pct: number; label: string } {
       const done = Number(m[1]);
       const total = Number(m[2]);
       const sub = total > 0 ? Math.round((done / total) * 25) : 0;
-      return { pct: 15 + sub, label: `Crawl ${done}/${total} sites` };
+      return { pct: 15 + sub, label: t("progress.crawl.detail", { done, total }) };
     }
   }
-  return { pct: found.pct, label: found.label };
+  return { pct: found.pct, label: t(found.labelKey) };
 }
 
 export type FolderOption = {
@@ -72,13 +74,13 @@ export type FolderOption = {
   website: string | null;
 };
 
-const COUNTRY_LABELS: Record<string, string> = {
-  fr: "France",
-  es: "Espagne",
-  us: "États-Unis",
-  uk: "Royaume-Uni",
-  de: "Allemagne",
-  it: "Italie",
+const COUNTRY_KEYS: Record<string, TranslationKey> = {
+  fr: "country.fr",
+  es: "country.es",
+  us: "country.us",
+  uk: "country.uk",
+  de: "country.de",
+  it: "country.it",
 };
 
 export function BriefCard({
@@ -90,6 +92,7 @@ export function BriefCard({
   folders: FolderOption[];
   availableTags: TagDTO[];
 }) {
+  const { locale, t } = useI18n();
   const router = useRouter();
   const [currentFolder, setCurrentFolder] = useState(brief.folder);
   const [status, setStatus] = useState<WorkflowStatus>(brief.workflowStatus);
@@ -126,7 +129,7 @@ export function BriefCard({
             return;
           }
           if (d.status === "failed") {
-            setLiveError(d.errorMessage ?? "L'analyse a échoué");
+            setLiveError(d.errorMessage ?? t("card.analysisFailed"));
             router.refresh();
             return;
           }
@@ -142,7 +145,7 @@ export function BriefCard({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [isPending, brief.id, router]);
+  }, [isPending, brief.id, router, t]);
 
   async function onFolderChange(next: FolderOption | null) {
     const prev = currentFolder;
@@ -205,7 +208,8 @@ export function BriefCard({
     return res.tag;
   }
 
-  const countryLabel = COUNTRY_LABELS[brief.country] ?? brief.country.toUpperCase();
+  const countryKey = COUNTRY_KEYS[brief.country];
+  const countryLabel = countryKey ? t(countryKey) : brief.country.toUpperCase();
   // Carte cliquable : un clic n'importe où sur la zone blanche ouvre le brief
   // (uniquement quand l'analyse est terminée). Les contrôles interactifs
   // (picker client, tags, statut, suppression) stoppent la propagation pour ne
@@ -239,8 +243,8 @@ export function BriefCard({
               className="font-semibold text-[15px] leading-tight truncate block text-[var(--text)] cursor-default"
               title={
                 isPending
-                  ? "Analyse en cours, le brief sera accessible à la fin"
-                  : "Analyse échouée, brief non accessible"
+                  ? t("card.pending.tooltip")
+                  : t("card.failed.tooltip")
               }
             >
               {brief.keyword}
@@ -260,7 +264,7 @@ export function BriefCard({
             <ProgressBar step={liveStep} />
           ) : isFailed ? (
             <div className="text-[12px] text-[var(--red)] leading-[1.4]">
-              {liveError ?? "Analyse échouée. Relancez le brief, puis supprimez celui-ci."}
+              {liveError ?? t("card.failed.message")}
             </div>
           ) : (
             <div className="flex items-center gap-[10px] text-[12px] flex-wrap">
@@ -274,28 +278,28 @@ export function BriefCard({
                 {countryLabel}
               </span>
               <span className="text-[var(--text-muted)] font-mono text-[11px]">
-                {relativeDate(brief.createdAt)}
+                {relativeDate(brief.createdAt, locale)}
               </span>
               <span className="w-[1px] h-3 bg-[var(--border)]" />
               <InlineMetric
-                label="Vol"
-                value={brief.volume != null ? fmtNum(brief.volume) : "—"}
+                label={t("brief.pill.volume")}
+                value={brief.volume != null ? formatNumber(brief.volume, locale) : "—"}
                 tone="default"
               />
               <InlineMetric
                 label="KGR"
                 value={brief.kgr != null ? brief.kgr.toFixed(2) : "—"}
                 tone={brief.kgr != null && brief.kgr < 0.25 ? "good" : "default"}
-                tooltip="Keyword Golden Ratio. < 0.25 = opportunité forte."
+                tooltip={t("card.kgr.tooltip")}
               />
               <InlineMetric
-                label="Pos"
+                label={t("brief.pill.position")}
                 value={brief.position != null ? `#${brief.position}` : "—"}
                 tone={positionTone(brief.position) as "good" | "warn" | "bad" | "best" | "muted"}
                 tooltip={
                   brief.folder?.website
-                    ? `Position de ${brief.folder.website} dans Google (top 100).`
-                    : "Rattache un client avec un site pour suivre ta position."
+                    ? t("card.position.tooltip", { website: brief.folder.website })
+                    : t("stat.position.noFolder")
                 }
               />
             </div>
@@ -321,7 +325,7 @@ export function BriefCard({
               disabledReason={
                 brief.folder
                   ? null
-                  : "Rattache le brief à un client pour ajouter des tags."
+                  : t("editor.tags.needFolder")
               }
             />
           </div>
@@ -340,8 +344,8 @@ export function BriefCard({
               e.stopPropagation();
               setConfirmOpen(true);
             }}
-            aria-label="Supprimer le brief"
-            title="Supprimer le brief"
+            aria-label={t("card.delete.title")}
+            title={t("card.delete.title")}
             className={`w-7 h-7 flex items-center justify-center rounded-[var(--radius-xs)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--red)] hover:border-[var(--red)]/40 hover:bg-[var(--red-bg)] transition-all ${
               hover ? "opacity-100" : "opacity-0"
             }`}
@@ -420,6 +424,7 @@ function DeleteBriefConfirm({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useT();
   return (
     <div
       className="fixed inset-0 bg-[rgba(0,0,0,0.45)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
@@ -434,10 +439,10 @@ function DeleteBriefConfirm({
       >
         <div className="flex items-center gap-2 mb-3 text-[var(--red)]">
           <TrashIcon size={14} />
-          <span className="font-semibold text-[16px]">Supprimer ce brief</span>
+          <span className="font-semibold text-[16px]">{t("card.delete.title")}</span>
         </div>
         <p className="text-[13px] text-[var(--text-secondary)] leading-[1.55] mb-5">
-          Le brief <strong>« {keyword} »</strong> sera définitivement supprimé : analyse SERP, NLP, contenu rédigé, partage. Cette action est irréversible.
+          {t("card.delete.body.before")}<strong>{t("card.delete.body.keyword", { keyword })}</strong>{t("card.delete.body.after")}
         </p>
         <div className="flex items-center justify-end gap-2">
           <button
@@ -446,7 +451,7 @@ function DeleteBriefConfirm({
             disabled={pending}
             className="px-4 py-[10px] rounded-[var(--radius-sm)] text-[13px] font-semibold border border-[var(--border)] hover:bg-[var(--bg-warm)] disabled:opacity-50 transition-colors"
           >
-            Annuler
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -454,7 +459,7 @@ function DeleteBriefConfirm({
             disabled={pending}
             className="px-4 py-[10px] rounded-[var(--radius-sm)] text-[13px] font-semibold bg-[var(--red)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
           >
-            {pending ? "Suppression…" : "Supprimer"}
+            {pending ? t("card.delete.pending") : t("common.delete")}
           </button>
         </div>
       </div>
@@ -475,9 +480,7 @@ export function positionTone(position: number | null): PillTone {
   return "bad";
 }
 
-function fmtNum(n: number): string {
-  return n.toLocaleString("fr-FR");
-}
+
 
 // ─── Gauge "analyse en cours" : spinner en demi-cercle ────────────────────
 /* Gabarit commun aux trois jauges de la liste.
@@ -523,11 +526,12 @@ function GaugeTile({
 }
 
 function PendingGauge({ step }: { step: string | null }) {
-  const { pct } = progressFromStep(step);
+  const t = useT();
+  const { pct } = progressFromStep(step, t);
   const offset = ARC_LENGTH - (pct / 100) * ARC_LENGTH;
   return (
     <GaugeTile
-      title={`Analyse en cours · ${pct}%`}
+      title={t("card.pendingGauge", { pct })}
       value={`${pct}%`}
       valueClass="text-[12px] text-[var(--text-inverse)]"
     >
@@ -547,9 +551,10 @@ function PendingGauge({ step }: { step: string | null }) {
 }
 
 function FailedGauge() {
+  const t = useT();
   return (
     <GaugeTile
-      title="Analyse échouée"
+      title={t("card.failedGauge")}
       value="✕"
       valueClass="text-[14px] text-[var(--red)]"
     >
@@ -566,7 +571,8 @@ function FailedGauge() {
 }
 
 function ProgressBar({ step }: { step: string | null }) {
-  const { pct, label } = progressFromStep(step);
+  const t = useT();
+  const { pct, label } = progressFromStep(step, t);
   return (
     <div className="flex items-center gap-3">
       <div className="flex-1 h-[6px] bg-[var(--bg-warm)] rounded-full overflow-hidden">
@@ -617,6 +623,7 @@ function FolderPickerInline({
   folders: FolderOption[];
   onChange: (f: FolderOption | null) => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -633,10 +640,10 @@ function FolderPickerInline({
       <button
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-[6px] px-[10px] py-[3px] text-[12px] text-[var(--text-secondary)] bg-[var(--bg)] hover:bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] transition-colors"
-        title="Changer le client"
+        title={t("card.changeFolder")}
       >
         {current ? <Favicon website={current.website} size={14} /> : <FolderIcon size={12} />}
-        <span className="font-medium">{current ? current.name : "+ Client"}</span>
+        <span className="font-medium">{current ? current.name : t("card.addFolder")}</span>
       </button>
 
       {open && (
@@ -651,7 +658,7 @@ function FolderPickerInline({
             }`}
           >
             <span className="w-4 h-4 rounded-[3px] bg-[var(--bg-warm)] text-[var(--text-muted)] flex items-center justify-center text-[10px] shrink-0">·</span>
-            <span className="flex-1">Aucun client</span>
+            <span className="flex-1">{t("newBrief.folder.empty")}</span>
             {!current && <span className="text-[var(--text)] text-[12px]">✓</span>}
           </button>
           {folders.map((f) => (

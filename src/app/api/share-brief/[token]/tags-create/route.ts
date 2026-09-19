@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { brief } from "@/db/schema";
 import { createTag, TAG_COLORS } from "@/lib/tags-service";
+import { getTranslator } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export async function POST(req: Request, context: { params: Promise<{ token: str
   if (!row) return NextResponse.json({ error: "invalid token" }, { status: 404 });
   if (!row.clientId)
     return NextResponse.json(
-      { error: "Le brief n'est rattaché à aucun client." },
+      { error: (await getTranslator())("error.tagNeedsFolder") },
       { status: 400 },
     );
 

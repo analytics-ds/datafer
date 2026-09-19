@@ -8,8 +8,10 @@ import { and, asc, count, eq, sql } from "drizzle-orm";
 import { PageHeader, EmptyState } from "../_ui";
 import { faviconUrl } from "@/lib/favicon";
 import { SearchableFolderList } from "./searchable-folder-list";
+import { getTranslator } from "@/lib/i18n/server";
 
 export default async function FoldersPage() {
+  const t = await getTranslator();
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
@@ -39,23 +41,23 @@ export default async function FoldersPage() {
   return (
     <div className="px-10 py-10 max-w-[1100px]">
       <PageHeader
-        title={<>Tous les clients<span className="df-accent">.</span></>}
-        subtitle="Tous les clients clients de l'agence, visibles par tous les consultants."
+        title={<>{t("foldersPage.title")}<span className="df-accent">.</span></>}
+        subtitle={t("foldersPage.subtitle")}
         action={
           <Link
             href="/app/folders/new"
             className="inline-flex items-center gap-2 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] px-4 py-[9px] text-[13px] font-semibold hover:bg-[var(--bg-dark)] transition-colors"
           >
-            + Nouveau client
+            {t("foldersPage.new")}
           </Link>
         }
       />
 
       {rows.length === 0 ? (
         <EmptyState
-          title="Aucun client"
-          description="Créez un client pour regrouper les briefs."
-          ctaLabel="Créer un client"
+          title={t("foldersPage.empty.title")}
+          description={t("foldersPage.empty.description")}
+          ctaLabel={t("foldersPage.empty.cta")}
           ctaHref="/app/folders/new"
         />
       ) : (

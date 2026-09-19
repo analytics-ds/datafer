@@ -6,6 +6,7 @@ import { TAG_COLORS } from "@/lib/tags-service";
 import type { TagDTO } from "../../briefs/tag-picker";
 import { TagChip } from "../../briefs/tag-picker";
 import { createFolderTagAction, deleteTagAction } from "./tags-actions";
+import { useT } from "@/lib/i18n/context";
 
 export function TagsPanel({
   folderId,
@@ -16,6 +17,7 @@ export function TagsPanel({
   folderName: string;
   initialTags: TagDTO[];
 }) {
+  const t = useT();
   const router = useRouter();
   const [tags, setTags] = useState<TagDTO[]>(initialTags);
   const [name, setName] = useState("");
@@ -59,24 +61,23 @@ export function TagsPanel({
     <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-6 mb-6">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="font-semibold text-[14px]">Tags du dossier</h3>
+          <h3 className="font-semibold text-[14px]">{t("folderTags.title")}</h3>
           <p className="text-[12px] text-[var(--text-muted)] mt-[2px]">
-            Les tags créés ici n&apos;existent que dans l&apos;écosystème <strong>{folderName}</strong>. Ils restent
-            sauvegardés tant qu&apos;ils ne sont pas supprimés.
+            {t("folderTags.description.before")}<strong>{folderName}</strong>{t("folderTags.description.after")}
           </p>
         </div>
       </div>
 
       {tags.length > 0 ? (
         <div className="flex flex-wrap gap-2 mb-4">
-          {tags.map((t) => (
-            <span key={t.id} className="inline-flex items-center gap-1">
-              <TagChip tag={t} size="md" />
+          {tags.map((tag) => (
+            <span key={tag.id} className="inline-flex items-center gap-1">
+              <TagChip tag={tag} size="md" />
               <button
                 type="button"
-                onClick={() => setConfirmId(t.id)}
-                aria-label={`Supprimer le tag ${t.name}`}
-                title="Supprimer définitivement"
+                onClick={() => setConfirmId(tag.id)}
+                aria-label={t("tags.delete.named", { name: tag.name })}
+                title={t("folderDelete.confirm")}
                 className="w-5 h-5 inline-flex items-center justify-center rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--red-bg)] transition-colors"
               >
                 <svg width="11" height="11" viewBox="0 0 20 20" fill="none">
@@ -94,7 +95,7 @@ export function TagsPanel({
         </div>
       ) : (
         <p className="text-[12px] text-[var(--text-muted)] italic mb-4">
-          Aucun tag pour ce dossier. Crée le premier ci-dessous.
+          {t("folderTags.empty")}
         </p>
       )}
 
@@ -103,7 +104,7 @@ export function TagsPanel({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Nom du tag (ex. saison hiver)"
+          placeholder={t("folderTags.placeholder")}
           maxLength={40}
           disabled={pending}
           className="px-3 py-[8px] text-[13px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] outline-none focus:border-[var(--bg-black)] flex-1 min-w-[200px]"
@@ -128,7 +129,7 @@ export function TagsPanel({
           disabled={pending || !name.trim()}
           className="px-4 py-[8px] bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] text-[13px] font-semibold hover:bg-[var(--bg-dark)] disabled:opacity-40 transition-colors"
         >
-          + Créer
+          {t("folderTags.create")}
         </button>
       </form>
       {error && <p className="mt-2 text-[12px] text-[var(--red)]">{error}</p>}
@@ -143,11 +144,10 @@ export function TagsPanel({
             className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius)] p-7 w-[440px] max-w-full shadow-[var(--shadow-lg)]"
           >
             <div className="flex items-center gap-2 mb-3 text-[var(--red)]">
-              <span className="font-semibold text-[16px]">Supprimer ce tag</span>
+              <span className="font-semibold text-[16px]">{t("folderTags.delete.title")}</span>
             </div>
             <p className="text-[13px] text-[var(--text-secondary)] leading-[1.55] mb-5">
-              Le tag <TagChip tag={confirmTag} size="md" /> sera définitivement supprimé et détaché de tous
-              les briefs qui le portaient. Action irréversible.
+              {t("folderTags.delete.before")}<TagChip tag={confirmTag} size="md" />{t("folderTags.delete.after")}
             </p>
             <div className="flex items-center justify-end gap-2">
               <button
@@ -156,7 +156,7 @@ export function TagsPanel({
                 disabled={pending}
                 className="px-4 py-[10px] rounded-[var(--radius-sm)] text-[13px] font-semibold border border-[var(--border)] hover:bg-[var(--bg-warm)] disabled:opacity-50 transition-colors"
               >
-                Annuler
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -164,7 +164,7 @@ export function TagsPanel({
                 disabled={pending}
                 className="px-4 py-[10px] rounded-[var(--radius-sm)] text-[13px] font-semibold bg-[var(--red)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
               >
-                {pending ? "Suppression…" : "Supprimer"}
+                {pending ? t("card.delete.pending") : t("common.delete")}
               </button>
             </div>
           </div>

@@ -8,6 +8,9 @@ import type { HaloscanOverview } from "@/lib/analysis";
 import { listTagsForBriefs, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
 import { SharedBriefList, type SharedBriefRow } from "./shared-brief-list";
+import { LocaleProvider } from "@/lib/i18n/context";
+import { getTranslator, resolveLocale } from "@/lib/i18n/server";
+import { LocaleSwitcher } from "@/components/locale-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -74,54 +77,62 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
 
   const favicon = faviconUrl(folder.website, 48);
 
+  // La langue du dossier pilote la page : un dossier client US s'ouvre en
+  // anglais pour qui reçoit le lien, sans réglage de sa part.
+  const locale = await resolveLocale(folder.locale);
+  const t = await getTranslator(folder.locale);
+
   return (
-    <main className="min-h-screen bg-[var(--bg)]">
-      <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 py-5 flex items-center justify-between">
-        <LogoApp height={20} className="text-[var(--text)]" />
-      </header>
+    <LocaleProvider locale={locale}>
+      <main className="min-h-screen bg-[var(--bg)]">
+        <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-8 py-5 flex items-center justify-between">
+          <LogoApp height={20} className="text-[var(--text)]" />
+          <LocaleSwitcher />
+        </header>
 
-      <div className="max-w-[1000px] mx-auto px-8 py-12">
-        <div className="flex items-center gap-3 mb-4">
-          {favicon ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={favicon}
-              alt=""
-              width={40}
-              height={40}
-              className="rounded-[var(--radius-xs)] bg-[var(--bg-warm)]"
-            />
-          ) : (
-            <span className="w-10 h-10 rounded-[var(--radius-xs)] bg-[var(--bg-warm)]" />
-          )}
-          <span className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
-            Client
-          </span>
-        </div>
-        <h1 className="df-title text-[48px] leading-[1.05] tracking-[-1.2px] mb-2">
-          {folder.name}
-          <span className="df-accent">.</span>
-        </h1>
-        {folder.website && (
-          <p className="text-[13px] text-[var(--text-muted)] font-mono mb-10">
-            {folder.website}
-          </p>
-        )}
-
-        {briefs.length === 0 ? (
-          <div className="bg-[var(--bg-card)] border border-dashed border-[var(--border-strong)] rounded-[var(--radius)] px-7 py-12 text-center">
-            <p className="text-[13px] text-[var(--text-muted)]">
-              Aucun brief pour ce client pour le moment.
-            </p>
+        <div className="max-w-[1000px] mx-auto px-8 py-12">
+          <div className="flex items-center gap-3 mb-4">
+            {favicon ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={favicon}
+                alt=""
+                width={40}
+                height={40}
+                className="rounded-[var(--radius-xs)] bg-[var(--bg-warm)]"
+              />
+            ) : (
+              <span className="w-10 h-10 rounded-[var(--radius-xs)] bg-[var(--bg-warm)]" />
+            )}
+            <span className="text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)]">
+              {t("share.folder.label")}
+            </span>
           </div>
-        ) : (
-          <SharedBriefList token={token} briefs={briefs} availableTags={availableTags} />
-        )}
+          <h1 className="df-title text-[48px] leading-[1.05] tracking-[-1.2px] mb-2">
+            {folder.name}
+            <span className="df-accent">.</span>
+          </h1>
+          {folder.website && (
+            <p className="text-[13px] text-[var(--text-muted)] font-mono mb-10">
+              {folder.website}
+            </p>
+          )}
 
-        <footer className="mt-14 text-center text-[11px] text-[var(--text-muted)]">
-          Propulsé par <strong>datashake</strong>
-        </footer>
-      </div>
-    </main>
+          {briefs.length === 0 ? (
+            <div className="bg-[var(--bg-card)] border border-dashed border-[var(--border-strong)] rounded-[var(--radius)] px-7 py-12 text-center">
+              <p className="text-[13px] text-[var(--text-muted)]">
+                {t("share.folder.empty")}
+              </p>
+            </div>
+          ) : (
+            <SharedBriefList token={token} briefs={briefs} availableTags={availableTags} />
+          )}
+
+          <footer className="mt-14 text-center text-[11px] text-[var(--text-muted)]">
+            {t("share.poweredBy")} <strong>datashake</strong>
+          </footer>
+        </div>
+      </main>
+    </LocaleProvider>
   );
 }

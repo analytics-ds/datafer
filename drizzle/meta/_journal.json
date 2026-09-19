@@ -134,6 +134,13 @@
       "when": 1781172542207,
       "tag": "0018_furry_miracleman",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1789809822113,
+      "tag": "0019_warm_blink",
+      "breakpoints": true
     }
   ]
 }

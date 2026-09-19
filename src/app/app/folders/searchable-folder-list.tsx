@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { FolderListCard } from "./folder-list-card";
+import { useT } from "@/lib/i18n/context";
 
 type Folder = {
   id: string;
@@ -15,6 +16,7 @@ type Folder = {
 };
 
 export function SearchableFolderList({ folders }: { folders: Folder[] }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
 
@@ -38,14 +40,14 @@ export function SearchableFolderList({ folders }: { folders: Folder[] }) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher un client…"
+          placeholder={t("foldersPage.search")}
           className="w-full pl-10 pr-9 py-[10px] text-[13px] bg-transparent border-b-2 border-[var(--border)] outline-none focus:border-[var(--bg-black)] transition-colors placeholder:text-[var(--text-muted)]"
         />
         {query && (
           <button
             type="button"
             onClick={() => setQuery("")}
-            aria-label="Effacer la recherche"
+            aria-label={t("filters.search.clear")}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)]"
           >
             ×
@@ -55,7 +57,7 @@ export function SearchableFolderList({ folders }: { folders: Folder[] }) {
 
       {filtered.length === 0 ? (
         <div className="text-center py-10 text-[13px] text-[var(--text-muted)]">
-          Aucun client ne correspond à « {query} ».
+          {t("foldersPage.noMatch", { query })}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -67,7 +69,7 @@ export function SearchableFolderList({ folders }: { folders: Folder[] }) {
               href="/app/folders/new"
               className="flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed border-[var(--border-strong)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)] hover:bg-[var(--bg-warm)] transition-colors min-h-[160px] text-[13px] font-semibold"
             >
-              <span className="text-[16px]">+</span> Ajouter un client
+              <span className="text-[16px]">+</span> {t("foldersPage.add")}
             </a>
           )}
         </div>

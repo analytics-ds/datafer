@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DownloadIcon, CaretDownIcon } from "@/components/icons";
+import { useT } from "@/lib/i18n/context";
 
 export function ExportMenu({
   exportEndpoint,
@@ -10,6 +11,7 @@ export function ExportMenu({
   exportEndpoint: string;
   printUrl: string;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -43,10 +45,10 @@ export function ExportMenu({
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-[6px] px-3 py-[8px] bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[12px] font-semibold hover:bg-[var(--bg-warm)] transition-colors cursor-pointer"
-        title="Télécharger le contenu rédigé"
+        title={t("export.tooltip")}
       >
         <DownloadIcon size={14} />
-        Télécharger
+        {t("export.cta")}
         <CaretDownIcon size={10} />
       </button>
 
@@ -55,17 +57,17 @@ export function ExportMenu({
           <ExportItem
             onClick={() => download("html")}
             primary="HTML"
-            secondary=".html prêt à publier"
+            secondary={t("export.html")}
           />
           <ExportItem
             onClick={() => download("docx")}
             primary="Word"
-            secondary=".docx Office Open XML"
+            secondary={t("export.docx")}
           />
           <ExportItem
             onClick={openPrint}
             primary="PDF"
-            secondary="Aperçu navigateur → Enregistrer en PDF"
+            secondary={t("export.pdf")}
           />
         </div>
       )}

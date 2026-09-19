@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { deleteFolderAction } from "./actions";
 import { TrashIcon } from "@/components/icons";
+import { useT } from "@/lib/i18n/context";
 
 export function DeleteFolderButton({
   folderId,
@@ -13,6 +14,7 @@ export function DeleteFolderButton({
   folderName: string;
   folderWebsite: string | null;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -55,12 +57,10 @@ export function DeleteFolderButton({
           >
             <div className="flex items-center gap-2 mb-3 text-[var(--red)]">
               <TrashIcon size={14} />
-              <span className="font-semibold text-[16px]">Supprimer le client</span>
+              <span className="font-semibold text-[16px]">{t("folderDelete.title")}</span>
             </div>
             <p className="text-[13px] text-[var(--text-secondary)] leading-[1.55] mb-5">
-              Cette action est <strong>définitive</strong>. Tous les briefs rattachés à ce client
-              seront également perdus. Pour confirmer, retape le site associé (ou le nom
-              du client s&apos;il n&apos;a pas de site) ci-dessous :
+              {t("folderDelete.warning")}
             </p>
             <div className="bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius-xs)] px-3 py-2 mb-3 font-mono text-[12px] text-[var(--text)] select-all">
               {expected}
@@ -69,7 +69,7 @@ export function DeleteFolderButton({
               type="text"
               value={confirmation}
               onChange={(e) => setConfirmation(e.target.value)}
-              placeholder="Retape le texte ci-dessus"
+              placeholder={t("folderDelete.placeholder")}
               className="w-full px-4 py-[11px] border-2 border-[var(--border)] rounded-[var(--radius-sm)] mb-4 outline-none focus:border-[var(--red)] transition-colors text-[14px] bg-[var(--bg-card)] font-mono"
               autoFocus
             />
@@ -87,14 +87,14 @@ export function DeleteFolderButton({
                 disabled={pending}
                 className="px-4 py-[10px] rounded-[var(--radius-sm)] text-[13px] font-semibold border border-[var(--border)] hover:bg-[var(--bg-warm)] disabled:opacity-50 transition-colors"
               >
-                Annuler
+                {t("common.cancel")}
               </button>
               <button
                 type="submit"
                 disabled={pending || confirmation.trim() !== expected}
                 className="px-4 py-[10px] rounded-[var(--radius-sm)] text-[13px] font-semibold bg-[var(--red)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
               >
-                {pending ? "Suppression…" : "Supprimer définitivement"}
+                {pending ? t("card.delete.pending") : t("folderDelete.confirm")}
               </button>
             </div>
           </form>

@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
 import { LogoApp } from "@/components/brand";
+import { useT } from "@/lib/i18n/context";
 
 export function LoginForm() {
+  const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextUrl = searchParams.get("next") ?? "/app";
@@ -22,7 +24,7 @@ export function LoginForm() {
     const res = await signIn.email({ email, password });
     setLoading(false);
     if (res.error) {
-      setError(res.error.message ?? "Identifiants invalides");
+      setError(res.error.message ?? t("login.error"));
       return;
     }
     router.push(nextUrl);
@@ -37,18 +39,18 @@ export function LoginForm() {
       </div>
 
       <span className="inline-flex items-center px-3 py-1 bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-pill)] text-[10px] font-semibold tracking-[0.2px] uppercase mb-5">
-        Connexion
+        {t("login.badge")}
       </span>
 
       <h1 className="df-title text-[44px] leading-[1.05] tracking-[-1.2px] mb-2">
-        Bon retour<em className="df-accent">.</em>
+        {t("login.title")}<em className="df-accent">.</em>
       </h1>
       <p className="text-[var(--text-secondary)] text-[14px] leading-[1.55] mb-10">
-        Connectez-vous à votre espace corpus pour générer vos briefs et accéder à vos clients.
+        {t("login.subtitle")}
       </p>
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Email
+        {t("login.email")}
       </label>
       <input
         type="email"
@@ -61,7 +63,7 @@ export function LoginForm() {
       />
 
       <label className="block text-[11px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[6px]">
-        Mot de passe
+        {t("login.password")}
       </label>
       <input
         type="password"
@@ -84,13 +86,13 @@ export function LoginForm() {
         disabled={loading}
         className="w-full bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-sm)] py-[13px] text-[14px] font-semibold hover:bg-[var(--bg-dark)] disabled:opacity-50 transition-colors"
       >
-        {loading ? "Connexion…" : "Se connecter →"}
+        {loading ? t("login.loading") : t("login.submit")}
       </button>
 
       <p className="text-[11px] text-[var(--text-muted)] mt-10 text-center leading-[1.5]">
-        Accès sur invitation uniquement.
+        {t("login.invite")}
         <br />
-        Contactez votre admin pour obtenir un compte.
+        {t("login.invite.contact")}
       </p>
     </form>
   );

@@ -1,7 +1,7 @@
 // PATCH /api/clients/[id]
-// Met à jour les champs éditables d'un client. Pour l'instant : sitemapUrl
-// (config maillage interne). Restera étendu si d'autres champs deviennent
-// éditables depuis l'UI.
+// Met à jour les champs éditables d'un client : sitemapUrl (config maillage
+// interne) et locale (langue d'affichage héritée par les briefs du dossier et
+// par ses liens de partage).
 
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { client } from "@/db/schema";
+import { isLocale, type Locale } from "@/lib/i18n/types";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
   const body = (await req.json().catch(() => null)) as {
     sitemapUrl?: string | null;
+    locale?: string;
   } | null;
   if (!body) return NextResponse.json({ error: "bad body" }, { status: 400 });
 
@@ -32,7 +34,16 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const patch: { sitemapUrl?: string | null; updatedAt: Date } = { updatedAt: new Date() };
+  const patch: { sitemapUrl?: string | null; locale?: Locale; updatedAt: Date } = {
+    updatedAt: new Date(),
+  };
+
+  if (body.locale !== undefined) {
+    if (!isLocale(body.locale)) {
+      return NextResponse.json({ error: "unsupported locale" }, { status: 400 });
+    }
+    patch.locale = body.locale;
+  }
 
   if (body.sitemapUrl !== undefined) {
     if (body.sitemapUrl === null || body.sitemapUrl === "") {

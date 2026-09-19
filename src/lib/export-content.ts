@@ -6,6 +6,8 @@
  */
 
 import { Parser } from "htmlparser2";
+import { createTranslator } from "@/lib/i18n";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/types";
 
 const SAFE_FILENAME_RE = /[^a-z0-9-_]/gi;
 
@@ -146,12 +148,18 @@ export function safeFilename(keyword: string): string {
  * Document HTML autonome : structure standard, charset UTF-8,
  * styles minimaux pour rendre le contenu lisible hors de l'éditeur.
  */
-export function renderHtmlDocument(keyword: string, bodyHtml: string): string {
+export function renderHtmlDocument(
+  keyword: string,
+  bodyHtml: string,
+  /** Code pays du brief (`fr`, `us`, `uk`…) : il donne la langue du contenu
+   *  exporté, qui n'est pas celle de l'interface. */
+  country = "fr",
+): string {
   const title = escapeHtml(keyword);
   const safe = sanitizeHtml(bodyHtml);
   const body = safe || "<p><em>Contenu vide.</em></p>";
   return `<!doctype html>
-<html lang="fr">
+<html lang="${contentLang(country)}">
 <head>
 <meta charset="utf-8">
 <title>${title}</title>
@@ -183,7 +191,23 @@ ${body}
  * d'impression au chargement, et propose un bouton « Imprimer » pour
  * relancer manuellement.
  */
-export function renderPrintDocument(keyword: string, bodyHtml: string): string {
+/** Langue du contenu rédigé, déduite du marché du brief. */
+function contentLang(country: string): string {
+  const cc = country.toLowerCase();
+  if (cc === "us" || cc === "uk" || cc === "gb") return "en";
+  return cc || "fr";
+}
+
+/**
+ * Page imprimable d'un contenu. La barre d'impression suit la langue de
+ * lecture : c'est un écran que le client ouvre depuis son lien de partage.
+ */
+export function renderPrintDocument(
+  keyword: string,
+  bodyHtml: string,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = createTranslator(locale);
   const title = escapeHtml(keyword);
   const safe = sanitizeHtml(bodyHtml);
   const body = safe || "<p><em>Contenu vide.</em></p>";
@@ -216,8 +240,8 @@ export function renderPrintDocument(keyword: string, bodyHtml: string): string {
 </head>
 <body>
 <div class="print-bar">
-  <button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button>
-  <span class="hint">Astuce : choisis « Enregistrer au format PDF » comme imprimante.</span>
+  <button type="button" onclick="window.print()">${escapeHtml(t("print.button"))}</button>
+  <span class="hint">${escapeHtml(t("print.hint"))}</span>
 </div>
 ${body}
 <script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));</script>

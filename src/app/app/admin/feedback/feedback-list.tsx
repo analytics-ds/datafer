@@ -3,6 +3,10 @@
 import { useMemo, useState, useTransition } from "react";
 import { deleteFeedback, updateFeedbackStatus } from "./actions";
 import { CaretDownIcon } from "@/components/icons";
+import { useI18n, useT } from "@/lib/i18n/context";
+import { intlLocale } from "@/lib/relative-date";
+import type { TranslationKey, Translator } from "@/lib/i18n";
+import type { Locale } from "@/lib/i18n/types";
 
 export type FeedbackRow = {
   id: string;
@@ -22,19 +26,23 @@ export type FeedbackRow = {
   resolvedNote: string | null;
 };
 
-const CATEGORY_META: Record<FeedbackRow["category"], { label: string; emoji: string; color: string; bg: string }> = {
-  bug: { label: "Bug", emoji: "🐛", color: "var(--red)", bg: "var(--red-bg)" },
-  suggestion: { label: "Suggestion", emoji: "💡", color: "var(--text)", bg: "var(--state-ok-bg)" },
-  question: { label: "Question", emoji: "❓", color: "var(--text)", bg: "var(--blue-bg)" },
+const CATEGORY_META: Record<
+  FeedbackRow["category"],
+  { labelKey: TranslationKey; emoji: string; color: string; bg: string }
+> = {
+  bug: { labelKey: "feedback.cat.bug", emoji: "🐛", color: "var(--red)", bg: "var(--red-bg)" },
+  suggestion: { labelKey: "feedback.cat.suggestion", emoji: "💡", color: "var(--text)", bg: "var(--state-ok-bg)" },
+  question: { labelKey: "feedback.cat.question", emoji: "❓", color: "var(--text)", bg: "var(--blue-bg)" },
 };
 
-const STATUS_META: Record<FeedbackRow["status"], { label: string; color: string }> = {
-  new: { label: "Nouveau", color: "var(--text)" },
-  in_progress: { label: "En cours", color: "var(--text)" },
-  resolved: { label: "Résolu", color: "var(--text)" },
+const STATUS_META: Record<FeedbackRow["status"], { labelKey: TranslationKey; color: string }> = {
+  new: { labelKey: "admin.status.new", color: "var(--text)" },
+  in_progress: { labelKey: "workflow.in_progress", color: "var(--text)" },
+  resolved: { labelKey: "comments.resolved", color: "var(--text)" },
 };
 
 export function FeedbackList({ feedbacks }: { feedbacks: FeedbackRow[] }) {
+  const t = useT();
   const [statusFilter, setStatusFilter] = useState<"all" | FeedbackRow["status"]>("all");
   const [categoryFilter, setCategoryFilter] = useState<"all" | FeedbackRow["category"]>("all");
 
@@ -55,7 +63,7 @@ export function FeedbackList({ feedbacks }: { feedbacks: FeedbackRow[] }) {
           active={statusFilter === "all"}
           onClick={() => setStatusFilter("all")}
         >
-          Tous statuts
+          {t("admin.allStatuses")}
         </FilterChip>
         {(Object.keys(STATUS_META) as Array<FeedbackRow["status"]>).map((s) => (
           <FilterChip
@@ -64,12 +72,12 @@ export function FeedbackList({ feedbacks }: { feedbacks: FeedbackRow[] }) {
             onClick={() => setStatusFilter(s)}
             color={STATUS_META[s].color}
           >
-            {STATUS_META[s].label}
+            {t(STATUS_META[s].labelKey)}
           </FilterChip>
         ))}
         <span className="w-px h-5 bg-[var(--border)] mx-1" />
         <FilterChip active={categoryFilter === "all"} onClick={() => setCategoryFilter("all")}>
-          Toutes catégories
+          {t("admin.allCategories")}
         </FilterChip>
         {(Object.keys(CATEGORY_META) as Array<FeedbackRow["category"]>).map((c) => (
           <FilterChip
@@ -77,14 +85,14 @@ export function FeedbackList({ feedbacks }: { feedbacks: FeedbackRow[] }) {
             active={categoryFilter === c}
             onClick={() => setCategoryFilter(c)}
           >
-            {CATEGORY_META[c].emoji} {CATEGORY_META[c].label}
+            {CATEGORY_META[c].emoji} {t(CATEGORY_META[c].labelKey)}
           </FilterChip>
         ))}
       </div>
 
       {filtered.length === 0 ? (
         <div className="text-center py-10 text-[13px] text-[var(--text-muted)]">
-          Aucun feedback ne correspond à ces filtres.
+          {t("admin.noMatch")}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -125,6 +133,7 @@ function FilterChip({
 }
 
 function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
+  const { locale, t } = useI18n();
   const [expanded, setExpanded] = useState(feedback.status === "new");
   const [pending, startTransition] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -171,10 +180,10 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
               className="px-[7px] py-[1px] rounded-[var(--radius-pill)] text-[9px] font-bold uppercase tracking-[0.2px]"
               style={{ color: status.color, background: `${status.color}1A` }}
             >
-              {status.label}
+              {t(status.labelKey)}
             </span>
             <span className="text-[10px] text-[var(--text-muted)] font-mono">
-              {formatDate(feedback.createdAt)}
+              {formatDate(feedback.createdAt, locale, t)}
             </span>
           </div>
           <div className="text-[12px] text-[var(--text-secondary)] line-clamp-1">{feedback.message}</div>
@@ -203,7 +212,7 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
           </div>
 
           <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[5px]">
-            Message
+            {t("admin.message")}
           </div>
           <div className="bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] px-4 py-3 text-[13px] leading-[1.55] whitespace-pre-wrap mb-4">
             {feedback.message}
@@ -212,7 +221,7 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
           {feedback.screenshots.length > 0 && (
             <>
               <div className="text-[10px] font-semibold uppercase tracking-[0.2px] text-[var(--text-muted)] mb-[5px]">
-                Captures d&apos;écran ({feedback.screenshots.length})
+                {t("admin.screenshots", { count: feedback.screenshots.length })}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                 {feedback.screenshots.map((src, i) => (
@@ -244,7 +253,7 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
                     : "border-[var(--border)] hover:bg-[var(--bg-warm)] hover:border-[var(--border-strong)]"
                 }`}
               >
-                {STATUS_META[s].label}
+                {t(STATUS_META[s].labelKey)}
               </button>
             ))}
             <div className="flex-1" />
@@ -252,7 +261,7 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
               href={`mailto:${feedback.userEmail}?subject=Re%3A%20Ton%20feedback`}
               className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text)] font-semibold"
             >
-              Répondre par mail
+              {t("admin.replyByEmail")}
             </a>
             <button
               type="button"
@@ -260,7 +269,7 @@ function FeedbackCard({ feedback }: { feedback: FeedbackRow }) {
               disabled={pending}
               className="text-[11px] text-[var(--red)] hover:bg-[var(--red-bg)] px-2 py-[5px] rounded-[var(--radius-xs)] font-semibold disabled:opacity-50"
             >
-              {confirmDelete ? "Confirmer ?" : "Supprimer"}
+              {confirmDelete ? t("admin.confirmDelete") : t("common.delete")}
             </button>
           </div>
         </div>
@@ -286,17 +295,17 @@ function Meta({ label, value, mono, small }: { label: string; value: React.React
   );
 }
 
-function formatDate(ms: number): string {
+function formatDate(ms: number, locale: Locale, t: Translator): string {
   const d = new Date(ms);
   const now = Date.now();
   const diffM = Math.floor((now - ms) / 60_000);
-  if (diffM < 1) return "à l'instant";
-  if (diffM < 60) return `il y a ${diffM} min`;
+  if (diffM < 1) return t("date.justNow");
+  if (diffM < 60) return t("date.minutesAgo", { count: diffM });
   const diffH = Math.floor(diffM / 60);
-  if (diffH < 24) return `il y a ${diffH} h`;
+  if (diffH < 24) return t("date.hoursAgo", { count: diffH });
   const diffD = Math.floor(diffH / 24);
-  if (diffD < 7) return `il y a ${diffD} j`;
-  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+  if (diffD < 7) return t("date.daysAgo", { count: diffD });
+  return d.toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short", year: "numeric" });
 }
 
 function shortPath(url: string): string {

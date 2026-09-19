@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { getTranslator, resolveLocale } from "@/lib/i18n/server";
 
 /* Typographies de la charte datashake (Brand Style Guidelines 2026) :
    - Titres      : Season Sans Medium, chargée en local depuis /public/fonts
@@ -18,28 +19,36 @@ const inter = Inter({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "corpus by datashake · outil d'optimisation de contenu SEO et GEO",
-  description: "corpus analyse le top 10 Google, extrait les patterns sémantiques et score vos contenus en temps réel. L'outil d'optimisation SEO et GEO de datashake.",
+/* Titre et description suivent la langue choisie : c'est ce que voit un client
+   US dans son onglet quand il ouvre un lien de partage. */
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslator();
+  return {
+    title: t("meta.title"),
+    description: t("meta.description"),
   /* Outil interne : aucune page ne doit ressortir dans un moteur ni dans un
      LLM, y compris les liens de partage client (/share, /share-brief). Le
      noindex est doublé d'un header X-Robots-Tag dans next.config.ts et d'un
      robots.txt bloquant (src/app/robots.ts). */
-  robots: {
-    index: false,
-    follow: false,
-    nocache: true,
-    googleBot: { index: false, follow: false, noimageindex: true },
-  },
-};
+    robots: {
+      index: false,
+      follow: false,
+      nocache: true,
+      googleBot: { index: false, follow: false, noimageindex: true },
+    },
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  /* `lang` initial : le LocaleProvider le réajuste côté client quand la langue
+     vient du dossier partagé plutôt que du cookie. */
+  const locale = await resolveLocale();
   return (
-    <html lang="fr" className={`${inter.variable} h-full antialiased`}>
+    <html lang={locale} className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

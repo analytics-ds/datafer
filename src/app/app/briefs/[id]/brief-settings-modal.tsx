@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { BriefOverrides } from "@/lib/brief-overrides";
 import type { NlpTerm, SerpResult } from "@/lib/analysis";
 import { faviconUrl } from "@/lib/favicon";
+import { useT } from "@/lib/i18n/context";
 import { InfoBubble } from "./info-bubble";
 
 type Props = {
@@ -38,6 +39,7 @@ export function BriefSettingsModal({
   rawNlpTerms,
   current,
 }: Props) {
+  const t = useT();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -142,7 +144,7 @@ export function BriefSettingsModal({
     } else {
       const p = parseInt(positionInput, 10);
       if (!Number.isFinite(p) || p < 1) {
-        setError("La position doit être un entier ≥ 1");
+        setError(t("briefSettings.error.position"));
         setSaving(false);
         return;
       }
@@ -200,15 +202,15 @@ export function BriefSettingsModal({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)]">
           <div>
-            <h2 className="text-[15px] font-semibold leading-none">Paramètres du brief</h2>
+            <h2 className="text-[15px] font-semibold leading-none">{t("editor.settings")}</h2>
             <p className="text-[11px] text-[var(--text-muted)] mt-1">
-              Back-office uniquement. Le client ne voit pas cet écran sur le partage.
+              {t("briefSettings.subtitle")}
             </p>
           </div>
           <button
             onClick={onClose}
             className="text-[var(--text-muted)] hover:text-[var(--text)] text-[20px] leading-none px-2"
-            aria-label="Fermer"
+            aria-label={t("common.close")}
           >
             ×
           </button>
@@ -219,8 +221,8 @@ export function BriefSettingsModal({
           {/* Position */}
           <section>
             <h3 className="text-[12px] font-semibold uppercase tracking-[0.2px] text-[var(--text-secondary)] mb-2">
-              Position SERP
-              <InfoBubble text="Position du domaine du client dans Google (top 100). Override la valeur récupérée automatiquement via Haloscan/CrazySerp. Vider le champ pour revenir à la position d'origine." />
+              {t("briefSettings.position")}
+              <InfoBubble text={t("briefSettings.position.info")} />
             </h3>
             <input
               type="number"
@@ -232,31 +234,37 @@ export function BriefSettingsModal({
               className="w-32 px-3 py-2 text-[13px] border border-[var(--border)] rounded-[var(--radius-xs)] bg-[var(--bg)] focus:outline-none focus:border-[var(--accent)]"
             />
             <span className="ml-2 text-[11px] text-[var(--text-muted)]">
-              vide = position détectée automatiquement
+              {t("briefSettings.position.hint")}
             </span>
           </section>
 
           {/* Word count */}
           <section>
             <h3 className="text-[12px] font-semibold uppercase tracking-[0.2px] text-[var(--text-secondary)] mb-2">
-              Nombre de mots de référence
-              <InfoBubble text={`Sert au scoring du critère "Longueur" et à l'affichage du benchmark concurrents. Valeurs auto issues du crawl du top 10 : ${rawMinWordCount} à ${rawMaxWordCount} mots, moyenne ${rawAvgWordCount}.`} />
+              {t("briefSettings.wordCount")}
+              <InfoBubble
+                text={t("briefSettings.wordCount.info", {
+                  min: rawMinWordCount,
+                  max: rawMaxWordCount,
+                  avg: rawAvgWordCount,
+                })}
+              />
             </h3>
             <div className="grid grid-cols-3 gap-3">
-              <WcInput label="Min" value={minWc} onChange={setMinWc} placeholder={String(rawMinWordCount)} />
-              <WcInput label="Avg" value={avgWc} onChange={setAvgWc} placeholder={String(rawAvgWordCount)} />
-              <WcInput label="Max" value={maxWc} onChange={setMaxWc} placeholder={String(rawMaxWordCount)} />
+              <WcInput label={t("filters.score.min")} value={minWc} onChange={setMinWc} placeholder={String(rawMinWordCount)} />
+              <WcInput label={t("briefSettings.wordCount.avg")} value={avgWc} onChange={setAvgWc} placeholder={String(rawAvgWordCount)} />
+              <WcInput label={t("filters.score.max")} value={maxWc} onChange={setMaxWc} placeholder={String(rawMaxWordCount)} />
             </div>
             <p className="text-[11px] text-[var(--text-muted)] mt-2">
-              Vide = valeur d&apos;origine du crawl. Recalcule le score &quot;Longueur&quot; à l&apos;enregistrement.
+              {t("briefSettings.wordCount.hint")}
             </p>
           </section>
 
           {/* Concurrents */}
           <section>
             <h3 className="text-[12px] font-semibold uppercase tracking-[0.2px] text-[var(--text-secondary)] mb-2">
-              Concurrents top {rawSerp.length}
-              <InfoBubble text="Décocher un concurrent le retire des calculs (médiane des scores, benchmarks word count) et de l'affichage SERP. Le centroïde sémantique paragraphe reste figé sur le top 10 d'origine." />
+              {t("panel.bench.topCompetitors", { count: rawSerp.length })}
+              <InfoBubble text={t("briefSettings.competitors.info")} />
             </h3>
             <div className="flex flex-col gap-1 border border-[var(--border)] rounded-[var(--radius-xs)] divide-y divide-[var(--border)]">
               {rawSerp.map((r, i) => {
@@ -312,44 +320,44 @@ export function BriefSettingsModal({
           {/* Termes NLP */}
           <section>
             <h3 className="text-[12px] font-semibold uppercase tracking-[0.2px] text-[var(--text-secondary)] mb-2">
-              Termes NLP à masquer
-              <InfoBubble text="Sur les 40 termes top, décocher pour retirer un terme du brief (chips dans l'éditeur, scoring couverture NLP). Utile pour cacher du bruit (cookie, newsletter, footer…) qui n'a rien à voir avec le sujet du KW." />
+              {t("briefSettings.hideTerms")}
+              <InfoBubble text={t("briefSettings.hideTerms.info")} />
             </h3>
             <div className="flex flex-wrap gap-1.5 max-h-[200px] overflow-y-auto p-2 border border-[var(--border)] rounded-[var(--radius-xs)]">
-              {top40Terms.map((t) => {
-                const removed = removedTerms.has(t.term);
+              {top40Terms.map((term) => {
+                const removed = removedTerms.has(term.term);
                 return (
                   <button
-                    key={t.term}
-                    onClick={() => toggleTerm(t.term)}
+                    key={term.term}
+                    onClick={() => toggleTerm(term.term)}
                     className={`text-[11px] px-2 py-1 rounded-[var(--radius-pill)] border transition-colors ${
                       removed
                         ? "bg-[var(--bg-warm)] border-[var(--border)] text-[var(--text-muted)] line-through"
                         : "bg-[var(--bg)] border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)]"
                     }`}
-                    title={`Présent chez ${t.presence}% des concurrents (avg ${t.avgCount})`}
+                    title={t("briefSettings.term.tooltip", { presence: term.presence, avg: term.avgCount })}
                   >
-                    {t.term}
-                    <span className="ml-1.5 text-[9px] opacity-60">{t.presence}%</span>
+                    {term.term}
+                    <span className="ml-1.5 text-[9px] opacity-60">{term.presence}%</span>
                   </button>
                 );
               })}
               {top40Terms.length === 0 && (
                 <span className="text-[12px] text-[var(--text-muted)] italic px-2 py-1">
-                  Aucun terme NLP analysé.
+                  {t("briefSettings.noTerms")}
                 </span>
               )}
             </div>
             <p className="text-[11px] text-[var(--text-muted)] mt-2">
-              Clic = masquer / réafficher. Recalcule la couverture NLP à l&apos;enregistrement.
+              {t("briefSettings.hideTerms.hint")}
             </p>
           </section>
 
           {/* Ajout de termes NLP custom */}
           <section>
             <h3 className="text-[12px] font-semibold uppercase tracking-[0.2px] text-[var(--text-secondary)] mb-2">
-              Termes NLP à ajouter
-              <InfoBubble text="Ajoute un terme que l'analyse automatique n'a pas remonté mais qui doit apparaître dans les chips de l'éditeur et compter dans le scoring couverture NLP. Ajouté au tier 'Essentiels' (presence 70%) : compté comme obligatoire dans la couverture NLP. Retirez-le ici pour qu'il ne soit plus exigé. Les mots-clés secondaires saisis à la création du brief arrivent aussi dans cette liste." />
+              {t("briefSettings.addTerms")}
+              <InfoBubble text={t("briefSettings.addTerms.info")} />
             </h3>
             <div className="flex gap-2 mb-2">
               <input
@@ -362,7 +370,7 @@ export function BriefSettingsModal({
                     addCustomTerm();
                   }
                 }}
-                placeholder="ex. cosmétique naturelle"
+                placeholder={t("briefSettings.addTerms.placeholder")}
                 maxLength={50}
                 className="flex-1 px-3 py-2 text-[13px] border border-[var(--border)] rounded-[var(--radius-xs)] bg-[var(--bg)] focus:outline-none focus:border-[var(--accent)]"
               />
@@ -372,21 +380,21 @@ export function BriefSettingsModal({
                 disabled={!newTermInput.trim()}
                 className="px-4 py-2 text-[13px] font-semibold bg-[var(--bg-warm)] border border-[var(--border)] rounded-[var(--radius-xs)] hover:bg-[var(--bg)] disabled:opacity-50"
               >
-                + Ajouter
+                {t("briefSettings.add")}
               </button>
             </div>
             {addedTerms.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                {addedTerms.map((t) => (
+                {addedTerms.map((term) => (
                   <span
-                    key={t}
+                    key={term}
                     className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-[var(--radius-pill)] bg-[var(--green-bg)] border border-[var(--green)] text-[var(--text)]"
                   >
-                    {t}
+                    {term}
                     <button
-                      onClick={() => removeCustomTerm(t)}
+                      onClick={() => removeCustomTerm(term)}
                       className="ml-0.5 leading-none hover:text-[var(--red)]"
-                      aria-label={`Retirer ${t}`}
+                      aria-label={t("briefSettings.removeTerm", { term })}
                     >
                       ×
                     </button>
@@ -395,7 +403,7 @@ export function BriefSettingsModal({
               </div>
             ) : (
               <p className="text-[11px] text-[var(--text-muted)] italic">
-                Aucun terme custom. Ajoutez des termes que les concurrents n&apos;utilisent pas mais qui méritent d&apos;être poussés.
+                {t("briefSettings.noCustomTerms")}
               </p>
             )}
           </section>
@@ -407,7 +415,7 @@ export function BriefSettingsModal({
             <span className="text-[12px] text-[var(--red)] font-medium">{error}</span>
           ) : (
             <span className="text-[11px] text-[var(--text-muted)]">
-              Les modifs sont visibles aussi sur le partage client.
+              {t("briefSettings.footerNote")}
             </span>
           )}
           <div className="flex gap-2">
@@ -416,14 +424,14 @@ export function BriefSettingsModal({
               disabled={saving}
               className="px-4 py-2 text-[13px] border border-[var(--border)] rounded-[var(--radius-xs)] hover:bg-[var(--bg-warm)] disabled:opacity-50"
             >
-              Annuler
+              {t("common.cancel")}
             </button>
             <button
               onClick={save}
               disabled={saving}
               className="px-4 py-2 text-[13px] font-semibold bg-[var(--bg-black)] text-[var(--text-inverse)] rounded-[var(--radius-xs)] hover:opacity-90 disabled:opacity-50"
             >
-              {saving ? "Enregistrement…" : "Enregistrer"}
+              {saving ? t("common.saving") : t("common.save")}
             </button>
           </div>
         </div>

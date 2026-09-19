@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/lib/i18n/context";
 import { useEffect, useRef, useState } from "react";
 
 /**
@@ -21,6 +22,7 @@ export function CompetitorDownloadMenu({
   /** Désactive le menu (ex: concurrent sans contenu persisté). */
   disabled?: boolean;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -60,8 +62,8 @@ export function CompetitorDownloadMenu({
           }}
           disabled={disabled}
           className="flex items-center justify-center w-[18px] h-[18px] rounded-[var(--radius-xs)] text-[var(--text-muted)] hover:bg-[var(--bg)] hover:text-[var(--text)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-          title="Télécharger le contenu de ce concurrent"
-          aria-label="Télécharger le contenu"
+          title={t("export.competitor.tooltip")}
+          aria-label={t("export.cta")}
         >
           <svg width="11" height="11" viewBox="0 0 20 20" fill="none">
             <path
@@ -79,17 +81,17 @@ export function CompetitorDownloadMenu({
           onClick={() => setOpen((v) => !v)}
           disabled={disabled}
           className="px-3 py-[6px] rounded-[var(--radius-xs)] text-[11px] font-semibold border border-[var(--border)] hover:bg-[var(--bg-warm)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          title={disabled ? "Contenu non disponible (brief antérieur à la persistance contenu)" : "Télécharger le contenu de ce concurrent"}
+          title={disabled ? t("export.competitor.unavailable") : t("export.competitor.tooltip")}
         >
-          {open ? "▲" : "▼"} Télécharger
+          {open ? "▲" : "▼"} {t("export.cta")}
         </button>
       )}
 
       {open && !disabled && (
         <div className="absolute right-0 top-full mt-1 z-30 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-sm)] shadow-[var(--shadow-lg)] py-1 min-w-[180px]">
-          <Item onClick={() => download("html")} primary="HTML" secondary=".html du contenu" />
-          <Item onClick={() => download("docx")} primary="Word" secondary=".docx Office Open XML" />
-          <Item onClick={openPrint} primary="PDF" secondary="Aperçu navigateur → Save as PDF" />
+          <Item onClick={() => download("html")} primary="HTML" secondary={t("export.competitor.html")} />
+          <Item onClick={() => download("docx")} primary="Word" secondary={t("export.docx")} />
+          <Item onClick={openPrint} primary="PDF" secondary={t("export.pdf")} />
         </div>
       )}
     </div>
