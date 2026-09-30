@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
-import { htmlToEditorData, computeCompetitorStats } from "@/lib/briefs-service";
-import { computeDetailedScore } from "@/lib/scoring";
-import { geoSignalsFromHtml } from "@/lib/geo-scoring";
+import { computeCompetitorStats } from "@/lib/briefs-service";
+import { applyBriefOverrides, parseBriefOverrides } from "@/lib/brief-overrides";
+import { scoreEditorHtml } from "@/lib/editor-score";
 
 export const dynamic = "force-dynamic";
 
@@ -15,32 +16,34 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   const pending = notReady(row);
   if (pending) return pending;
 
-  const { nlp } = loadBrief(row);
+  const { nlp, serp } = loadBrief(row);
   if (!nlp) {
     return NextResponse.json({ error: "nlp data unavailable" }, { status: 404 });
   }
 
-  const editorHtml = row.editorHtml ?? "";
-  const ed = htmlToEditorData(editorHtml);
-  const geoSignals = geoSignalsFromHtml(editorHtml);
-  // Score brut (rawTotal) directement, plus de relativisation vs médiane
-  // concurrents (décision 2026-05-16 : aligner user vs SERP sur même échelle).
-  const breakdown = computeDetailedScore(ed, nlp, geoSignals);
-
-  // Le critère sémantique paragraphe est calculé côté client (live editor)
-  // car il nécessite des appels bge-m3 par paragraphe. Côté serveur on
-  // n'a pas les scores → critère neutralisé. Mais l'utilisateur a sauvegardé
-  // un score qui les inclut. On retourne donc :
-  //   - total = brief.score (le vrai score affiché dans l'éditeur, persisté)
-  //   - breakdown = recalculé sans sémantique (info pédagogique)
-  // Sans persistance (`row.score == null`), on retombe sur le breakdown.
-  const displayedTotal = row.score ?? breakdown.total;
+  // Même NLP (overrides du brief) et même calcul que l'éditeur, sémantique et
+  // saillance comprises (editor-score.ts, 2026-09-30) : le détail renvoyé est
+  // celui du score affiché partout. Avant, ce détail était recalculé sans
+  // sémantique ni overrides et ne retombait pas sur le total.
+  const overridden = applyBriefOverrides(
+    { nlp, serp, position: null },
+    parseBriefOverrides(row.overridesJson),
+  );
+  const ai = (getCloudflareContext().env as unknown as { AI?: Ai }).AI;
+  let breakdown;
+  try {
+    breakdown = await scoreEditorHtml(row.editorHtml ?? "", overridden.nlp ?? nlp, { ai, strictSemantic: true });
+  } catch {
+    return NextResponse.json({ error: "semantic scoring unavailable, retry in a few seconds" }, { status: 503 });
+  }
 
   return NextResponse.json({
     id: row.id,
     keyword: row.keyword,
-    total: displayedTotal,
+    total: breakdown.total,
+    // Conservé pour compatibilité : c'est désormais la même valeur que total.
     breakdownTotal: breakdown.total,
+    storedScore: row.score,
     rawTotal: breakdown.rawTotal,
     competitorMedian: breakdown.competitorMedian,
     seoTotal: breakdown.seoTotal,
@@ -48,15 +51,18 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
     breakdown: {
       keyword: breakdown.keyword,
       nlpCoverage: breakdown.nlpCoverage,
+      differentiation: breakdown.differentiation,
       contentLength: breakdown.contentLength,
       headings: breakdown.headings,
       placement: breakdown.placement,
       structure: breakdown.structure,
       quality: breakdown.quality,
+      salience: breakdown.salience,
+      semantic: breakdown.semantic,
       images: breakdown.images,
       geo: breakdown.geo,
     },
     competitors: computeCompetitorStats(row.serpJson),
-    editorWordCount: ed.text ? ed.text.split(/\s+/).filter(Boolean).length : 0,
+    editorWordCount: breakdown.wordCount,
   });
 }

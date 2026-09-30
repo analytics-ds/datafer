@@ -9,22 +9,19 @@
  * consultant, puis l'écrivait en base.
  *
  * Les paragraphes arrivent en un seul lot (un appel bge-m3 par tranche de
- * BATCH), et non plus cinq par cinq : c'est ce goutte-à-goutte qui faisait
+ * 40), et non plus cinq par cinq : c'est ce goutte-à-goutte qui faisait
  * grimper le score par paliers plusieurs secondes après l'arrêt de la frappe.
  */
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { cosineSim, type NlpResult } from "@/lib/analysis";
+import type { NlpResult } from "@/lib/analysis";
+import { embedParagraphScores, MAX_PARAGRAPH_CHARS } from "@/lib/editor-score";
 
 // Seuils couleur validés Pierre 2026-05-06 (cf. project_datafer_next_steps.md).
 const GREEN_THRESHOLD = 0.75;
 const YELLOW_THRESHOLD = 0.55;
-// Cap dur par paragraphe : sur Workers AI, chaque appel bge-m3 consomme des
-// neurons proportionnels à la longueur de l'input. Review 2026-05-08 (H3).
-const MAX_PARAGRAPH_CHARS = 2000;
 // Cap par requête : un brief très long dépasse rarement 60 blocs de 5 mots.
 const MAX_PARAGRAPHS = 120;
-const BATCH = 40;
 
 export type ParagraphSemantic = { score: number; color: "green" | "yellow" | "red" } | null;
 
@@ -68,28 +65,14 @@ export async function handleSemanticRequest(req: Request, nlpJson: string | null
   const ai = (getCloudflareContext().env as unknown as { AI?: Ai }).AI;
   if (!ai) return NextResponse.json({ error: "AI binding missing" }, { status: 503 });
 
-  const scores: ParagraphSemantic[] = paragraphs.map(() => null);
-  const todo = paragraphs
-    .map((text, i) => ({ text, i }))
-    .filter((p) => p.text.split(/\s+/).filter(Boolean).length >= 5);
+  let raw: (number | null)[];
   try {
-    for (let start = 0; start < todo.length; start += BATCH) {
-      const chunk = todo.slice(start, start + BATCH);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const r = (await ai.run("@cf/baai/bge-m3" as any, { text: chunk.map((c) => c.text) })) as {
-        data?: number[][];
-      };
-      chunk.forEach((c, k) => {
-        const emb = r.data?.[k];
-        if (!emb || emb.length !== centroid.length) return;
-        const score = Math.round(cosineSim(emb, centroid) * 1000) / 1000;
-        scores[c.i] = { score, color: colorFor(score) };
-      });
-    }
+    raw = await embedParagraphScores(ai, centroid, paragraphs);
   } catch (err) {
     console.error("[semantic-paragraphs] embed failed:", err);
     return NextResponse.json({ error: "embedding failed" }, { status: 500 });
   }
+  const scores: ParagraphSemantic[] = raw.map((score) => (score === null ? null : { score, color: colorFor(score) }));
 
   if (single) {
     const s = scores[0];
