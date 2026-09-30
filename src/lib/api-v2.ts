@@ -24,6 +24,7 @@ export type BriefRow = {
   kgr: number | null;
   allintitleCount: number | null;
   position: number | null;
+  overridesJson: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -77,6 +78,7 @@ export async function authBrief(
       kgr: brief.kgr,
       allintitleCount: brief.allintitleCount,
       position: brief.position,
+      overridesJson: brief.overridesJson,
       createdAt: brief.createdAt,
       updatedAt: brief.updatedAt,
     })

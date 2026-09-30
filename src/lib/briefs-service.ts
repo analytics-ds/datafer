@@ -28,13 +28,13 @@ import {
   computeDetailedScore,
   ensureCompetitorScores,
   type DetailedScore,
-  type EditorData,
 } from "@/lib/scoring";
 import {
   applyBriefOverrides,
   parseBriefOverrides,
 } from "@/lib/brief-overrides";
 import { geoSignalsFromHtml } from "@/lib/geo-scoring";
+import { scoreEditorHtml } from "@/lib/editor-score";
 
 export type CompetitorStats = {
   avg: number;
@@ -204,36 +204,10 @@ async function resolveFolder(
 // par createPendingBrief + Cloudflare Queue + completeBriefAnalysis (cf.
 // ARCHITECTURE plus bas et workers/analysis-consumer/).
 
-export function htmlToEditorData(html: string): EditorData {
-  const grab = (tag: string) =>
-    [...html.matchAll(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi"))]
-      .map((m) => stripTags(m[1]).trim())
-      .filter(Boolean);
-  const h1s = grab("h1");
-  const h2s = grab("h2");
-  const h3s = grab("h3");
-  // Préserve les sauts de paragraphe lors du strip : insère \n\n après chaque
-  // bloc fermant (p, h1-h6, li, tr, blockquote) et \n après <br>. Sans ça, le
-  // critère structure du scoring (qui split sur \n\s*\n) ne voit qu'un seul
-  // paragraphe géant et plombe le score à 1/6 même sur des contenus bien
-  // structurés (cf. test & learn 2026-05-08).
-  const withBreaks = html
-    .replace(/<\/(p|h[1-6]|li|tr|blockquote|div)\s*>/gi, "\n\n")
-    .replace(/<br\s*\/?>/gi, "\n");
-  const text = stripTags(withBreaks)
-    .split("\n")
-    .map((l) => l.replace(/[ \t]+/g, " ").trim())
-    .filter(Boolean)
-    .join("\n\n");
-  // Compte les <img> du HTML (self-closing inclus). Sert au critère images
-  // du scoring : on compare ce nombre à la médiane des concurrents.
-  const imageCount = (html.match(/<img\b[^>]*>/gi) ?? []).length;
-  return { text, h1s, h2s, h3s, imageCount };
-}
-
-function stripTags(s: string): string {
-  return s.replace(/<[^>]+>/g, " ");
-}
+// htmlToEditorData (lecture du HTML par regex) a été retiré le 2026-09-30 :
+// il ne lisait pas le texte comme l'éditeur et donnait un autre score (4
+// briefs réels sur 40 identiques). Toute lecture serveur du contenu rédigé
+// passe par readEditorHtml (editor-html.ts) ou scoreEditorHtml (editor-score.ts).
 
 export type RescoreResult =
   | {
@@ -247,6 +221,7 @@ export type RescoreResult =
 export async function rescoreBrief(
   briefId: string,
   editorHtml: string,
+  ai?: Ai,
 ): Promise<RescoreResult> {
   const db = getDb();
   const [row] = await db
@@ -268,7 +243,6 @@ export async function rescoreBrief(
   const nlp = row.nlpJson ? (JSON.parse(row.nlpJson) as NlpResult) : null;
   if (!nlp) return { ok: false, status: 500, error: "brief has no NLP data" };
 
-  const ed = htmlToEditorData(editorHtml);
   // Score brut (rawTotal) directement : on n'applique plus la relativisation
   // vs médiane concurrents. Pierre veut que le score affiché user soit
   // comparable 1:1 au score brut affiché côté SERP concurrents (décision
@@ -296,8 +270,15 @@ export async function rescoreBrief(
   // Si des concurrents sont désactivés, applyBriefOverrides a invalidé
   // competitorScores sur la copie : re-scoring sur le SERP filtré.
   ensureCompetitorScores(scoringNlp, JSON.stringify(overridden.serp));
-  const geoSignals = geoSignalsFromHtml(editorHtml);
-  const breakdown = computeDetailedScore(ed, scoringNlp, geoSignals);
+  // Même lecture du HTML et même sémantique que l'éditeur (editor-score.ts) :
+  // le score écrit ici est celui que l'éditeur affichera à l'ouverture. Si les
+  // embeddings échouent, on n'écrit rien plutôt qu'un score sans sémantique.
+  let breakdown: DetailedScore;
+  try {
+    breakdown = await scoreEditorHtml(editorHtml, scoringNlp, { ai, strictSemantic: true });
+  } catch {
+    return { ok: false, status: 503, error: "semantic scoring unavailable, retry in a few seconds" };
+  }
 
   const nlpJsonToWrite =
     nlp.competitorScores !== undefined ? JSON.stringify(nlp) : row.nlpJson;
@@ -905,20 +886,9 @@ async function createBriefAnalysisPayload(
         blocks.push(`<p>${escapeHtml(myPage.text)}</p>`);
         initialEditorHtml = blocks.join("\n");
       }
-      const myGeoSignals = myPage.structuredHtml
-        ? geoSignalsFromHtml(myPage.structuredHtml)
-        : undefined;
-      const breakdown = computeDetailedScore(
-        {
-          text: myPage.text,
-          h1s: myPage.h1,
-          h2s: myPage.h2,
-          h3s: myPage.h3,
-          imageCount: myPage.imageCount,
-        },
-        nlp,
-        myGeoSignals,
-      );
+      // Score du HTML injecté dans l'éditeur, lu comme l'éditeur le lira :
+      // pas de saut de score à la première ouverture (2026-09-30).
+      const breakdown = await scoreEditorHtml(initialEditorHtml, nlp, { ai: aiBinding });
       myInitialScore = breakdown.total;
     }
   }
