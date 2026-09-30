@@ -109,6 +109,8 @@ export default async function SharedBriefPage({
             workflowStatus={b.workflowStatus as WorkflowStatus}
             initialTags={initialTags}
             availableTags={availableTags}
+            semanticEndpoint={`/api/share/${token}/briefs/${b.id}/semantic`}
+            initialScore={b.score ?? null}
             saveEndpoint={`/api/share/${token}/briefs/${b.id}`}
             tagsEndpoint={`/api/share/${token}/briefs/${b.id}/tags`}
             tagsCreateEndpoint={`/api/share/${token}/tags`}

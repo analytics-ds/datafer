@@ -1,35 +1,23 @@
 /**
  * POST /api/v2/briefs/[id]/semantic-paragraph
  *
- * Body : { paragraph: string }
+ * Body : { paragraphs: string[] }  (l'ancien { paragraph: string } reste accepté)
  *
- * Embed le paragraphe via bge-m3 et calcule le cosinus vs le centroïde
- * sémantique top 10 stocké dans nlp.semanticCentroid. Sert le live scoring
- * sémantique côté éditeur (debounce 2s, ~30-50 calls par session).
+ * Embed les paragraphes via bge-m3 et calcule leur cosinus vs le centroïde
+ * sémantique top 10 stocké dans nlp.semanticCentroid. Sert le critère
+ * sémantique du score de l'éditeur, en un seul lot par pause de frappe.
  *
  * Renvoie :
- *   { score: number 0-1, color: 'green'|'yellow'|'red', centroidAvailable: true }
+ *   { centroidAvailable: true, scores: ({ score, color } | null)[] }
  *   { centroidAvailable: false }  (brief antérieur à l'iter sémantique)
  *
  * Itération 8 (2026-05-08) : feature embedding paragraphe vs top 10 (Pierre).
+ * Passage en lot et logique partagée avec les liens de partage : 2026-09-30.
  */
-import { NextResponse } from "next/server";
-import { authBrief, loadBrief, notReady } from "@/lib/api-v2";
-import { cosineSim } from "@/lib/analysis";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { CorpusEnv } from "@/lib/corpus-env";
+import { authBrief, notReady } from "@/lib/api-v2";
+import { handleSemanticRequest } from "@/lib/semantic-paragraphs";
 
 export const dynamic = "force-dynamic";
-
-// Seuils couleur validés Pierre 2026-05-06 (cf. project_datafer_next_steps.md).
-const GREEN_THRESHOLD = 0.75;
-const YELLOW_THRESHOLD = 0.55;
-
-function colorFor(score: number): "green" | "yellow" | "red" {
-  if (score >= GREEN_THRESHOLD) return "green";
-  if (score >= YELLOW_THRESHOLD) return "yellow";
-  return "red";
-}
 
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -40,50 +28,5 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   const pending = notReady(row);
   if (pending) return pending;
 
-  const body = (await req.json().catch(() => null)) as { paragraph?: string } | null;
-  const paragraph = body?.paragraph?.trim();
-  if (!paragraph || paragraph.split(/\s+/).filter(Boolean).length < 5) {
-    return NextResponse.json({ error: "paragraph too short" }, { status: 400 });
-  }
-  // Cap dur à 2000 caractères (~400 mots, largement au-dessus d'un
-  // paragraphe normal). Évite qu'un paragraphe trop long vide le quota
-  // Workers AI : sur Free, chaque appel bge-m3 consomme des neurons
-  // proportionnels à la longueur de l'input. Review 2026-05-08 (H3).
-  if (paragraph.length > 2000) {
-    return NextResponse.json(
-      { error: "paragraph too long (max 2000 characters)" },
-      { status: 400 },
-    );
-  }
-
-  const { nlp } = loadBrief(row);
-  if (!nlp?.semanticCentroid || nlp.semanticCentroid.length === 0) {
-    return NextResponse.json({ centroidAvailable: false });
-  }
-
-  const env = getCloudflareContext().env as unknown as CorpusEnv;
-  const ai = (env as unknown as { AI?: Ai }).AI;
-  if (!ai) {
-    return NextResponse.json({ error: "AI binding missing" }, { status: 503 });
-  }
-
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r = (await ai.run("@cf/baai/bge-m3" as any, { text: [paragraph] })) as {
-      data?: number[][];
-    };
-    const emb = r.data?.[0];
-    if (!emb || emb.length !== nlp.semanticCentroid.length) {
-      return NextResponse.json({ error: "embedding failed" }, { status: 500 });
-    }
-    const score = cosineSim(emb, nlp.semanticCentroid);
-    return NextResponse.json({
-      centroidAvailable: true,
-      score: Math.round(score * 1000) / 1000,
-      color: colorFor(score),
-    });
-  } catch (err) {
-    console.error("[semantic-paragraph] embed failed:", err);
-    return NextResponse.json({ error: "embedding failed" }, { status: 500 });
-  }
+  return handleSemanticRequest(req, row.nlpJson);
 }

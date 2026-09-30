@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import { brief, client } from "@/db/schema";
 import type { NlpResult, SerpResult, Paa, HaloscanOverview } from "@/lib/analysis";
 import { BriefEditor } from "@/app/app/briefs/[id]/brief-editor";
+import { applyBriefOverrides, parseBriefOverrides } from "@/lib/brief-overrides";
 import { listTagsForBrief, listTagsForClient } from "@/lib/tags-service";
 import type { WorkflowStatus } from "@/app/app/briefs/workflow-status";
 import { LogoApp } from "@/components/brand";
@@ -32,8 +33,17 @@ export default async function SharedSingleBriefPage({
   const b = row.brief;
   const folder = row.folder;
 
-  const nlp = b.nlpJson ? (JSON.parse(b.nlpJson) as NlpResult) : null;
-  const serp = b.serpJson ? (JSON.parse(b.serpJson) as SerpResult[]) : [];
+  // Mêmes overrides back-office que la vue consultant (termes ajoutés ou
+  // masqués, concurrents désactivés, longueur cible) : sans eux, le client
+  // scorait sur une autre liste de termes et voyait un autre score.
+  const rawNlp = b.nlpJson ? (JSON.parse(b.nlpJson) as NlpResult) : null;
+  const rawSerp = b.serpJson ? (JSON.parse(b.serpJson) as SerpResult[]) : [];
+  const overridden = applyBriefOverrides(
+    { nlp: rawNlp, serp: rawSerp, position: b.position ?? null },
+    parseBriefOverrides(b.overridesJson),
+  );
+  const nlp = overridden.nlp;
+  const serp = overridden.serp;
   const paa = b.paaJson ? (JSON.parse(b.paaJson) as Paa[]) : [];
   const haloscan = b.haloscanJson ? (JSON.parse(b.haloscanJson) as HaloscanOverview) : null;
 
@@ -67,11 +77,13 @@ export default async function SharedSingleBriefPage({
             serp={serp}
             paa={paa}
             haloscan={haloscan}
-            position={b.position ?? null}
+            position={overridden.position}
             positionUrl={b.positionUrl ?? null}
             workflowStatus={b.workflowStatus as WorkflowStatus}
             initialTags={initialTags}
             availableTags={availableTags}
+            semanticEndpoint={`/api/share-brief/${token}/semantic`}
+            initialScore={b.score ?? null}
             saveEndpoint={`/api/share-brief/${token}`}
             tagsEndpoint={`/api/share-brief/${token}/tags`}
             tagsCreateEndpoint={`/api/share-brief/${token}/tags-create`}
