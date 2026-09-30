@@ -84,6 +84,7 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
       }
       initialHtml={b.editorHtml ?? ""}
       nlp={nlp}
+      initialScore={b.score ?? null}
       serp={serp}
       paa={paa}
       haloscan={haloscan}

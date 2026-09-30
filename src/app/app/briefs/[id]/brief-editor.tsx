@@ -80,6 +80,18 @@ type BriefEditorProps = {
    */
   saveEndpoint?: string;
   /**
+   * Endpoint POST de la proximité sémantique des paragraphes (critère du score).
+   * - `/api/v2/briefs/<id>/semantic-paragraph` pour les users authentifiés
+   * - `/api/share/<token>/briefs/<id>/semantic` ou `/api/share-brief/<token>/semantic`
+   *   pour les liens de partage, qui doivent scorer exactement comme le consultant.
+   */
+  semanticEndpoint?: string;
+  /**
+   * Score enregistré en base. Affiché tel quel à l'ouverture, avant le premier
+   * calcul complet, pour que le chiffre ne saute pas au chargement.
+   */
+  initialScore?: number | null;
+  /**
    * Endpoint POST/DELETE pour attacher/détacher un tag à ce brief.
    * - `/api/briefs/<id>/tags` (auth) ou `/api/share/<token>/briefs/<id>/tags`
    */
@@ -143,6 +155,7 @@ export function BriefEditor(props: BriefEditorProps) {
   const t = useT();
   const { id, keyword, country, folder, initialHtml, nlp, serp, paa, haloscan, position } = props;
   const saveEndpoint = props.saveEndpoint ?? `/api/briefs/${id}`;
+  const semanticEndpoint = props.semanticEndpoint ?? `/api/v2/briefs/${id}/semantic-paragraph`;
   const tagsEndpoint = props.tagsEndpoint ?? `/api/briefs/${id}/tags`;
   const tagsCreateEndpoint = props.tagsCreateEndpoint ?? `/api/tags`;
   const exportEndpoint = props.exportEndpoint ?? `/api/briefs/${id}/export`;
@@ -244,7 +257,20 @@ export function BriefEditor(props: BriefEditorProps) {
   // chaque <p> de l'éditeur. Itération 8 (2026-05-08, validée Pierre).
   const [paragraphScores, setParagraphScores] = useState<Map<string, { score: number; color: "green" | "yellow" | "red" }>>(new Map());
   const semanticDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const semanticInflight = useRef<Set<string>>(new Set());
+  // Texte de l'éditeur pour lequel toutes les données du score sont prêtes
+  // (embeddings de chaque paragraphe reçus, ou brief sans centroïde). Tant que
+  // l'éditeur ne correspond pas à ce texte, le score affiché reste figé sur le
+  // dernier calcul complet : il ne bouge qu'une fois par pause de frappe, et
+  // jamais par paliers pendant que les embeddings arrivent (2026-09-30).
+  const [readyText, setReadyText] = useState<string | null>(null);
+  const [semanticRetry, setSemanticRetry] = useState(0);
+  // Texte à l'ouverture : sert à savoir si le contenu a vraiment été modifié
+  // dans cette session avant d'écrire un score en base.
+  const initialTextRef = useRef<string | null>(null);
+  // Passe à true à la première relecture de l'éditeur après l'ouverture : tous
+  // ces appels viennent d'une action (frappe, mise en forme, import, lien,
+  // commentaire). Sans modification, on n'écrit rien en base.
+  const editedRef = useRef(false);
   // Mode "source HTML" : remplace l'éditeur visuel par une textarea de HTML
   // brut. Au toggle on, on capture l'innerHTML courant ; au toggle off, on
   // ré-injecte la textarea dans l'éditeur (rendu HTML normal).
@@ -269,12 +295,14 @@ export function BriefEditor(props: BriefEditorProps) {
       editorRef.current.innerHTML = initialHtml;
     }
     readEditor();
+    initialTextRef.current = editorRef.current?.innerText ?? "";
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const readEditor = useCallback(() => {
     const el = editorRef.current;
     if (!el) return;
+    if (initialTextRef.current !== null) editedRef.current = true;
     const text = el.innerText || "";
     const h1s = [...el.querySelectorAll("h1")].map((h) => (h.textContent || "").trim()).filter(Boolean);
     const h2s = [...el.querySelectorAll("h2")].map((h) => (h.textContent || "").trim()).filter(Boolean);
@@ -310,67 +338,77 @@ export function BriefEditor(props: BriefEditorProps) {
     return text.replace(/\s+/g, " ").trim().slice(0, 200);
   }, []);
 
-  // Debounce semantic : 2s après chaque modif éditeur, on récupère les
-  // scores cosinus de chaque paragraphe ≥5 mots qui n'est pas encore en
-  // cache. Max 5 fetchs par batch pour éviter d'inonder l'endpoint.
-  // Désactivé si nlp.semanticCentroid absent (briefs antérieurs à l'iter 8).
+  // Après chaque pause de frappe (1 s), on récupère EN UN SEUL LOT la
+  // proximité sémantique de tous les paragraphes ≥ 5 mots pas encore en cache,
+  // puis on marque le texte comme prêt : le score se recalcule alors une fois,
+  // complet. Avant (jusqu'au 2026-09-30), les paragraphes partaient cinq par
+  // cinq toutes les 2 s et le score grimpait par paliers bien après l'arrêt de
+  // la frappe, à chaque ouverture comme à chaque modification.
+  // Sans centroïde (briefs antérieurs à l'iter 8), le texte est prêt tout de suite.
   useEffect(() => {
-    if (!nlp?.semanticCentroid || nlp.semanticCentroid.length === 0) return;
     if (!editorRef.current) return;
     if (semanticDebounce.current) clearTimeout(semanticDebounce.current);
+    const text = editorData.text;
     semanticDebounce.current = setTimeout(async () => {
       const el = editorRef.current;
       if (!el) return;
+      if (!nlp?.semanticCentroid || nlp.semanticCentroid.length === 0) {
+        setReadyText(text);
+        return;
+      }
       // Inclut les listes (ul/ol) en plus des <p>. On embed le textContent
       // de la liste COMPLÈTE (l'agrégation de tous les <li>), pas chaque
       // bullet pris isolément : un bullet seul n'a pas assez de contexte
-      // sémantique pour être scoré (demande Pierre 2026-05-28). La bordure
-      // colorée s'applique sur tout le bloc liste.
-      const paragraphs = Array.from(el.querySelectorAll("p, ul, ol"));
+      // sémantique pour être scoré (demande Pierre 2026-05-28).
       const toFetch: string[] = [];
-      for (const p of paragraphs) {
-        const text = (p.textContent || "").trim();
-        if (text.split(/\s+/).filter(Boolean).length < 5) continue;
-        const hash = paragraphCacheKey(text);
-        if (paragraphScores.has(hash)) continue;
-        if (semanticInflight.current.has(hash)) continue;
-        toFetch.push(text);
-        if (toFetch.length >= 5) break;
+      for (const p of el.querySelectorAll("p, ul, ol")) {
+        const t = (p.textContent || "").trim();
+        if (t.split(/\s+/).filter(Boolean).length < 5) continue;
+        const key = paragraphCacheKey(t);
+        if (paragraphScores.has(key) || toFetch.some((x) => paragraphCacheKey(x) === key)) continue;
+        toFetch.push(t);
       }
-      if (toFetch.length === 0) return;
-      for (const t of toFetch) semanticInflight.current.add(paragraphCacheKey(t));
-      const newScores = new Map(paragraphScores);
-      await Promise.all(
-        toFetch.map(async (paragraph) => {
-          try {
-            const r = await fetch(`/api/v2/briefs/${id}/semantic-paragraph`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ paragraph }),
-            });
-            const j = (await r.json()) as {
-              centroidAvailable?: boolean;
-              score?: number;
-              color?: "green" | "yellow" | "red";
-            };
-            if (j.centroidAvailable && typeof j.score === "number" && j.color) {
-              newScores.set(paragraphCacheKey(paragraph), { score: j.score, color: j.color });
-            }
-          } catch {
-            // Silencieux : un échec ponctuel n'empêche pas l'éditeur de
-            // fonctionner ; on retentera au prochain debounce.
-          } finally {
-            semanticInflight.current.delete(paragraphCacheKey(paragraph));
-          }
-        }),
-      );
-      setParagraphScores(newScores);
-    }, 2000);
+      if (toFetch.length === 0) {
+        setReadyText(text);
+        return;
+      }
+      const next = new Map(paragraphScores);
+      try {
+        for (let i = 0; i < toFetch.length; i += 100) {
+          const chunk = toFetch.slice(i, i + 100);
+          const r = await fetch(semanticEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paragraphs: chunk }),
+          });
+          if (!r.ok) throw new Error(`semantic ${r.status}`);
+          const j = (await r.json()) as {
+            centroidAvailable?: boolean;
+            scores?: ({ score: number; color: "green" | "yellow" | "red" } | null)[];
+          };
+          if (!j.centroidAvailable) break;
+          chunk.forEach((t, k) => {
+            const sc = j.scores?.[k];
+            if (sc) next.set(paragraphCacheKey(t), sc);
+          });
+        }
+      } catch {
+        // Échec réseau ou Workers AI : on ne publie pas un score amputé du
+        // critère sémantique (il serait faux et partirait en base). Le score
+        // reste figé sur le dernier calcul complet, nouvel essai dans 5 s.
+        semanticDebounce.current = setTimeout(() => setSemanticRetry((n) => n + 1), 5000);
+        return;
+      }
+      setParagraphScores(next);
+      setReadyText(text);
+    }, 1000);
     return () => {
       if (semanticDebounce.current) clearTimeout(semanticDebounce.current);
     };
+    // paragraphScores volontairement hors deps : sa mise à jour vient de cet
+    // effet, la relancer referait un tour pour rien.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorData.text, id, nlp?.semanticCentroid, paragraphScores]);
+  }, [editorData.text, nlp?.semanticCentroid, semanticEndpoint, semanticRetry]);
 
   // La proximité sémantique par paragraphe ne se voit plus dans l'éditeur.
   // Elle continue d'être calculée et de peser dans le score (arbitrage Pierre
@@ -419,95 +457,76 @@ export function BriefEditor(props: BriefEditorProps) {
     // editorData.text déclenche la re-évaluation à chaque modif éditeur.
   }, [paragraphScores, editorData.text, paragraphCacheKey]);
 
-  const score: DetailedScore = useMemo(
-    // Score brut (rawTotal) directement : plus de relativisation vs médiane
-    // concurrents (décision 2026-05-16). Le score affiché user est désormais
-    // sur la même échelle que le score brut affiché côté SERP concurrents.
-    // semanticParagraphScores est alimenté par le debounce ci-dessus.
-    () => {
+  // Calcul complet, uniquement quand toutes les données du texte courant sont
+  // prêtes. Même formule, mêmes entrées côté consultant et côté client : le
+  // chiffre est identique dans les deux vues et dans la liste des briefs.
+  // Score brut (rawTotal) directement : plus de relativisation vs médiane
+  // concurrents (décision 2026-05-16).
+  const computeScore = useCallback(
+    (semantic: ParagraphSemanticScore[] | undefined): DetailedScore => {
       const kwEmphasized = editorRef.current
         ? detectKwEmphasized(editorRef.current, nlp?.exactKeyword?.keyword ?? "")
         : undefined;
-      return computeDetailedScore(
-        { ...editorData, kwEmphasized },
-        nlp,
-        geoSignals,
-        undefined,
-        semanticParagraphScores.length > 0 ? semanticParagraphScores : undefined,
-      );
+      return computeDetailedScore({ ...editorData, kwEmphasized }, nlp, geoSignals, undefined, semantic);
     },
-    [editorData, nlp, geoSignals, semanticParagraphScores],
+    [editorData, nlp, geoSignals],
   );
-
-  // Premier save : on rattrape les briefs avec un score obsolète en BDD
-  // (changement de formule, debounce raté à la session précédente…). On
-  // déclenche dès le 1er calcul utile et on ne le rejoue pas.
-  //
-  // Bug fix 2026-05-26 : on attend que les embeddings paragraphes soient
-  // arrivés (paragraphScores non vide) AVANT le premier save, sinon on
-  // push un score sous-évalué (sans la composante semantic /10) qui fait
-  // diverger l'affichage liste (snapshot BDD) vs affichage brief (calcul
-  // live avec embeddings). Pierre voyait 84 dans la liste et 85 dans le
-  // brief sur "assurance moto A2" parce que le initial save tirait avant
-  // les fetch async des embeddings.
-  //
-  // Fallback : si après 4s les embeddings ne sont toujours pas arrivés
-  // (brief vide, AI binding down, etc.), on save quand même.
-  const initialSaveDone = useRef(false);
-  const initialSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const freshScore: DetailedScore | null = useMemo(
+    () =>
+      readyText !== null && readyText === editorData.text
+        ? computeScore(semanticParagraphScores.length > 0 ? semanticParagraphScores : undefined)
+        : null,
+    [readyText, editorData.text, computeScore, semanticParagraphScores],
+  );
+  // Dernier score complet : c'est lui qu'on affiche pendant la frappe, il ne
+  // bouge pas tant que le nouveau calcul n'est pas prêt.
+  const [settledScore, setSettledScore] = useState<DetailedScore | null>(null);
   useEffect(() => {
-    if (initialSaveDone.current) return;
-    if (editorData.text.length === 0 && !editorRef.current?.innerHTML) return;
+    if (freshScore) setSettledScore(freshScore);
+  }, [freshScore]);
+  // Avant le tout premier calcul complet (la première seconde), on affiche le
+  // score enregistré en base plutôt qu'un calcul partiel. Le détail des
+  // critères est provisoire le temps de ce premier calcul.
+  const provisionalScore = useMemo(() => {
+    const s = computeScore(undefined);
+    return typeof props.initialScore === "number" ? { ...s, total: props.initialScore } : s;
+  }, [computeScore, props.initialScore]);
+  const score: DetailedScore = settledScore ?? provisionalScore;
 
-    const hasMeaningfulText = editorData.text.length > 100;
-    const embeddingsLoaded = paragraphScores.size > 0;
-    const shouldWait = hasMeaningfulText && !embeddingsLoaded;
-
-    if (shouldWait && !initialSaveTimer.current) {
-      // Arm le fallback timeout : si après 4s on n'a toujours rien, save
-      // quand même pour ne pas bloquer indéfiniment.
-      initialSaveTimer.current = setTimeout(() => {
-        if (initialSaveDone.current) return;
-        initialSaveDone.current = true;
-        fetch(saveEndpoint, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ score: score.total, rawScore: score.rawTotal }),
-        }).catch(() => {});
-      }, 4000);
-      return;
-    }
-    if (shouldWait) return;
-
-    if (initialSaveTimer.current) {
-      clearTimeout(initialSaveTimer.current);
-      initialSaveTimer.current = null;
-    }
-    initialSaveDone.current = true;
+  // Écriture du score en base, seulement quand un calcul complet donne une
+  // valeur différente de celle déjà enregistrée. Le client n'écrit que s'il a
+  // lui-même modifié le contenu ; le consultant écrit aussi pour rattraper un
+  // score périmé (changement de formule, contenu poussé par l'API). Avant
+  // (jusqu'au 2026-09-30), chaque vue écrivait son propre calcul à chaque
+  // sauvegarde, et la vue client, privée du critère sémantique, écrasait le
+  // score du consultant.
+  const lastSavedScore = useRef<number | null>(props.initialScore ?? null);
+  useEffect(() => {
+    if (!freshScore) return;
+    if (freshScore.total === lastSavedScore.current) return;
+    if (isShareMode && !editedRef.current) return;
+    lastSavedScore.current = freshScore.total;
     fetch(saveEndpoint, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ score: score.total, rawScore: score.rawTotal }),
+      body: JSON.stringify({ score: freshScore.total, rawScore: freshScore.rawTotal }),
     }).catch(() => {
-      // best-effort : si ça échoue, le debounce save reprendra plus tard.
+      lastSavedScore.current = null;
     });
-  }, [editorData.text, score.total, score.rawTotal, saveEndpoint, paragraphScores.size]);
+  }, [freshScore, saveEndpoint, isShareMode]);
 
-  // Debounced save
+  // Sauvegarde débouncée du contenu. Le score part par l'effet ci-dessus.
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (editorData.text.length === 0 && !editorRef.current?.innerHTML) return;
+    if (!editedRef.current) return;
     saveTimer.current = setTimeout(async () => {
       setSaveStatus("saving");
       try {
         await fetch(saveEndpoint, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            editorHtml: editorRef.current?.innerHTML ?? "",
-            score: score.total,
-            rawScore: score.rawTotal,
-          }),
+          body: JSON.stringify({ editorHtml: editorRef.current?.innerHTML ?? "" }),
         });
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus("idle"), 1500);
@@ -518,7 +537,7 @@ export function BriefEditor(props: BriefEditorProps) {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [editorData, score.total, score.rawTotal, saveEndpoint]);
+  }, [editorData, saveEndpoint]);
 
   const exec = (cmd: string, value?: string) => {
     editorRef.current?.focus();
