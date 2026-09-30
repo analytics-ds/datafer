@@ -1,7 +1,9 @@
 name = "datafer"
 compatibility_date = "2026-04-14"
 compatibility_flags = ["nodejs_compat"]
-main = ".open-next/worker.js"
+# worker.ts enveloppe le worker OpenNext avec le verrou par mot de passe
+# (src/lib/gate.ts). Secrets requis : GATE_PASSWORD, PROXY_SECRET.
+main = "worker.ts"
 
 assets = { directory = ".open-next/assets", binding = "ASSETS" }
 
@@ -57,6 +59,9 @@ SERP_BRIGHTDATA_FALLBACK = "1"
 # Compte Cloudflare pour appeler la Browser Rendering REST API en
 # fallback de crawl (sites bloquants type Akamai). Free tier : 10 min/j.
 CF_ACCOUNT_ID = "e0dd71e4cd791925c9b37a85496aa259"
+# Prod : seul l'accès direct à l'URL workers.dev demande le mot de passe,
+# corpus.datashake.fr passe par corpus-proxy qui signe ses requêtes.
+GATE_MODE = "direct"
 
 # Secrets set via `wrangler secret put`:
 # - BETTER_AUTH_SECRET       (openssl rand -base64 32)
@@ -65,3 +70,41 @@ CF_ACCOUNT_ID = "e0dd71e4cd791925c9b37a85496aa259"
 # - HALOSCAN_KEY             (haloscan JWT)
 # - CF_BROWSER_TOKEN         (Cloudflare API token, perm. "Browser Rendering: Edit")
 # - SCRAPINGBEE_KEY          (scrapingbee.com, fallback niveau 3 IP résidentielles)
+
+# ─── Preprod ────────────────────────────────────────────────────────────────
+# Environnement de test séparé : worker, base D1 et queues à part, copie des
+# données de prod au 2026-09-30. Tout est derrière le mot de passe (GATE_MODE
+# "all"). URL : https://datafer-preprod.analytics-e0d.workers.dev
+# Déploiement : npm run deploy:preprod (ou push sur la branche preprod).
+# Les sections [env.*] n'héritent ni des bindings ni des vars : tout est
+# redéclaré ici.
+[env.preprod]
+name = "datafer-preprod"
+workers_dev = true
+
+[[env.preprod.d1_databases]]
+binding = "DB"
+database_name = "datafer-preprod"
+database_id = "7afc3406-4331-41fc-97dc-e98a3fbaa9b6"
+migrations_dir = "drizzle"
+
+[[env.preprod.queues.producers]]
+binding = "ANALYSIS_QUEUE"
+queue = "datafer-analysis-preprod"
+
+[[env.preprod.queues.producers]]
+binding = "SITEMAP_SYNC_QUEUE"
+queue = "datafer-sitemap-sync-preprod"
+
+[env.preprod.ai]
+binding = "AI"
+
+[env.preprod.vars]
+BETTER_AUTH_URL = "https://datafer-preprod.analytics-e0d.workers.dev"
+# Pas de clé Bright Data en preprod (les secrets de prod ne sont pas
+# relisibles) : CrazySerp seul. Poser BRIGHTDATA_TOKEN / BRIGHTDATA_ZONE sur
+# les deux workers preprod pour revenir à la config de prod.
+SERP_PROVIDER = "crazyserp"
+SERP_BRIGHTDATA_FALLBACK = "0"
+CF_ACCOUNT_ID = "e0dd71e4cd791925c9b37a85496aa259"
+GATE_MODE = "all"

@@ -91,3 +91,46 @@ crons = ["* * * * *"]
 # - HALOSCAN_KEY
 # - BRIGHTDATA_TOKEN
 # - BRIGHTDATA_ZONE
+
+# ─── Preprod ────────────────────────────────────────────────────────────────
+# Consumer de la preprod (cf. [env.preprod] de wrangler.toml) : base D1 et
+# queues à part. npx wrangler deploy -c wrangler-analysis.toml --env preprod
+[env.preprod]
+name = "datafer-analysis-consumer-preprod"
+
+[env.preprod.limits]
+cpu_ms = 300000
+
+[[env.preprod.d1_databases]]
+binding = "DB"
+database_name = "datafer-preprod"
+database_id = "7afc3406-4331-41fc-97dc-e98a3fbaa9b6"
+
+[env.preprod.ai]
+binding = "AI"
+
+[[env.preprod.queues.consumers]]
+queue = "datafer-analysis-preprod"
+max_batch_size = 1
+max_batch_timeout = 5
+max_concurrency = 3
+max_retries = 1
+dead_letter_queue = "datafer-analysis-preprod-dlq"
+
+[[env.preprod.queues.consumers]]
+queue = "datafer-sitemap-sync-preprod"
+max_batch_size = 1
+max_batch_timeout = 5
+max_concurrency = 2
+max_retries = 1
+dead_letter_queue = "datafer-sitemap-sync-preprod-dlq"
+
+[env.preprod.vars]
+# Pas de clé Bright Data en preprod (les secrets de prod ne sont pas
+# relisibles) : CrazySerp seul. Poser BRIGHTDATA_TOKEN / BRIGHTDATA_ZONE sur
+# les deux workers preprod pour revenir à la config de prod.
+SERP_PROVIDER = "crazyserp"
+SERP_BRIGHTDATA_FALLBACK = "0"
+
+[env.preprod.triggers]
+crons = ["* * * * *"]
