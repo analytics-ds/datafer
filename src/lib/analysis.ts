@@ -279,24 +279,21 @@ export async function fetchSerp(
   // ~5 % de corps vides sous charge), donc les enchaîner fait chuter le taux
   // d'échec sans rien coûter quand le premier répond : le second n'est appelé
   // que sur un échec complet du premier.
+  // Avec Bright Data en principal, les deux fournisseurs partent EN PARALLÈLE
+  // et on garde la première SERP non vide (30/09/2026). En séquence, Bright
+  // Data brûlait ~60 s de retries sur un 520 (« rejoindre un club
+  // investissement entre particuliers », à chaque essai), puis CrazySerp
+  // n'avait plus droit qu'à une tentative, alors qu'il met 28 à 43 s sur une
+  // requête longue traîne qu'il n'a pas en cache : le brief échouait en « no
+  // SERP results ». Coût : un crédit CrazySerp par brief, ~0,0003 $.
   if (provider === "brightdata") {
-    const bd = brightdata
-      ? await fetchSerpFromBrightdata(keyword, country, brightdata)
-      : vide;
-    if (bd.results.length) return bd;
-    if (crazyserpKey) {
-      console.log("[serp] Bright Data vide, repli CrazySerp", { keyword });
-      // Une seule tentative : CrazySerp sert ici de filet, pas de provider
-      // principal, et le budget d'analyse doit rester au crawl.
-      return fetchSerpFromCrazyserp(
-        keyword,
-        country,
-        crazyserpKey,
-        apiKeyFallback,
-        1,
-      );
-    }
-    return bd;
+    const bdP = brightdata
+      ? fetchSerpFromBrightdata(keyword, country, brightdata).catch(() => vide)
+      : Promise.resolve(vide);
+    const czP = crazyserpKey
+      ? fetchSerpFromCrazyserp(keyword, country, crazyserpKey, apiKeyFallback).catch(() => vide)
+      : Promise.resolve(vide);
+    return firstNonEmptySerp([bdP, czP], vide);
   }
 
   const primary =
@@ -314,6 +311,22 @@ export async function fetchSerp(
     return fetchSerpFromBrightdata(keyword, country, brightdata);
   }
   return primary;
+}
+
+type SerpFetch = { results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] };
+
+/** Première réponse avec des résultats ; `fallback` si toutes reviennent vides. */
+export function firstNonEmptySerp(promises: Promise<SerpFetch>[], fallback: SerpFetch): Promise<SerpFetch> {
+  return new Promise((resolve) => {
+    let pending = promises.length;
+    if (pending === 0) return resolve(fallback);
+    for (const p of promises) {
+      p.then((r) => {
+        if (r.results.length) resolve(r);
+        else if (--pending === 0) resolve(fallback);
+      });
+    }
+  });
 }
 
 // ─── CrazySerp ───────────────────────────────────────────────────────────────
