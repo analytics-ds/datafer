@@ -71,6 +71,17 @@ npx wrangler deploy --config wrangler-analysis.toml           # consumer uniquem
 
 `npm run deploy` exécute `opennextjs-cloudflare build && opennextjs-cloudflare deploy` et upload le Worker + les assets `public/`. Les assets sous `public/` ne sont servis en prod qu'après un deploy : un fichier committé sur `main` mais jamais déployé renvoie 404 (cas impossible avec l'auto-deploy puisque le workflow déploie systématiquement).
 
+## Preprod et verrou par mot de passe
+
+**Preprod** (depuis le 2026-09-30) : https://datafer-preprod.analytics-e0d.workers.dev, entièrement derrière un mot de passe. Environnement séparé : workers `datafer-preprod` et `datafer-analysis-consumer-preprod`, base D1 `datafer-preprod`, queues `datafer-analysis-preprod` et `datafer-sitemap-sync-preprod` (+ DLQ). Données copiées de la prod le 2026-09-30 (1 358 briefs, 22 users, 59 dossiers) : les comptes et les clés API de prod y marchent. Rien de ce qu'on fait en preprod ne touche la prod.
+
+- Déployer : push sur la branche `preprod` (workflow `deploy-preprod.yml`), lancement manuel du workflow sur n'importe quelle branche, ou `npm run deploy:preprod` en local. Migrations : `npm run db:migrate:preprod`.
+- **SERP en preprod = CrazySerp seul** : les secrets Bright Data de prod ne sont pas relisibles. Pour aligner, poser `BRIGHTDATA_TOKEN` et `BRIGHTDATA_ZONE` sur les deux workers preprod (`--env preprod`) et remettre `SERP_PROVIDER = "brightdata"` dans les deux `[env.preprod.vars]`. Crawl sans Bright Data : fetch direct seulement, certains concurrents protégés sortiront vides.
+- Secrets preprod en place : `GATE_PASSWORD`, `BETTER_AUTH_SECRET` (propre à la preprod : les sessions ne passent pas d'un environnement à l'autre), `CRON_SECRET`, `CRAZYSERP_KEY`, `HALOSCAN_KEY`. Pas de Resend ni ScrapingBee.
+- Rafraîchir les données : `wrangler d1 export datafer --remote`, puis import dans `datafer-preprod`. Deux pièges vécus : l'export crée `account` avant `user` (réordonner les tables par dépendance), et les lignes de brief dépassent la taille max d'une instruction D1 (SQLITE_TOOBIG, jusqu'à 1,5 Mo) : insérer les gros champs vides puis les compléter par des `UPDATE … SET col = col || '…'` de moins de 90 Ko, en décodant les `replace('…','\n',char(10))` du dump.
+
+**Verrou** (`worker.ts` + `src/lib/gate.ts`) : `main = "worker.ts"` enveloppe le worker OpenNext. `GATE_MODE = "all"` en preprod (tout est verrouillé), `"direct"` en prod : seul l'accès direct à `datafer.analytics-e0d.workers.dev` demande le mot de passe. corpus.datashake.fr passe sans rien demander parce que `corpus-proxy` signe chaque requête avec l'en-tête `x-corpus-proxy` (secret `PROXY_SECRET`, identique sur le projet Pages et sur le worker `datafer`). Page de saisie + cookie 30 jours, pas d'auth HTTP Basic : les requêtes `Authorization: Bearer` (API v1/v2, crons GitHub) passent le verrou et restent contrôlées par leur clé. Le mot de passe est le secret `GATE_PASSWORD`, jamais dans le repo (public). **Si on change `PROXY_SECRET`, le changer des deux côtés en même temps**, sinon corpus.datashake.fr affiche la page de mot de passe à tout le monde.
+
 ## Migrations D1
 
 Les migrations doivent être appliquées **avant** de déployer du code qui dépend des nouvelles colonnes, sinon la prod casse le temps du deploy.

@@ -35,6 +35,7 @@ function buildAuth() {
     trustedOrigins: [
       "https://corpus.datashake.fr",
       "https://datafer.analytics-e0d.workers.dev",
+      "https://datafer-preprod.analytics-e0d.workers.dev",
     ],
     emailAndPassword: {
       enabled: true,
