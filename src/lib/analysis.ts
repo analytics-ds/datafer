@@ -151,11 +151,7 @@ export type KeywordTerm = {
  * dans quel mode rédiger (article informatif, fiche produit, comparatif...).
  */
 export type Intent =
-  | "transactional"
-  | "informational"
-  | "commercial"
-  | "navigational"
-  | "local";
+  "transactional" | "informational" | "commercial" | "navigational" | "local";
 
 /**
  * Sous-thème détecté dans la SERP : dérivé du clustering des H2/H3 des
@@ -245,7 +241,7 @@ export type NlpResult = {
   competitorSemanticScores?: number[];
 };
 
-// ─── SERP providers (CrazySerp + SerpAPI) ────────────────────────────────────
+// ─── SERP providers (CrazySerp + SerpAPI + repli Bright Data) ────────────────
 //
 // On supporte deux providers pour pouvoir basculer entre les essais gratuits.
 // Le choix se fait via la variable d'env `SERP_PROVIDER` :
@@ -254,8 +250,13 @@ export type NlpResult = {
 //
 // CrazySerp est ~150× moins cher mais limité aux crédits dispo. SerpAPI
 // reste utile pour les jours où on dépasse le quota CrazySerp.
+//
+// En plus de ces deux providers, un 3e niveau Bright Data se déclenche quand
+// le provider choisi ne renvoie AUCUN résultat (cf. fetchSerpFromBrightdata).
+// C'est le filet anti-panne fournisseur : sans lui, une panne CrazySerp fait
+// échouer 100 % des briefs en `no SERP results` (vécu les 11 et 14/09/2026).
 
-export type SerpProvider = "crazyserp" | "serpapi";
+export type SerpProvider = "crazyserp" | "serpapi" | "brightdata";
 
 export async function fetchSerp(
   keyword: string,
@@ -263,11 +264,56 @@ export async function fetchSerp(
   apiKey: string,
   provider: SerpProvider = "crazyserp",
   apiKeyFallback?: string,
+  brightdata?: {
+    BRIGHTDATA_TOKEN?: string;
+    BRIGHTDATA_ZONE?: string;
+    enabled?: boolean;
+  },
+  crazyserpKey?: string,
 ): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
-  if (provider === "serpapi") {
-    return fetchSerpFromSerpapi(keyword, country, apiKey);
+  const vide = { results: [], allResults: [], paa: [] };
+
+  // Le repli joue dans les DEUX sens : un brief ne doit pas échouer parce
+  // qu'un fournisseur a hoqueté. Les deux tombent en panne indépendamment
+  // (CrazySerp est en panne fournisseur depuis le 11/09, Bright Data renvoie
+  // ~5 % de corps vides sous charge), donc les enchaîner fait chuter le taux
+  // d'échec sans rien coûter quand le premier répond : le second n'est appelé
+  // que sur un échec complet du premier.
+  if (provider === "brightdata") {
+    const bd = brightdata
+      ? await fetchSerpFromBrightdata(keyword, country, brightdata)
+      : vide;
+    if (bd.results.length) return bd;
+    if (crazyserpKey) {
+      console.log("[serp] Bright Data vide, repli CrazySerp", { keyword });
+      // Une seule tentative : CrazySerp sert ici de filet, pas de provider
+      // principal, et le budget d'analyse doit rester au crawl.
+      return fetchSerpFromCrazyserp(
+        keyword,
+        country,
+        crazyserpKey,
+        apiKeyFallback,
+        1,
+      );
+    }
+    return bd;
   }
-  return fetchSerpFromCrazyserp(keyword, country, apiKey, apiKeyFallback);
+
+  const primary =
+    provider === "serpapi"
+      ? await fetchSerpFromSerpapi(keyword, country, apiKey)
+      : await fetchSerpFromCrazyserp(keyword, country, apiKey, apiKeyFallback);
+
+  if (primary.results.length) return primary;
+
+  if (brightdata?.enabled) {
+    console.log("[serp] provider principal vide, repli Bright Data", {
+      provider,
+      keyword,
+    });
+    return fetchSerpFromBrightdata(keyword, country, brightdata);
+  }
+  return primary;
 }
 
 // ─── CrazySerp ───────────────────────────────────────────────────────────────
@@ -332,6 +378,8 @@ async function fetchCrazyserpPage(
   country: string,
   apiKey: string,
   page: number,
+  /** Nombre de tentatives. 1 quand CrazySerp sert de simple filet. */
+  tentatives?: number,
 ): Promise<CrazySerpResponse | null> {
   const cc = country.toLowerCase();
   const location = COUNTRY_TO_LOCATION[cc] ?? "France";
@@ -351,16 +399,20 @@ async function fetchCrazyserpPage(
     googleDomain,
   });
   const url = `https://crazyserp.com/api/search?${params.toString()}`;
-  // 3 tentatives par appel avec backoff 0s / 1s / 2s pour absorber les
-  // latences transient de CrazySerp (le service a parfois des pics de
-  // latence >30s qui causent des timeouts puis se résorbent dans la seconde
-  // suivante). Demande Pierre 2026-05-26 (brief "piercing oreille" qui a
-  // timeout sur les 2 clés en même temps).
+  // Tentatives avec backoff pour absorber les latences transient de CrazySerp.
+  // Demande Pierre 2026-05-26 (brief "piercing oreille" qui a timeout sur les
+  // 2 clés en même temps).
   //
-  // Timeout 30s par tentative × 3 max = 90s worst case par appel. Combiné
-  // avec la cascade primary → fallback côté caller, on reste sous le
-  // deadline ANALYSIS_DEADLINE_MS de 180s.
-  const maxAttempts = 3;
+  // 2026-09-14 : 2 tentatives à 45s au lieu de 3 à 30s, à budget constant
+  // (90s). Mesuré pendant la panne : quand CrazySerp répond, il met parfois
+  // 30,8s (« abri buches exterieur ») — un timeout à 30s jetait donc une
+  // réponse valide, et réessayer plus souvent ne sert à rien face à un service
+  // lent. Mieux vaut attendre plus longtemps, moins souvent.
+  //
+  // Combiné avec la cascade primary → fallback côté caller, on reste sous le
+  // deadline ANALYSIS_DEADLINE_MS de 240s.
+  const maxAttempts = tentatives ?? 2;
+  const attemptTimeoutMs = 45000;
   let lastError: string = "";
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
@@ -372,7 +424,7 @@ async function fetchCrazyserpPage(
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(attemptTimeoutMs),
       });
       if (!r.ok) {
         lastError = `http ${r.status}`;
@@ -384,14 +436,18 @@ async function fetchCrazyserpPage(
         continue;
       }
       if (attempt > 0) {
-        console.log("[crazyserp] page fetch ok after retry", { page, keyword, attempt });
+        console.log("[crazyserp] page fetch ok after retry", {
+          page,
+          keyword,
+          attempt,
+        });
       }
       return d;
     } catch (e) {
       lastError = e instanceof Error ? e.message : String(e);
     }
   }
-  console.error("[crazyserp] page fetch failed after 3 attempts", {
+  console.error(`[crazyserp] page fetch failed after ${maxAttempts} attempts`, {
     page,
     keyword,
     error: lastError,
@@ -404,10 +460,12 @@ async function fetchSerpFromCrazyserp(
   country: string,
   apiKey: string,
   apiKeyFallback?: string,
+  /** Tentatives par page. 1 quand CrazySerp n'est que le filet de Bright Data. */
+  tentatives?: number,
 ): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
   // Page 1 = 1 crédit. Renvoie ~10 résultats organiques (parfois 8-9 si
   // Google a inséré des blocs spéciaux).
-  let first = await fetchCrazyserpPage(keyword, country, apiKey, 1);
+  let first = await fetchCrazyserpPage(keyword, country, apiKey, 1, tentatives);
   // Bascule automatique sur la clé secondaire si la primaire ne répond pas
   // (cas typique : quota CrazySerp épuisé sur la primaire). Pierre voit
   // [crazyserp] fallback dans les logs Cloudflare et sait qu'il faut
@@ -415,7 +473,13 @@ async function fetchSerpFromCrazyserp(
   let activeKey = apiKey;
   if (!first && apiKeyFallback) {
     console.log("[crazyserp] primary key failed, trying fallback");
-    first = await fetchCrazyserpPage(keyword, country, apiKeyFallback, 1);
+    first = await fetchCrazyserpPage(
+      keyword,
+      country,
+      apiKeyFallback,
+      1,
+      tentatives,
+    );
     if (first) {
       activeKey = apiKeyFallback;
       console.log("[crazyserp] using fallback key for this brief");
@@ -496,7 +560,11 @@ type SerpApiRaw = {
     snippet?: string;
     displayed_link?: string;
   }>;
-  related_questions?: Array<{ question?: string; snippet?: string; link?: string }>;
+  related_questions?: Array<{
+    question?: string;
+    snippet?: string;
+    link?: string;
+  }>;
   error?: string;
 };
 
@@ -565,6 +633,374 @@ async function fetchSerpFromSerpapi(
   return { results, allResults, paa };
 }
 
+// ─── Bright Data (repli SERP de dernier recours) ─────────────────────────────
+//
+// Ajouté le 2026-09-14 : CrazySerp est tombé côté fournisseur (0/12 appels OK,
+// `500 Failed to fetch search results` sur tous les mots-clés et tous les
+// marchés, y compris avec une clé valide et créditée) et la clé de secours
+// `CRAZYSERP_KEY_FALLBACK` est à 0 crédit (http 402). Résultat : tout brief
+// échouait en `no SERP results`, l'outil était inutilisable.
+//
+// Ce 3e niveau récupère la SERP via la zone Bright Data déjà utilisée pour le
+// crawl des concurrents (mêmes secrets BRIGHTDATA_TOKEN / BRIGHTDATA_ZONE, pas
+// de nouveau compte à ouvrir). Deux formats de réponse sont gérés :
+//   1. `brd_json=1` → JSON déjà parsé (zones SERP API). Chemin nominal.
+//   2. HTML brut (zones Web Unlocker simples) → parsing des <h3> dans les <a>.
+//      On récupère alors titre + URL mais pas les snippets, ce qui suffit :
+//      le NLP travaille sur les pages crawlées, pas sur les snippets.
+//
+// Ne se déclenche QUE si CrazySerp n'a rien renvoyé, donc facturé uniquement
+// pendant une panne. Coupure possible sans redéploiement de code en passant
+// SERP_BRIGHTDATA_FALLBACK à "0" dans wrangler-analysis.toml.
+
+type BrightDataSerpJson = {
+  organic?: Array<{
+    link?: string;
+    url?: string;
+    title?: string;
+    description?: string;
+    snippet?: string;
+    display_link?: string;
+    rank?: number;
+    position?: number;
+  }>;
+  people_also_ask?: Array<Record<string, unknown>>;
+  // Selon la zone, Bright Data nomme le bloc PAA `related_questions`.
+  related_questions?: Array<Record<string, unknown>>;
+};
+
+/**
+ * Les items PAA de Bright Data ne portent pas les mêmes noms de champs selon
+ * la zone (`question` / `question_text` / `title`, `answer` / `snippet` /
+ * `description` / `text`). On prend le premier champ non vide de chaque
+ * famille plutôt que de parier sur un nom.
+ */
+function pickString(o: Record<string, unknown>, keys: string[]): string {
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return "";
+}
+
+function mapBrightDataPaa(items: Array<Record<string, unknown>>): Paa[] {
+  return items
+    .map((q) => ({
+      question: pickString(q, [
+        "question",
+        "question_text",
+        "title",
+        "query",
+        "text",
+      ]),
+      snippet: pickString(q, [
+        "answer",
+        "snippet",
+        "description",
+        "answer_text",
+        "body",
+      ]),
+      link: pickString(q, ["link", "url", "source_url", "displayed_link"]),
+    }))
+    .filter((q) => q.question);
+}
+
+/**
+ * Bright Data renvoie les liens organiques sous forme de redirection Google
+ * (`https://www.google.fr/goto?url=CAES…`, parfois `/url?q=…`), jamais l'URL
+ * du site. Laissées telles quelles, elles polluent `bestUrl` côté UI et
+ * cassent `findDomainHit`, qui cherche le domaine du client dans l'URL.
+ *
+ * `/url?q=` se décode sans requête réseau. `/goto?url=` est un blob encodé
+ * côté Google : on suit la redirection en `manual` et on lit le `Location`
+ * (302 vérifié le 14/09/2026). En cas d'échec on garde le lien d'origine,
+ * qui reste crawlable puisque le crawler suit les redirections.
+ */
+export async function resolveGoogleRedirect(link: string): Promise<string> {
+  let u: URL;
+  try {
+    u = new URL(link);
+  } catch {
+    return link;
+  }
+  if (!/(^|\.)google\.[a-z.]+$/.test(u.hostname.toLowerCase())) return link;
+
+  const direct = u.searchParams.get("q") ?? u.searchParams.get("imgurl");
+  if (direct && /^https?:\/\//.test(direct)) return direct;
+
+  try {
+    const r = await fetch(link, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    const loc = r.headers.get("location");
+    if (loc && /^https?:\/\//.test(loc)) return loc;
+  } catch {
+    // silencieux : on retombe sur le lien d'origine
+  }
+  return link;
+}
+
+function googleSearchUrl(
+  keyword: string,
+  country: string,
+  json: boolean,
+): string {
+  const cc = country.toLowerCase();
+  const lang = COUNTRY_TO_LANG[cc] ?? "fr";
+  const googleDomain = COUNTRY_TO_GOOGLE_DOMAIN[cc] ?? "google.fr";
+  const params = new URLSearchParams({
+    q: keyword,
+    // num=20 pour garantir un top 10 plein même quand Google insère des blocs
+    // spéciaux (même raison que la page 2 côté CrazySerp).
+    num: "20",
+    gl: cc === "uk" || cc === "gb" ? "uk" : cc,
+    hl: lang,
+  });
+  // brd_json est un paramètre Bright Data, pas Google : il demande à leur
+  // couche SERP de renvoyer du JSON parsé au lieu du HTML.
+  if (json) params.set("brd_json", "1");
+  return `https://www.${googleDomain}/search?${params.toString()}`;
+}
+
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
+function stripSerpTags(s: string): string {
+  return decodeHtmlEntities(s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " "));
+}
+
+/**
+ * Parse un HTML de SERP Google pour en extraire les résultats organiques.
+ *
+ * Le markup Google est obfusqué et change souvent, mais la structure
+ * `<a href="https://…"> … <h3>Titre</h3> … </a>` est stable depuis des années.
+ * On filtre les URL internes Google (navigation, cache) et on dédoublonne par
+ * URL en gardant le premier passage, qui correspond à la meilleure position.
+ *
+ * Le filtre vise la navigation du moteur, pas le domaine google : les
+ * propriétés Google sont des concurrents organiques légitimes, et
+ * developers.google.com sort d'ailleurs en position 1 sur « qu'est-ce que le
+ * SEO » (constaté le 14/09/2026). Écarter tout *.google.* ferait sauter un
+ * vrai résultat du top 10.
+ */
+export function parseGoogleSerpHtml(html: string): SerpResult[] {
+  const out: SerpResult[] = [];
+  const seen = new Set<string>();
+  const re =
+    /<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>[\s\S]{0,2000}?<h3[^>]*>([\s\S]*?)<\/h3>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const link = decodeHtmlEntities(m[1]);
+    const title = stripSerpTags(m[2]).trim();
+    if (!title) continue;
+    let host: string;
+    let chemin: string;
+    try {
+      const u = new URL(link);
+      host = u.hostname.toLowerCase();
+      chemin = u.pathname;
+    } catch {
+      continue;
+    }
+    // Navigation du moteur : le domaine nu (www.google.fr, google.com) sur ses
+    // chemins internes, et le cache. developers.google.com, support.google.com
+    // ou blog.google restent des résultats organiques et passent.
+    const estHoteMoteur = /^(www\.)?google\.[a-z.]+$/.test(host);
+    const estCheminMoteur =
+      /^\/(search|url|preferences|imgres|shopping|maps|travel|finance|advanced_search|intl|policies|setprefs|history)(\/|$)/.test(
+        chemin,
+      ) || chemin === "/";
+    if (
+      (estHoteMoteur && estCheminMoteur) ||
+      host === "webcache.googleusercontent.com"
+    ) {
+      continue;
+    }
+    if (seen.has(link)) continue;
+    seen.add(link);
+    out.push({
+      position: out.length + 1,
+      title,
+      link,
+      snippet: "",
+      displayed_link: host,
+    });
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+// Trace one-shot de la forme des items PAA (les noms de champs varient selon
+// la zone Bright Data). Loggée une fois par isolate, pas à chaque brief.
+let paaShapeLogged = false;
+
+async function fetchSerpFromBrightdata(
+  keyword: string,
+  country: string,
+  env: { BRIGHTDATA_TOKEN?: string; BRIGHTDATA_ZONE?: string },
+): Promise<{ results: SerpResult[]; allResults: SerpResult[]; paa: Paa[] }> {
+  const empty = { results: [], allResults: [], paa: [] };
+  const token = env.BRIGHTDATA_TOKEN;
+  const zone = env.BRIGHTDATA_ZONE;
+  if (!token || !zone) {
+    console.log("[serp-brightdata] secrets manquants, repli impossible");
+    return empty;
+  }
+
+  // Passes JSON (zones SERP API) puis HTML brut (zones Unlocker).
+  //
+  // Bright Data renvoie par intermittence un 200 au corps vide (constaté le
+  // 14/09/2026 sur « assurance moto 125 »), puis met la requête en quarantaine
+  // et répond « This query recently failed and cannot be attempted at this
+  // time. Please try again later, after a minimum of 15 seconds. » Un retry
+  // immédiat tombe donc systématiquement dans la quarantaine : on attend
+  // RETRY_COOLDOWN_MS (leur minimum + marge) avant de rejouer.
+  //
+  // Budget pire cas ~112s, à comparer à ANALYSIS_DEADLINE_MS = 240s dont il
+  // faut laisser de quoi crawler les 10 concurrents. Ce pire cas n'est atteint
+  // qu'en enchaînant les échecs ; un appel qui passe répond en quelques
+  // secondes. Avec SERP_PROVIDER=brightdata on n'a pas dépensé les ~40s de
+  // CrazySerp avant d'arriver ici.
+  const RETRY_COOLDOWN_MS = 16000;
+  const passes: Array<{ asJson: boolean; attempts: number }> = [
+    { asJson: true, attempts: 3 },
+    { asJson: false, attempts: 1 },
+  ];
+  for (const pass of passes) {
+    const asJson = pass.asJson;
+    for (let attempt = 0; attempt < pass.attempts; attempt++) {
+      if (attempt > 0)
+        await new Promise((res) => setTimeout(res, RETRY_COOLDOWN_MS));
+      try {
+        const r = await fetch("https://api.brightdata.com/request", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            zone,
+            url: googleSearchUrl(keyword, country, asJson),
+            format: "raw",
+            country: country.toLowerCase(),
+          }),
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!r.ok) {
+          console.error("[serp-brightdata] http error", {
+            status: r.status,
+            asJson,
+            keyword,
+          });
+          continue;
+        }
+        const body = await r.text();
+
+        let allResults: SerpResult[] = [];
+        let paa: Paa[] = [];
+
+        const trimmed = body.trimStart();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+          let d: BrightDataSerpJson | null = null;
+          try {
+            d = JSON.parse(body) as BrightDataSerpJson;
+          } catch {
+            d = null;
+          }
+          if (d) {
+            // Trace des blocs renvoyés par la zone : sert à repérer sous quel
+            // nom arrivent les PAA et les autres blocs SERP exploitables.
+            console.log("[serp-brightdata] blocs json", {
+              keys: Object.keys(d).slice(0, 40),
+            });
+          }
+          if (d?.organic?.length) {
+            const mapped = d.organic
+              .map((o, i) => ({
+                position: o.rank ?? o.position ?? i + 1,
+                title: o.title ?? "",
+                link: o.link ?? o.url ?? "",
+                snippet: o.description ?? o.snippet ?? "",
+                displayed_link: o.display_link ?? o.link ?? o.url ?? "",
+              }))
+              .filter((x) => x.link);
+
+            // Déballage en parallèle des redirections Google (cf.
+            // resolveGoogleRedirect) : sans ça `bestUrl` affiche un
+            // google.fr/goto?url=… et la détection de position échoue.
+            allResults = await Promise.all(
+              mapped.map(async (r) => {
+                const link = await resolveGoogleRedirect(r.link);
+                let host = r.displayed_link;
+                try {
+                  host = new URL(link).hostname;
+                } catch {
+                  // on garde le display_link de Bright Data
+                }
+                return { ...r, link, displayed_link: host };
+              }),
+            );
+
+            const rawPaa = d.people_also_ask ?? d.related_questions ?? [];
+            if (rawPaa.length && !paaShapeLogged) {
+              paaShapeLogged = true;
+              console.log("[serp-brightdata] forme paa", {
+                champs: Object.keys(rawPaa[0] ?? {}).slice(0, 20),
+              });
+            }
+            paa = mapBrightDataPaa(rawPaa);
+          }
+        }
+
+        // Pas de JSON exploitable : la zone n'est pas une zone SERP API, on
+        // retombe sur le parsing du HTML renvoyé.
+        if (!allResults.length) {
+          allResults = parseGoogleSerpHtml(body);
+        }
+
+        if (allResults.length) {
+          console.log("[serp-brightdata] ok", {
+            keyword,
+            mode: asJson ? "json" : "html",
+            count: allResults.length,
+          });
+          return { results: allResults.slice(0, 10), allResults, paa };
+        }
+        console.error("[serp-brightdata] aucun résultat extrait", {
+          keyword,
+          asJson,
+          attempt,
+          bodyLength: body.length,
+          // Corps court = message d'erreur Bright Data ou page de blocage :
+          // on le trace pour diagnostiquer sans rejouer la requête.
+          extrait: body.length <= 400 ? body.slice(0, 400) : undefined,
+        });
+      } catch (e) {
+        console.error("[serp-brightdata] exception", {
+          keyword,
+          asJson,
+          attempt,
+          err: String(e),
+        });
+      }
+    }
+  }
+  return empty;
+}
+
 /**
  * Questions connexes récupérées via Haloscan /api/keywords/questions.
  * Utilisé en complément des PAA SERPAPI quand SERPAPI n'en renvoie pas assez
@@ -580,7 +1016,10 @@ export async function fetchHaloscanQuestions(
     const gl = country === "uk" ? "GB" : country.toUpperCase();
     const r = await fetch("https://api.haloscan.com/api/keywords/questions", {
       method: "POST",
-      headers: { "haloscan-api-key": token, "Content-Type": "application/json" },
+      headers: {
+        "haloscan-api-key": token,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ keyword, country: gl }),
       signal: AbortSignal.timeout(12000),
     });
@@ -630,7 +1069,10 @@ export async function fetchHaloscan(
     const gl = country === "uk" ? "GB" : country.toUpperCase();
     const r = await fetch("https://api.haloscan.com/api/keywords/overview", {
       method: "POST",
-      headers: { "haloscan-api-key": token, "Content-Type": "application/json" },
+      headers: {
+        "haloscan-api-key": token,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         keyword,
         country: gl,
@@ -639,7 +1081,11 @@ export async function fetchHaloscan(
       signal: AbortSignal.timeout(15000),
     });
     if (!r.ok) {
-      console.error("[haloscan] overview HTTP", r.status, await r.text().catch(() => ""));
+      console.error(
+        "[haloscan] overview HTTP",
+        r.status,
+        await r.text().catch(() => ""),
+      );
       return null;
     }
     const raw = (await r.json()) as {
@@ -767,7 +1213,10 @@ export function findDomainHit(
   if (!target) return null;
   for (const r of results) {
     const d = normalizeDomain(r.link);
-    if (d && (d === target || d.endsWith("." + target) || target.endsWith("." + d))) {
+    if (
+      d &&
+      (d === target || d.endsWith("." + target) || target.endsWith("." + d))
+    ) {
       return { position: r.position, url: r.link };
     }
   }
@@ -870,7 +1319,8 @@ export async function crawlPage(
       signal: AbortSignal.timeout(10000),
       headers: {
         "User-Agent": GOOGLEBOT_UA,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
         From: "googlebot(at)googlebot.com",
       },
@@ -878,9 +1328,12 @@ export async function crawlPage(
     });
     if (r.ok) {
       const html = await r.text();
-      const truncated = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
+      const truncated =
+        html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
       if (looksLikeChallengePage(truncated)) {
-        console.log(`[crawl] niveau=1 fallback raison=challenge_page url=${url}`);
+        console.log(
+          `[crawl] niveau=1 fallback raison=challenge_page url=${url}`,
+        );
       } else {
         const parsed = parseHTML(truncated);
         // Seuil 200 mots : sous ce seuil on suppose que le contenu est
@@ -891,11 +1344,15 @@ export async function crawlPage(
           console.log(`[crawl] niveau=1 ok wc=${parsed.wordCount} url=${url}`);
           return { ...parsed, url };
         }
-        console.log(`[crawl] niveau=1 fallback raison=wc_faible(${parsed.wordCount}) url=${url}`);
+        console.log(
+          `[crawl] niveau=1 fallback raison=wc_faible(${parsed.wordCount}) url=${url}`,
+        );
       }
     } else {
       if (diag) diag.level1Status = r.status;
-      console.log(`[crawl] niveau=1 fallback raison=http_${r.status} url=${url}`);
+      console.log(
+        `[crawl] niveau=1 fallback raison=http_${r.status} url=${url}`,
+      );
     }
   } catch {
     // Timeout / TLS / DNS : on bascule sur Bright Data
@@ -920,9 +1377,13 @@ export async function crawlPage(
       return { ...parsed, url };
     }
     if (parsed.wordCount > 0) partial = { ...parsed, url };
-    console.log(`[crawl] niveau=2 fallback raison=wc_partiel(${parsed.wordCount}) url=${url}`);
+    console.log(
+      `[crawl] niveau=2 fallback raison=wc_partiel(${parsed.wordCount}) url=${url}`,
+    );
   } else {
-    console.log(`[crawl] niveau=2 fallback raison=${fullHtml ? "challenge_page" : "pas_de_html"} url=${url}`);
+    console.log(
+      `[crawl] niveau=2 fallback raison=${fullHtml ? "challenge_page" : "pas_de_html"} url=${url}`,
+    );
   }
 
   // Garde-fou de cout : le niveau 3 est le poste de depense (bande passante
@@ -932,7 +1393,9 @@ export async function crawlPage(
     if (budget.level3Remaining <= 0) {
       console.log(`[crawl] niveau=3 saute raison=budget_epuise url=${url}`);
       if (partial && partial.wordCount >= 100) {
-        console.log(`[crawl] niveau=2 retombee wc=${partial.wordCount} url=${url}`);
+        console.log(
+          `[crawl] niveau=2 retombee wc=${partial.wordCount} url=${url}`,
+        );
         return partial;
       }
       console.log(`[crawl] ECHEC tous_niveaux url=${url}`);
@@ -950,13 +1413,20 @@ export async function crawlPage(
     const parsed = parseHTML(browserHtml);
     // On garde le niveau 3 seulement s'il dépasse le seuil minimal absolu
     // (100) ET fait au moins aussi bien que le rendu partiel niveau 2.
-    if (parsed.wordCount >= 100 && parsed.wordCount >= (partial?.wordCount ?? 0)) {
+    if (
+      parsed.wordCount >= 100 &&
+      parsed.wordCount >= (partial?.wordCount ?? 0)
+    ) {
       console.log(`[crawl] niveau=3 ok wc=${parsed.wordCount} url=${url}`);
       return { ...parsed, url };
     }
-    console.log(`[crawl] niveau=3 insuffisant wc=${parsed.wordCount} url=${url}`);
+    console.log(
+      `[crawl] niveau=3 insuffisant wc=${parsed.wordCount} url=${url}`,
+    );
   } else {
-    console.log(`[crawl] niveau=3 echec raison=${browserHtml ? "challenge_page" : "pas_de_html"} url=${url}`);
+    console.log(
+      `[crawl] niveau=3 echec raison=${browserHtml ? "challenge_page" : "pas_de_html"} url=${url}`,
+    );
   }
 
   // Anti-régression : le niveau 3 n'a pas fait mieux, on retombe sur le
@@ -1006,7 +1476,11 @@ async function crawlWithBrightDataBrowser(
   let basicAuth: string;
   try {
     const u = new URL(wssUrl);
-    basicAuth = "Basic " + btoa(`${decodeURIComponent(u.username)}:${decodeURIComponent(u.password)}`);
+    basicAuth =
+      "Basic " +
+      btoa(
+        `${decodeURIComponent(u.username)}:${decodeURIComponent(u.password)}`,
+      );
     u.username = "";
     u.password = "";
     httpsUrl = u.toString().replace(/^wss:\/\//, "https://");
@@ -1029,7 +1503,10 @@ async function crawlWithBrightDataBrowser(
   }
   if (wsResp.status !== 101 || !wsResp.webSocket) {
     if (diag) diag.level3Status = wsResp.status;
-    console.log("[bd-browser] no websocket on response", { url, status: wsResp.status });
+    console.log("[bd-browser] no websocket on response", {
+      url,
+      status: wsResp.status,
+    });
     return null;
   }
 
@@ -1076,13 +1553,23 @@ async function crawlWithBrightDataBrowser(
           resolve(result as T);
         }
       });
-      ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+      ws.send(
+        JSON.stringify({
+          id,
+          method,
+          params,
+          ...(sessionId ? { sessionId } : {}),
+        }),
+      );
     });
   };
 
   const waitFor = (method: string, timeoutMs = 15000): Promise<unknown> =>
     new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`timeout waiting ${method}`)), timeoutMs);
+      const timer = setTimeout(
+        () => reject(new Error(`timeout waiting ${method}`)),
+        timeoutMs,
+      );
       const handlers = events.get(method) ?? [];
       handlers.push((params) => {
         clearTimeout(timer);
@@ -1095,7 +1582,9 @@ async function crawlWithBrightDataBrowser(
     // Garde-fou global : on coupe tout après 45s (15s navigate + 12s polling
     // d'hydratation + marge pour Runtime.evaluate sur de gros DOM).
     const overall = setTimeout(() => {
-      try { ws.close(1000, "overall timeout"); } catch {}
+      try {
+        ws.close(1000, "overall timeout");
+      } catch {}
     }, 45000);
 
     // 1. Crée un nouvel onglet blank (BD interdit d'ouvrir une URL non-blank
@@ -1105,10 +1594,13 @@ async function crawlWithBrightDataBrowser(
     });
 
     // 2. Attache la session pour pouvoir piloter cet onglet
-    const attached = await send<{ sessionId: string }>("Target.attachToTarget", {
-      targetId: target.targetId,
-      flatten: true,
-    });
+    const attached = await send<{ sessionId: string }>(
+      "Target.attachToTarget",
+      {
+        targetId: target.targetId,
+        flatten: true,
+      },
+    );
     const sid = attached.sessionId;
 
     // 3. Active Page domain pour recevoir loadEventFired
@@ -1127,38 +1619,87 @@ async function crawlWithBrightDataBrowser(
         "Network.setBlockedURLs",
         {
           urls: [
-            "*.jpg*", "*.jpeg*", "*.png*", "*.gif*", "*.webp*", "*.avif*",
-            "*.bmp*", "*.ico*", "*.tiff*",
-            "*.woff*", "*.woff2*", "*.ttf*", "*.otf*", "*.eot*",
-            "*.mp4*", "*.webm*", "*.mov*", "*.m4v*", "*.avi*", "*.mkv*",
-            "*.mp3*", "*.wav*", "*.ogg*", "*.m4a*",
-            "*.pdf*", "*.zip*",
+            "*.jpg*",
+            "*.jpeg*",
+            "*.png*",
+            "*.gif*",
+            "*.webp*",
+            "*.avif*",
+            "*.bmp*",
+            "*.ico*",
+            "*.tiff*",
+            "*.woff*",
+            "*.woff2*",
+            "*.ttf*",
+            "*.otf*",
+            "*.eot*",
+            "*.mp4*",
+            "*.webm*",
+            "*.mov*",
+            "*.m4v*",
+            "*.avi*",
+            "*.mkv*",
+            "*.mp3*",
+            "*.wav*",
+            "*.ogg*",
+            "*.m4a*",
+            "*.pdf*",
+            "*.zip*",
             // Scripts tiers : ils pesent souvent 30 a 50% du poids d'une page
             // et n'ont aucun effet sur le texte qu'on extrait. On garde en
             // revanche le CSS et le JS du site lui-meme : sans CSS le contenu
             // masque redeviendrait visible et gonflerait le wordCount, et sans
             // JS le niveau 3 n'aurait plus de raison d'etre (il n'existe que
             // pour rendre les SPA).
-            "*googletagmanager.com*", "*google-analytics.com*",
-            "*analytics.google.com*", "*doubleclick.net*",
-            "*googlesyndication.com*", "*googleadservices.com*",
-            "*facebook.net*", "*facebook.com/tr*", "*connect.facebook*",
-            "*hotjar.com*", "*clarity.ms*", "*segment.io*", "*segment.com*",
-            "*criteo.com*", "*criteo.net*", "*taboola.com*", "*outbrain.com*",
-            "*adnxs.com*", "*rubiconproject.com*", "*pubmatic.com*",
-            "*bing.com/bat*", "*clarity.microsoft.com*",
-            "*intercom.io*", "*intercomcdn.com*", "*crisp.chat*",
-            "*zdassets.com*", "*zendesk.com/embeddable*", "*tawk.to*",
-            "*cookielaw.org*", "*onetrust.com*", "*cookiebot.com*",
-            "*axeptio.eu*", "*didomi.io*", "*trustcommander.net*",
-            "*hs-scripts.com*", "*hubspot.com/__ptq*", "*matomo*",
-            "*newrelic.com*", "*nr-data.net*", "*sentry.io*", "*datadoghq*",
+            "*googletagmanager.com*",
+            "*google-analytics.com*",
+            "*analytics.google.com*",
+            "*doubleclick.net*",
+            "*googlesyndication.com*",
+            "*googleadservices.com*",
+            "*facebook.net*",
+            "*facebook.com/tr*",
+            "*connect.facebook*",
+            "*hotjar.com*",
+            "*clarity.ms*",
+            "*segment.io*",
+            "*segment.com*",
+            "*criteo.com*",
+            "*criteo.net*",
+            "*taboola.com*",
+            "*outbrain.com*",
+            "*adnxs.com*",
+            "*rubiconproject.com*",
+            "*pubmatic.com*",
+            "*bing.com/bat*",
+            "*clarity.microsoft.com*",
+            "*intercom.io*",
+            "*intercomcdn.com*",
+            "*crisp.chat*",
+            "*zdassets.com*",
+            "*zendesk.com/embeddable*",
+            "*tawk.to*",
+            "*cookielaw.org*",
+            "*onetrust.com*",
+            "*cookiebot.com*",
+            "*axeptio.eu*",
+            "*didomi.io*",
+            "*trustcommander.net*",
+            "*hs-scripts.com*",
+            "*hubspot.com/__ptq*",
+            "*matomo*",
+            "*newrelic.com*",
+            "*nr-data.net*",
+            "*sentry.io*",
+            "*datadoghq*",
           ],
         },
         sid,
       );
     } catch (e) {
-      console.log("[bd-browser] blocage assets indisponible", { err: String(e) });
+      console.log("[bd-browser] blocage assets indisponible", {
+        err: String(e),
+      });
     }
 
     // 4. Navigue vers l'URL cible
@@ -1226,21 +1767,26 @@ async function crawlWithBrightDataBrowser(
     const html = evalRes.result?.value;
 
     // 7. Ferme l'onglet (best-effort)
-    try { await send("Target.closeTarget", { targetId: target.targetId }); } catch {}
+    try {
+      await send("Target.closeTarget", { targetId: target.targetId });
+    } catch {}
 
     clearTimeout(overall);
-    try { ws.close(1000, "done"); } catch {}
+    try {
+      ws.close(1000, "done");
+    } catch {}
 
     if (typeof html !== "string" || html.length < 500) return null;
     console.log("[bd-browser] ok", { url, htmlLength: html.length });
     return html;
   } catch (e) {
     console.log("[bd-browser] error", { url, err: String(e) });
-    try { ws.close(1011, "error"); } catch {}
+    try {
+      ws.close(1011, "error");
+    } catch {}
     return null;
   }
 }
-
 
 /**
  * Niveau 2 : Bright Data Web Unlocker API. JS rendering + IPs résidentielles
@@ -1410,7 +1956,11 @@ async function crawlWithBrowser(url: string): Promise<string | null> {
     );
     if (!r.ok) {
       const text = await r.text().catch(() => "");
-      console.log("[browser-render] http error", { url, status: r.status, body: text.slice(0, 200) });
+      console.log("[browser-render] http error", {
+        url,
+        status: r.status,
+        body: text.slice(0, 200),
+      });
       return null;
     }
     const data = (await r.json()) as {
@@ -1612,8 +2162,16 @@ export function parseHTML(html: string): PageContent {
   type TableBlock = { tag: "table"; rows: TableRow[] };
   type Block = ParagraphBlock | ListBlock | TableBlock;
   const blocks: Block[] = [];
-  let currentHeading: { level: 1 | 2 | 3 | 4 | 5 | 6; text: string; html: string } | null = null;
-  let currentParagraph: { text: string; html: string; tag: "p" | "blockquote" | "pre" } | null = null;
+  let currentHeading: {
+    level: 1 | 2 | 3 | 4 | 5 | 6;
+    text: string;
+    html: string;
+  } | null = null;
+  let currentParagraph: {
+    text: string;
+    html: string;
+    tag: "p" | "blockquote" | "pre";
+  } | null = null;
   let pCount = 0;
   // État de listes : nesting basique via stack.
   const listStack: ListBlock[] = [];
@@ -1864,13 +2422,19 @@ export function parseHTML(html: string): PageContent {
       onclosetag(name) {
         const lower = name.toLowerCase();
 
-        if (noiseStack.length > 0 && noiseStack[noiseStack.length - 1] === depth) {
+        if (
+          noiseStack.length > 0 &&
+          noiseStack[noiseStack.length - 1] === depth
+        ) {
           noiseStack.pop();
           depth--;
           return;
         }
 
-        if (buttonStack.length > 0 && buttonStack[buttonStack.length - 1] === depth) {
+        if (
+          buttonStack.length > 0 &&
+          buttonStack[buttonStack.length - 1] === depth
+        ) {
           buttonStack.pop();
           depth--;
           return;
@@ -2006,7 +2570,10 @@ export function parseHTML(html: string): PageContent {
     const rowsHtml = t.rows
       .map((row) => {
         const cellsHtml = row.cells
-          .map((c) => `    <${c.isHeader ? "th" : "td"}>${c.html}</${c.isHeader ? "th" : "td"}>`)
+          .map(
+            (c) =>
+              `    <${c.isHeader ? "th" : "td"}>${c.html}</${c.isHeader ? "th" : "td"}>`,
+          )
           .join("\n");
         return `  <tr>\n${cellsHtml}\n  </tr>`;
       })
@@ -2072,7 +2639,10 @@ const STOPWORDS = new Set(
     "ma mon mes ta ton tes votre notre nos vos leurs lui",
     // Anglais conservé (certains concurrents mélangent)
     "the a an and or but in on at to for of with by is are was were be been have has had do does did will would could should may might can shall not no so than that this these those from it its they their them he she his her we our you your i my me us him which who whom what when where how all each every both few more most other some such only own same too very just about above after again before below between down up out off over under further then once here there why any also can more",
-  ].join(" ").split(/\s+/).filter(Boolean),
+  ]
+    .join(" ")
+    .split(/\s+/)
+    .filter(Boolean),
 );
 
 const WEB_NOISE = new Set(
@@ -2083,7 +2653,10 @@ const WEB_NOISE = new Set(
     "mso priority locked semihidden unhidewhenused unhide hidden default style theme background foreground color border margin padding font size weight height width align center left right justify bold italic underline accent shading medium list grid table row column cell pane title subtitle emphasis strong quote caption header footer",
     // Valeurs booléennes et techniques
     "true false null undefined none auto inherit initial transparent solid dashed dotted",
-  ].join(" ").split(/\s+/).filter(Boolean),
+  ]
+    .join(" ")
+    .split(/\s+/)
+    .filter(Boolean),
 );
 
 /**
@@ -2097,9 +2670,26 @@ const WEB_NOISE = new Set(
  * pour éviter "chaussure pas" ou "petit prix de" qui sont sémantiquement vides.
  */
 const NGRAM_KEEP_STOPWORDS = new Set([
-  "pas", "sans", "avec", "pour", "sur", "sous", "contre", "vers",
-  "chez", "dans", "par", "entre", "selon",
-  "à", "au", "aux", "en", "de", "du", "des",
+  "pas",
+  "sans",
+  "avec",
+  "pour",
+  "sur",
+  "sous",
+  "contre",
+  "vers",
+  "chez",
+  "dans",
+  "par",
+  "entre",
+  "selon",
+  "à",
+  "au",
+  "aux",
+  "en",
+  "de",
+  "du",
+  "des",
 ]);
 
 /**
@@ -2116,21 +2706,57 @@ const NGRAM_BAD_START = new Set(["de", "du", "des", "au", "aux"]);
  * amorces de H2/H3 (interrogatifs, possessifs, verbes génériques) qui ne
  * représentent pas un sous-thème en soi.
  */
-const SECTION_NOISE = new Set(
-  [
-    // Interrogatifs
-    "comment", "pourquoi", "quand", "où", "quoi", "quel", "quelle", "quels",
-    "quelles", "savoir", "faire", "ça",
-    // Déterminants possessifs
-    "votre", "notre", "mon", "ma", "mes", "tes", "ton", "ta", "son", "sa",
-    "ses", "leur", "leurs", "vos", "nos",
-    // Mots trop vagues
-    "tout", "tous", "toute", "toutes", "chaque", "plus",
-    // Verbes génériques souvent en H2 ("obtenir sa prime", "bénéficier de...")
-    "obtenir", "bénéficier", "demander", "trouver", "avoir", "être", "aller",
-    "venir", "choisir", "utiliser", "connaître", "découvrir",
-  ],
-);
+const SECTION_NOISE = new Set([
+  // Interrogatifs
+  "comment",
+  "pourquoi",
+  "quand",
+  "où",
+  "quoi",
+  "quel",
+  "quelle",
+  "quels",
+  "quelles",
+  "savoir",
+  "faire",
+  "ça",
+  // Déterminants possessifs
+  "votre",
+  "notre",
+  "mon",
+  "ma",
+  "mes",
+  "tes",
+  "ton",
+  "ta",
+  "son",
+  "sa",
+  "ses",
+  "leur",
+  "leurs",
+  "vos",
+  "nos",
+  // Mots trop vagues
+  "tout",
+  "tous",
+  "toute",
+  "toutes",
+  "chaque",
+  "plus",
+  // Verbes génériques souvent en H2 ("obtenir sa prime", "bénéficier de...")
+  "obtenir",
+  "bénéficier",
+  "demander",
+  "trouver",
+  "avoir",
+  "être",
+  "aller",
+  "venir",
+  "choisir",
+  "utiliser",
+  "connaître",
+  "découvrir",
+]);
 
 /**
  * Stemmer français simplifié (inspiré Snowball). Réduit les mots à leur
@@ -2186,26 +2812,72 @@ function frenchStem(w: string): string {
   // (avant les suffixes pour matcher correctement la forme singulier).
   if (word.length > 5 && word.endsWith("eaux")) {
     word = word.slice(0, -4) + "eau";
-  } else if (word.length > 4 && word.endsWith("aux") && !word.endsWith("eaux")) {
+  } else if (
+    word.length > 4 &&
+    word.endsWith("aux") &&
+    !word.endsWith("eaux")
+  ) {
     word = word.slice(0, -3) + "al";
   }
 
   const suffixes = [
-    "issements", "issement", "issantes", "issants", "issante", "issant",
-    "ations", "ateurs", "atrices", "ation", "ateur", "atrice",
-    "aient", "eraient", "eront", "iront", "iez", "ions",
-    "euses", "euse", "eux",
-    "tions", "tion",
-    "ements", "ement",
-    "iques", "ique",
-    "ités", "ité",
-    "ables", "able", "ibles", "ible",
-    "iennes", "ienne", "iens", "ien",
-    "antes", "ante", "ants", "ant",
-    "entes", "ente", "ents", "ent",
-    "ées", "ée", "és", "é",
-    "er", "ir", "re",
-    "es", "se", "s", "x", "e",
+    "issements",
+    "issement",
+    "issantes",
+    "issants",
+    "issante",
+    "issant",
+    "ations",
+    "ateurs",
+    "atrices",
+    "ation",
+    "ateur",
+    "atrice",
+    "aient",
+    "eraient",
+    "eront",
+    "iront",
+    "iez",
+    "ions",
+    "euses",
+    "euse",
+    "eux",
+    "tions",
+    "tion",
+    "ements",
+    "ement",
+    "iques",
+    "ique",
+    "ités",
+    "ité",
+    "ables",
+    "able",
+    "ibles",
+    "ible",
+    "iennes",
+    "ienne",
+    "iens",
+    "ien",
+    "antes",
+    "ante",
+    "ants",
+    "ant",
+    "entes",
+    "ente",
+    "ents",
+    "ent",
+    "ées",
+    "ée",
+    "és",
+    "é",
+    "er",
+    "ir",
+    "re",
+    "es",
+    "se",
+    "s",
+    "x",
+    "e",
   ];
   for (const sfx of suffixes) {
     if (word.length > sfx.length + 3 && word.endsWith(sfx)) {
@@ -2221,9 +2893,31 @@ function frenchStem(w: string): string {
  * comme équivalents (même intent SEO, juste une préposition différente).
  */
 const FINGERPRINT_FILLERS = new Set([
-  "pour", "de", "du", "des", "à", "au", "aux", "en", "avec", "sans",
-  "sur", "sous", "vers", "chez", "dans", "par", "entre", "selon",
-  "le", "la", "les", "un", "une", "et", "ou",
+  "pour",
+  "de",
+  "du",
+  "des",
+  "à",
+  "au",
+  "aux",
+  "en",
+  "avec",
+  "sans",
+  "sur",
+  "sous",
+  "vers",
+  "chez",
+  "dans",
+  "par",
+  "entre",
+  "selon",
+  "le",
+  "la",
+  "les",
+  "un",
+  "une",
+  "et",
+  "ou",
 ]);
 
 /**
@@ -2245,11 +2939,25 @@ const FINGERPRINT_FILLERS = new Set([
  * N'impacte pas le BM25 ni l'affichage des chips (surface-forms inchangées).
  */
 const FEM_ADJ_CANON: Record<string, string> = {
-  longu: "long", blanch: "blanc", franch: "franc", bell: "beau",
-  nouvell: "nouveau", jumell: "jumeau", vieill: "vieux", neuv: "neuf",
-  rouss: "roux", fauss: "faux", douc: "doux", fraich: "frais", "fraîch": "frais",
-  sech: "sec", "sèch": "sec", publiqu: "public", favorit: "favori",
-  "épaiss": "épais", epaiss: "épais",
+  longu: "long",
+  blanch: "blanc",
+  franch: "franc",
+  bell: "beau",
+  nouvell: "nouveau",
+  jumell: "jumeau",
+  vieill: "vieux",
+  neuv: "neuf",
+  rouss: "roux",
+  fauss: "faux",
+  douc: "doux",
+  fraich: "frais",
+  fraîch: "frais",
+  sech: "sec",
+  sèch: "sec",
+  publiqu: "public",
+  favorit: "favori",
+  épaiss: "épais",
+  epaiss: "épais",
 };
 
 function semanticFingerprint(term: string): string {
@@ -2287,13 +2995,17 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     const m = tl.match(rx);
     const cnt = m ? m.length : 0;
     kwCounts.push(cnt);
-    kwDensities.push(words.length > 0 ? ((cnt * kwParts.length) / words.length) * 100 : 0);
+    kwDensities.push(
+      words.length > 0 ? ((cnt * kwParts.length) / words.length) * 100 : 0,
+    );
   });
   const avgKwCnt = kwCounts.length
     ? Math.round(kwCounts.reduce((a, b) => a + b, 0) / kwCounts.length)
     : 3;
   const avgKwDen = kwDensities.length
-    ? Math.round((kwDensities.reduce((a, b) => a + b, 0) / kwDensities.length) * 100) / 100
+    ? Math.round(
+        (kwDensities.reduce((a, b) => a + b, 0) / kwDensities.length) * 100,
+      ) / 100
     : 1;
   const kwVariations = new Set<string>([kwLower]);
   kwParts.forEach((p) => {
@@ -2309,11 +3021,15 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
   // Pour chaque unigramme stemmé, on garde la liste des surface-forms afin
   // de pouvoir afficher la forme la plus fréquente ET matcher toutes les
   // variantes dans l'éditeur.
-  const docFreq: Record<string, number> = {};
+  // Toutes les tables indexées par un mot venu des pages crawlées sont créées
+  // sans prototype : cf. le commentaire de detectCompetitorSections.
+  const docFreq: Record<string, number> = Object.create(null);
   const allTerms: Array<{ tf: Record<string, number>; total: number }> = [];
   const headingStems = new Set<string>();
   // Map stem → surface-form → count total (tous docs confondus)
-  const surfaceForms: Record<string, Record<string, number>> = {};
+  const surfaceForms: Record<string, Record<string, number>> = Object.create(
+    null,
+  );
   // Pool global des phrases extraites des pages valides. Chaque entrée porte
   // l'URL source pour qu'on puisse afficher dans le popover NLP "ce
   // concurrent emploie le terme dans cette phrase". Fenêtre [50, 280] chars
@@ -2324,14 +3040,15 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     if (!c || !c.text) return;
     // Phrases d'exemple : on les extrait du `bodyText` (sans Hn) pour ne pas
     // citer un titre. Fallback sur `c.text` si bodyText absent.
-    const corpus = (c.bodyText && c.bodyText.length > 0 ? c.bodyText : c.text);
+    const corpus = c.bodyText && c.bodyText.length > 0 ? c.bodyText : c.text;
     const sents = corpus
       .replace(/\s+/g, " ")
       .split(/(?<=[.!?])\s+/)
       .map((s) => s.trim())
       .filter((s) => s.length >= 50 && s.length <= 280);
     const sourceUrl = c.url ?? "";
-    for (const s of sents.slice(0, 30)) allSentences.push({ url: sourceUrl, sentence: s });
+    for (const s of sents.slice(0, 30))
+      allSentences.push({ url: sourceUrl, sentence: s });
     // Tokens des titres : stemmés, pour le boost en scoring.
     // Apostrophes remplacées par espace AVANT le strip non-alphanum, sinon
     // "d'un" devient "dun" (idem rawWords/ngramWords ci-dessous).
@@ -2368,7 +3085,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     // Séquence stemmée pour les unigrammes (BM25 sur stems).
     const stems = rawWords.map(frenchStem);
 
-    const tf: Record<string, number> = {};
+    const tf: Record<string, number> = Object.create(null);
     const seen = new Set<string>();
 
     // Unigrammes : clé = stem
@@ -2380,7 +3097,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
       }
       // Trace surface-form
       const surface = rawWords[i];
-      surfaceForms[s] ??= {};
+      surfaceForms[s] ??= Object.create(null);
       surfaceForms[s][surface] = (surfaceForms[s][surface] ?? 0) + 1;
     });
 
@@ -2426,7 +3143,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
 
   // Score BM25 pour chaque terme, agrégé sur l'ensemble des documents où il
   // apparaît. idf(t) = log((N - df + 0.5)/(df + 0.5) + 1).
-  const termScore: Record<string, number> = {};
+  const termScore: Record<string, number> = Object.create(null);
   for (const [t, df] of Object.entries(docFreq)) {
     const idf = Math.log((n - df + 0.5) / (df + 0.5) + 1);
     let total = 0;
@@ -2434,7 +3151,7 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
       const f = d.tf[t];
       if (!f) continue;
       const norm = 1 - B + B * (d.total / avgDocLen);
-      total += idf * (f * (K1 + 1)) / (f + K1 * norm);
+      total += (idf * (f * (K1 + 1))) / (f + K1 * norm);
     }
     termScore[t] = total;
   }
@@ -2475,7 +3192,9 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
       }
       counts.sort((a, b) => a - b);
       const sampleSize = counts.length;
-      const avgRaw = sampleSize ? counts.reduce((s, c) => s + c, 0) / sampleSize : 0;
+      const avgRaw = sampleSize
+        ? counts.reduce((s, c) => s + c, 0) / sampleSize
+        : 0;
       const avgCount = sampleSize ? Math.max(1, Math.round(avgRaw)) : 0;
       let minCount = 0;
       let maxCount = 0;
@@ -2504,11 +3223,14 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
           ? [displayTerm.toLowerCase()]
           : Array.from(
               new Set(
-                [displayTerm.toLowerCase(), ...((variants ?? []).map((v) => v.toLowerCase()))]
-                  .filter((v) => v && v.length >= 2),
+                [
+                  displayTerm.toLowerCase(),
+                  ...(variants ?? []).map((v) => v.toLowerCase()),
+                ].filter((v) => v && v.length >= 2),
               ),
             );
-        const byUrl: Record<string, { url: string; sentence: string }> = {};
+        const byUrl: Record<string, { url: string; sentence: string }> =
+          Object.create(null);
         const SEEN_URLS_TARGET = 10;
         for (const item of allSentences) {
           if (!sentenceMatchesAnyTerm(item.sentence, matchPatterns)) continue;
@@ -2582,7 +3304,9 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
     .map(({ _key, ...rest }) => rest as NlpTerm);
 
   const avg = (arr: PageContent[], fn: (c: PageContent) => number) =>
-    arr.length ? Math.round(arr.reduce((s, c) => s + fn(c), 0) / arr.length) : 0;
+    arr.length
+      ? Math.round(arr.reduce((s, c) => s + fn(c), 0) / arr.length)
+      : 0;
 
   const median = (arr: number[]): number => {
     if (arr.length === 0) return 0;
@@ -2598,7 +3322,11 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
   const sections = detectCompetitorSections(valid, kwStems);
   const entities = detectNamedEntities(valid);
   const baseKeywordTerms = computeKeywordTerms(valid, kwLower, kwParts);
-  const keywordTerms = mergeKeywordExtensions(baseKeywordTerms, nlpTerms, kwParts);
+  const keywordTerms = mergeKeywordExtensions(
+    baseKeywordTerms,
+    nlpTerms,
+    kwParts,
+  );
 
   // Déduplication sémantique : on calcule un fingerprint canonique pour
   // chaque terme (ensemble des stems significatifs, ignorant les
@@ -2607,7 +3335,9 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
   //   2. ont le même fingerprint qu'un autre nlpTerm de meilleur score
   // Évite "sneakers homme" + "sneakers pour homme" + "sneakers" comme 3
   // entrées distinctes alors que c'est sémantiquement la même chose.
-  const kwFingerprints = new Set(keywordTerms.map((k) => semanticFingerprint(k.term)));
+  const kwFingerprints = new Set(
+    keywordTerms.map((k) => semanticFingerprint(k.term)),
+  );
   const nlpFingerprintsSeen = new Set<string>();
   const dedupedNlpTerms = nlpTerms.filter((t) => {
     const fp = semanticFingerprint(t.term);
@@ -2628,7 +3358,9 @@ export function runNLP(contents: PageContent[], keyword: string): NlpResult {
       idealDensityMax: Math.min(3, avgKwDen * 1.5),
       inH1Pct: valid.length ? Math.round((kwInH1 / valid.length) * 100) : 0,
       inH2Pct: valid.length ? Math.round((kwInH2 / valid.length) * 100) : 0,
-      inFirst100Pct: valid.length ? Math.round((kwInFirst100 / valid.length) * 100) : 0,
+      inFirst100Pct: valid.length
+        ? Math.round((kwInFirst100 / valid.length) * 100)
+        : 0,
     },
     keywordTerms,
     nlpTerms: dedupedNlpTerms,
@@ -2677,11 +3409,32 @@ function computeKeywordTerms(
   // possessifs, déterminants vagues). On les garde dans les bigrammes
   // ("comment choisir", "son assurance") mais on ne les promeut pas seuls.
   const NON_SEMANTIC_PARTS = new Set([
-    "comment", "pourquoi", "quand", "où", "quoi",
-    "quel", "quelle", "quels", "quelles",
-    "votre", "notre", "mon", "ma", "mes", "tes", "ton", "ta", "sa",
-    "leurs", "vos", "nos",
-    "tout", "tous", "toute", "toutes", "chaque",
+    "comment",
+    "pourquoi",
+    "quand",
+    "où",
+    "quoi",
+    "quel",
+    "quelle",
+    "quels",
+    "quelles",
+    "votre",
+    "notre",
+    "mon",
+    "ma",
+    "mes",
+    "tes",
+    "ton",
+    "ta",
+    "sa",
+    "leurs",
+    "vos",
+    "nos",
+    "tout",
+    "tous",
+    "toute",
+    "toutes",
+    "chaque",
   ]);
 
   push(keyword, "exact");
@@ -2730,7 +3483,11 @@ function computeKeywordTerms(
         counts.push(cnt);
         usedBy++;
       }
-      if ([...(p.h1 ?? []), ...(p.h2 ?? [])].some((h) => rxHead.test(h.toLowerCase()))) {
+      if (
+        [...(p.h1 ?? []), ...(p.h2 ?? [])].some((h) =>
+          rxHead.test(h.toLowerCase()),
+        )
+      ) {
         inH = true;
       }
     });
@@ -2805,7 +3562,9 @@ function mergeKeywordExtensions(
   // Dédup sémantique : "basket homme" (part) et "baskets homme" (extension)
   // ont le même fingerprint (basket/baskets stems pareil), on en garde un
   // seul. Évite les doublons triviaux singulier/pluriel dans l'UI.
-  const existingFingerprints = new Set(base.map((b) => semanticFingerprint(b.term)).filter(Boolean));
+  const existingFingerprints = new Set(
+    base.map((b) => semanticFingerprint(b.term)).filter(Boolean),
+  );
   const extensions: KeywordTerm[] = [];
   for (const t of nlp.slice(0, 30)) {
     // Seuil 40% : permissif pour rattraper les vraies extensions ("améliorer
@@ -2859,7 +3618,13 @@ function detectCompetitorSections(
       surfaces: Record<string, number>;
       samples: string[];
     }
-  > = {};
+    // `Object.create(null)` et pas `{}` : les clés sont des mots extraits des
+    // titres des concurrents. Sur un mot comme « constructor » ou « toString »,
+    // un objet littéral renvoie le membre hérité d'Object.prototype, le `??=`
+    // ne crée alors jamais l'entrée et la ligne suivante plante, ce qui fait
+    // échouer le brief entier (vécu le 14/09/2026 sur « capuche de pluie
+    // femme »). Un objet sans prototype n'a pas ces clés héritées.
+  > = Object.create(null);
 
   pages.forEach((p, idx) => {
     const headings = [...(p.h2 ?? []), ...(p.h3 ?? [])];
@@ -2913,7 +3678,9 @@ function detectCompetitorSections(
   return Object.entries(map)
     .map(([stem, data]) => {
       const hits = data.sources.size;
-      const label = Object.entries(data.surfaces).sort((a, b) => b[1] - a[1])[0]?.[0] ?? stem;
+      const label =
+        Object.entries(data.surfaces).sort((a, b) => b[1] - a[1])[0]?.[0] ??
+        stem;
       const keyTerms = Object.keys(data.surfaces);
       return {
         label,
@@ -2947,27 +3714,93 @@ function detectNamedEntities(pages: PageContent[]): Entity[] {
   // noms génériques de pays / marques partout, etc.
   const ENTITY_STOP = new Set(
     [
-      "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
-      "septembre", "octobre", "novembre", "décembre",
-      "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche",
-      "france", "europe", "paris", "google", "facebook", "twitter", "linkedin",
-      "instagram", "youtube", "tiktok", "whatsapp",
-      "non", "oui", "mais", "avec", "sans", "tout", "tous", "toute", "toutes",
-      "lui", "elle", "elles", "nous", "vous",
-      "lorsque", "lorsqu", "quand", "pendant", "depuis", "jusqu", "selon",
+      "janvier",
+      "février",
+      "mars",
+      "avril",
+      "mai",
+      "juin",
+      "juillet",
+      "août",
+      "septembre",
+      "octobre",
+      "novembre",
+      "décembre",
+      "lundi",
+      "mardi",
+      "mercredi",
+      "jeudi",
+      "vendredi",
+      "samedi",
+      "dimanche",
+      "france",
+      "europe",
+      "paris",
+      "google",
+      "facebook",
+      "twitter",
+      "linkedin",
+      "instagram",
+      "youtube",
+      "tiktok",
+      "whatsapp",
+      "non",
+      "oui",
+      "mais",
+      "avec",
+      "sans",
+      "tout",
+      "tous",
+      "toute",
+      "toutes",
+      "lui",
+      "elle",
+      "elles",
+      "nous",
+      "vous",
+      "lorsque",
+      "lorsqu",
+      "quand",
+      "pendant",
+      "depuis",
+      "jusqu",
+      "selon",
       // Pronoms / déterminants souvent isolés en majuscule dans titres/phrases
-      "je", "tu", "ma", "mon", "ta", "ton", "sa", "son", "mes", "tes", "ses",
-      "notre", "votre", "leur", "nos", "vos", "leurs",
+      "je",
+      "tu",
+      "ma",
+      "mon",
+      "ta",
+      "ton",
+      "sa",
+      "son",
+      "mes",
+      "tes",
+      "ses",
+      "notre",
+      "votre",
+      "leur",
+      "nos",
+      "vos",
+      "leurs",
       // Mots interrogatifs capitalisés en début de titre
-      "comment", "pourquoi", "quoi", "quel", "quelle", "quels", "quelles",
-      "avant", "après", "pendant",
+      "comment",
+      "pourquoi",
+      "quoi",
+      "quel",
+      "quelle",
+      "quels",
+      "quelles",
+      "avant",
+      "après",
+      "pendant",
     ].map((s) => s.toLowerCase()),
   );
 
   const map: Record<
     string,
     { sources: Set<number>; display: string; occurrences: number }
-  > = {};
+  > = Object.create(null);
 
   pages.forEach((p, idx) => {
     // Statistiques de casse par page pour filtrer les mots communs
@@ -2977,7 +3810,7 @@ function detectNamedEntities(pages: PageContent[]): Entity[] {
     const caseStats: Record<
       string,
       { lower: number; allCaps: number; titleCase: number }
-    > = {};
+    > = Object.create(null);
     const rawTokens = p.text.split(/[^\wÀ-ÿ'']+/).filter((t) => t.length > 1);
     for (const tok of rawTokens) {
       const lc = tok.toLowerCase();
@@ -3098,7 +3931,9 @@ export function detectOpportunities(
     }
   }
   // Tri par couverture croissante (les plus uniques en premier)
-  return opps.sort((a, b) => a.competitorCoverage - b.competitorCoverage).slice(0, 6);
+  return opps
+    .sort((a, b) => a.competitorCoverage - b.competitorCoverage)
+    .slice(0, 6);
 }
 
 // ─── Détection d'intent ──────────────────────────────────────────────────────
@@ -3108,19 +3943,57 @@ export function detectOpportunities(
  */
 const INTENT_PATTERNS: Record<string, string[]> = {
   transactional: [
-    "acheter", "achat", "prix", "pas cher", "moins cher", "promo",
-    "soldes", "vente", "discount", "promotion", "remise", "à vendre",
-    "code promo", "boutique", "commander", "livraison", "tarif", "coût",
+    "acheter",
+    "achat",
+    "prix",
+    "pas cher",
+    "moins cher",
+    "promo",
+    "soldes",
+    "vente",
+    "discount",
+    "promotion",
+    "remise",
+    "à vendre",
+    "code promo",
+    "boutique",
+    "commander",
+    "livraison",
+    "tarif",
+    "coût",
   ],
   informational: [
-    "comment", "pourquoi", "quand", "où", "qu est-ce", "quoi",
-    "définition", "guide", "tutoriel", "explication", "signification",
-    "principe", "histoire", "origine", "exemple", "explique",
+    "comment",
+    "pourquoi",
+    "quand",
+    "où",
+    "qu est-ce",
+    "quoi",
+    "définition",
+    "guide",
+    "tutoriel",
+    "explication",
+    "signification",
+    "principe",
+    "histoire",
+    "origine",
+    "exemple",
+    "explique",
   ],
   commercial: [
-    "meilleur", "meilleure", "meilleurs", "meilleures",
-    "top", "comparatif", "comparaison", "comparer",
-    "avis", "test", "review", "alternative", "vs",
+    "meilleur",
+    "meilleure",
+    "meilleurs",
+    "meilleures",
+    "top",
+    "comparatif",
+    "comparaison",
+    "comparer",
+    "avis",
+    "test",
+    "review",
+    "alternative",
+    "vs",
   ],
 };
 
@@ -3128,26 +4001,81 @@ const INTENT_PATTERNS: Record<string, string[]> = {
  * Domaines connus par catégorie pour analyser la SERP.
  */
 const COMMERCE_DOMAINS = new Set([
-  "amazon.fr", "amazon.com", "cdiscount.com", "fnac.com", "darty.com",
-  "boulanger.com", "leclerc.com", "carrefour.fr", "auchan.fr",
-  "zalando.fr", "sarenza.com", "spartoo.com", "asics.com", "courir.com",
-  "decathlon.fr", "go-sport.com", "intersport.fr", "shopify.com",
-  "etsy.com", "ebay.fr", "rakuten.com", "veepee.com", "showroomprive.com",
-  "wethenew.com", "sportshowroom.fr", "thelaststep.fr",
+  "amazon.fr",
+  "amazon.com",
+  "cdiscount.com",
+  "fnac.com",
+  "darty.com",
+  "boulanger.com",
+  "leclerc.com",
+  "carrefour.fr",
+  "auchan.fr",
+  "zalando.fr",
+  "sarenza.com",
+  "spartoo.com",
+  "asics.com",
+  "courir.com",
+  "decathlon.fr",
+  "go-sport.com",
+  "intersport.fr",
+  "shopify.com",
+  "etsy.com",
+  "ebay.fr",
+  "rakuten.com",
+  "veepee.com",
+  "showroomprive.com",
+  "wethenew.com",
+  "sportshowroom.fr",
+  "thelaststep.fr",
 ]);
-const COMPARE_DOMAINS = ["idealo.fr", "leguide.com", "lesfurets.com",
-  "monchoix.com", "comparateur", "ledenicheur.fr"];
+const COMPARE_DOMAINS = [
+  "idealo.fr",
+  "leguide.com",
+  "lesfurets.com",
+  "monchoix.com",
+  "comparateur",
+  "ledenicheur.fr",
+];
 const INFO_DOMAINS = new Set([
-  "wikipedia.org", "wikipedia.fr", "fandom.com", "lemonde.fr", "lefigaro.fr",
-  "lesnumeriques.com", "journaldunet.com", "futura-sciences.com",
-  "doctissimo.fr", "ameli.fr", "service-public.fr", "legifrance.gouv.fr",
+  "wikipedia.org",
+  "wikipedia.fr",
+  "fandom.com",
+  "lemonde.fr",
+  "lefigaro.fr",
+  "lesnumeriques.com",
+  "journaldunet.com",
+  "futura-sciences.com",
+  "doctissimo.fr",
+  "ameli.fr",
+  "service-public.fr",
+  "legifrance.gouv.fr",
 ]);
 
 const FR_CITIES = new Set([
-  "paris", "lyon", "marseille", "lille", "bordeaux", "toulouse",
-  "nice", "nantes", "strasbourg", "montpellier", "rennes", "reims",
-  "rouen", "dijon", "brest", "grenoble", "tours", "nancy", "metz",
-  "annecy", "clermont", "biarritz", "perpignan", "limoges",
+  "paris",
+  "lyon",
+  "marseille",
+  "lille",
+  "bordeaux",
+  "toulouse",
+  "nice",
+  "nantes",
+  "strasbourg",
+  "montpellier",
+  "rennes",
+  "reims",
+  "rouen",
+  "dijon",
+  "brest",
+  "grenoble",
+  "tours",
+  "nancy",
+  "metz",
+  "annecy",
+  "clermont",
+  "biarritz",
+  "perpignan",
+  "limoges",
 ]);
 
 export function detectIntent(keyword: string, results: SerpResult[]): Intent {
@@ -3181,10 +4109,16 @@ export function detectIntent(keyword: string, results: SerpResult[]): Intent {
   let infoCount = 0;
   let compareCount = 0;
   for (const d of domains) {
-    if (COMMERCE_DOMAINS.has(d) || Array.from(COMMERCE_DOMAINS).some((cd) => d.endsWith("." + cd))) {
+    if (
+      COMMERCE_DOMAINS.has(d) ||
+      Array.from(COMMERCE_DOMAINS).some((cd) => d.endsWith("." + cd))
+    ) {
       commerceCount++;
     }
-    if (INFO_DOMAINS.has(d) || Array.from(INFO_DOMAINS).some((id) => d.endsWith("." + id))) {
+    if (
+      INFO_DOMAINS.has(d) ||
+      Array.from(INFO_DOMAINS).some((id) => d.endsWith("." + id))
+    ) {
       infoCount++;
     }
     if (COMPARE_DOMAINS.some((cd) => d.includes(cd))) compareCount++;
@@ -3231,13 +4165,20 @@ export async function enrichWithSemantic(
     const t0 = Date.now();
     const inputs = [keyword, ...terms.map((t) => t.term)];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = (await ai.run("@cf/baai/bge-m3" as any, { text: inputs })) as {
+    const result = (await ai.run("@cf/baai/bge-m3" as any, {
+      text: inputs,
+    })) as {
       data?: number[][];
       shape?: number[];
     };
     const embeddings = result.data;
     if (!embeddings || embeddings.length !== inputs.length) {
-      console.warn("[ai] embeddings count mismatch:", embeddings?.length, "vs", inputs.length);
+      console.warn(
+        "[ai] embeddings count mismatch:",
+        embeddings?.length,
+        "vs",
+        inputs.length,
+      );
       return nlp;
     }
 
@@ -3408,7 +4349,8 @@ function clusterTermsByEmbedding(
       // Filtre cluster de "noise" : avgSem trop basse = mots vagues sans
       // lien thématique au keyword (ex "point/question/début").
       const avgSem =
-        members.reduce((s, m) => s + (m.semanticScore ?? 0), 0) / members.length;
+        members.reduce((s, m) => s + (m.semanticScore ?? 0), 0) /
+        members.length;
       // Label = terme le plus représentatif. Ne pas commencer par
       // stopword/préposition pour avoir un label parlant ("améliorer seo"
       // plutôt que "pour améliorer").
@@ -3453,10 +4395,18 @@ function clusterTermsByEmbedding(
  * et côté client (via embedParagraphForUser) pour scorer chaque paragraphe
  * du contenu rédigé.
  */
-export function extractParagraphsFromHtml(html: string, minWords = 40): string[] {
+export function extractParagraphsFromHtml(
+  html: string,
+  minWords = 40,
+): string[] {
   const matches = html.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) ?? [];
   return matches
-    .map((m) => m.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())
+    .map((m) =>
+      m
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
     .filter((t) => t.split(/\s+/).filter(Boolean).length >= minWords);
 }
 
@@ -3531,7 +4481,9 @@ export async function computeSemanticCentroid(
     const batch = allParagraphs.slice(i, i + batchSize);
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = (await ai.run("@cf/baai/bge-m3" as any, { text: batch })) as {
+      const result = (await ai.run("@cf/baai/bge-m3" as any, {
+        text: batch,
+      })) as {
         data?: number[][];
       };
       if (!result.data || result.data.length !== batch.length) {

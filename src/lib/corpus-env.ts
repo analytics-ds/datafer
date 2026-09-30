@@ -28,6 +28,12 @@ export type CorpusEnv = {
   SITEMAP_SYNC_QUEUE?: Queue<SitemapSyncMessage>;
   // Vars
   SERP_PROVIDER?: string;
+  /**
+   * "1" pour autoriser le repli SERP Bright Data quand le provider principal
+   * ne renvoie aucun résultat (panne fournisseur). Facturé à la requête côté
+   * Bright Data, d'où l'opt-in explicite. Cf. fetchSerpFromBrightdata.
+   */
+  SERP_BRIGHTDATA_FALLBACK?: string;
   CF_ACCOUNT_ID?: string;
   BETTER_AUTH_URL?: string;
   // Secrets
