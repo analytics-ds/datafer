@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractParagraphsFromHtml,
+  firstNonEmptySerp,
   filterPaaByLanguage,
   findDomainHit,
   extractJsonPayloadText,
@@ -371,5 +372,30 @@ describe("findDomainHit", () => {
   it("retourne null si le domaine est absent ou non fourni", () => {
     expect(findDomainHit(serp, "https://celio.com")).toBeNull();
     expect(findDomainHit(serp, null)).toBeNull();
+  });
+});
+
+describe("firstNonEmptySerp", () => {
+  const vide = { results: [], allResults: [], paa: [] };
+  const plein = (link: string) => ({
+    results: [{ position: 1, title: "t", link, snippet: "", displayed_link: "" }],
+    allResults: [],
+    paa: [],
+  });
+  const later = <T,>(v: T, ms: number) => new Promise<T>((r) => setTimeout(() => r(v), ms));
+
+  it("garde la première réponse non vide, même si l'autre est plus rapide mais vide", async () => {
+    const r = await firstNonEmptySerp([later(vide, 5), later(plein("https://b.fr"), 20)], vide);
+    expect(r.results[0].link).toBe("https://b.fr");
+  });
+
+  it("n'attend pas la plus lente quand la plus rapide a des résultats", async () => {
+    const r = await firstNonEmptySerp([later(plein("https://a.fr"), 5), new Promise(() => {})], vide);
+    expect(r.results[0].link).toBe("https://a.fr");
+  });
+
+  it("renvoie le repli quand tout est vide", async () => {
+    const r = await firstNonEmptySerp([later(vide, 1), later(vide, 2)], vide);
+    expect(r.results).toHaveLength(0);
   });
 });
