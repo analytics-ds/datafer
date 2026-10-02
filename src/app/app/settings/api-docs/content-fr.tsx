@@ -28,6 +28,7 @@ export function ApiDocsFr() {
           <li><Code>GET /api/v1/briefs/&#123;id&#125;</Code>, lit le brief, renvoie <Code>pending</Code> / <Code>ready</Code> / <Code>failed</Code></li>
           <li><Code>POST /api/v1/briefs/&#123;id&#125;/content</Code>, soumet du contenu HTML et reçoit le score détaillé</li>
           <li><Code>GET /api/v1/folders</Code>, liste les dossiers (clients) pour retrouver un <Code>folderId</Code></li>
+          <li><Code>POST /api/v1/folders</Code>, crée un dossier (client), ou renvoie celui qui existe déjà pour le même site</li>
           <li><Code>GET|POST|DELETE /api/v1/folders/&#123;id&#125;/share</Code>, lien de partage public d&apos;un dossier</li>
           <li><Code>GET|POST|DELETE /api/v1/briefs/&#123;id&#125;/share</Code>, lien de partage public d&apos;un brief seul</li>
         </ul>
@@ -188,6 +189,16 @@ export function ApiDocsFr() {
               <td className="py-2 pr-4">int</td>
               <td className="py-2">Nombre max de résultats, défaut 20, max 100</td>
             </tr>
+            <tr className="border-t border-[var(--border)]">
+              <td className="py-2 pr-4 font-code text-[var(--text)]">scope</td>
+              <td className="py-2 pr-4">string</td>
+              <td className="py-2"><Code>folder</Code> (avec <Code>folderId</Code>) : tous les briefs du dossier, quel que soit leur auteur, comme la page dossier de l&apos;UI. Sans ce paramètre, seulement les briefs du propriétaire de la clé</td>
+            </tr>
+            <tr className="border-t border-[var(--border)]">
+              <td className="py-2 pr-4 font-code text-[var(--text)]">offset</td>
+              <td className="py-2 pr-4">int</td>
+              <td className="py-2">Pagination : reprendre la valeur <Code>nextOffset</Code> de la réponse précédente (<Code>null</Code> = dernière page)</td>
+            </tr>
           </tbody>
         </table>
         <H4>Exemple (curl)</H4>
@@ -204,10 +215,12 @@ export function ApiDocsFr() {
       "workflowStatus": "in_progress",
       "score": 26,
       "folderId": null,
+      "ownerEmail": "prenom@datashake.fr",
       "createdAt": "2026-06-11T09:12:00.000Z",
       "updatedAt": "2026-06-11T09:13:21.000Z"
     }
-  ]
+  ],
+  "nextOffset": null
 }`}</Pre>
       </Section>
 
@@ -351,6 +364,23 @@ export function ApiDocsFr() {
           de token, passer <Code>&#123;&quot;regenerate&quot;: true&#125;</Code> : l&apos;ancien lien tombe
           immédiatement en 404.
         </p>
+
+        <H4>Créer un dossier</H4>
+        <p className="mb-3 text-[var(--text-muted)]">
+          Corps JSON : <Code>name</Code> (requis), <Code>website</Code> et <Code>locale</Code>
+          (<Code>fr</Code> ou <Code>en</Code>) facultatifs. Même effet que « Nouveau dossier » dans l&apos;UI :
+          dossier d&apos;agence, visible de tous. Si un dossier désigne déjà le même client (même
+          domaine, ou même nom quand l&apos;un des deux n&apos;a pas de site), il est renvoyé avec
+          <Code>&quot;duplicate&quot;: true</Code> et rien n&apos;est créé (200, sinon 201).
+        </p>
+        <Pre>{`curl -X POST ${BASE}/api/v1/folders \\
+  -H "Authorization: Bearer dfk_..." -H "Content-Type: application/json" \\
+  -d '{"name": "Skello", "website": "https://www.skello.io"}'`}</Pre>
+        <Pre>{`{
+  "folder": { "id": "8f2c...", "name": "Skello", "website": "https://www.skello.io",
+              "scope": "agency", "shared": false, "shareUrl": null, "createdAt": "2026-10-02T08:00:00.000Z" },
+  "duplicate": false
+}`}</Pre>
 
         <H4>Dossier</H4>
         <Pre>{`# retrouver l'id du dossier
