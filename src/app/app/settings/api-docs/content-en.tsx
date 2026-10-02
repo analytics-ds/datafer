@@ -28,6 +28,7 @@ export function ApiDocsEn() {
           <li><Code>GET /api/v1/briefs/&#123;id&#125;</Code>, reads a brief, returns <Code>pending</Code> / <Code>ready</Code> / <Code>failed</Code></li>
           <li><Code>POST /api/v1/briefs/&#123;id&#125;/content</Code>, submits HTML content and returns the detailed score</li>
           <li><Code>GET /api/v1/folders</Code>, lists folders (clients) so you can find a <Code>folderId</Code></li>
+          <li><Code>POST /api/v1/folders</Code>, creates a folder (client), or returns the one that already exists for the same website</li>
           <li><Code>GET|POST|DELETE /api/v1/folders/&#123;id&#125;/share</Code>, public share link for a folder</li>
           <li><Code>GET|POST|DELETE /api/v1/briefs/&#123;id&#125;/share</Code>, public share link for a single brief</li>
         </ul>
@@ -188,6 +189,16 @@ export function ApiDocsEn() {
               <td className="py-2 pr-4">int</td>
               <td className="py-2">Maximum number of results, 20 by default, 100 max</td>
             </tr>
+            <tr className="border-t border-[var(--border)]">
+              <td className="py-2 pr-4 font-code text-[var(--text)]">scope</td>
+              <td className="py-2 pr-4">string</td>
+              <td className="py-2"><Code>folder</Code> (with <Code>folderId</Code>): every brief in the folder, whoever created it, like the folder page of the UI. Without it, only the briefs of the key owner</td>
+            </tr>
+            <tr className="border-t border-[var(--border)]">
+              <td className="py-2 pr-4 font-code text-[var(--text)]">offset</td>
+              <td className="py-2 pr-4">int</td>
+              <td className="py-2">Pagination: pass the <Code>nextOffset</Code> value of the previous response (<Code>null</Code> = last page)</td>
+            </tr>
           </tbody>
         </table>
         <H4>Example (curl)</H4>
@@ -204,10 +215,12 @@ export function ApiDocsEn() {
       "workflowStatus": "in_progress",
       "score": 26,
       "folderId": null,
+      "ownerEmail": "prenom@datashake.fr",
       "createdAt": "2026-06-11T09:12:00.000Z",
       "updatedAt": "2026-06-11T09:13:21.000Z"
     }
-  ]
+  ],
+  "nextOffset": null
 }`}</Pre>
       </Section>
 
@@ -351,6 +364,23 @@ export function ApiDocsEn() {
           token on purpose, pass <Code>&#123;&quot;regenerate&quot;: true&#125;</Code>: the old link 404s
           immediately.
         </p>
+
+        <H4>Create a folder</H4>
+        <p className="mb-3 text-[var(--text-muted)]">
+          JSON body: <Code>name</Code> (required), optional <Code>website</Code> and <Code>locale</Code>
+          (<Code>fr</Code> or <Code>en</Code>). Same as &quot;New folder&quot; in the UI: an agency folder,
+          visible to everyone. If a folder already stands for the same client (same domain, or same
+          name when one of them has no website), it is returned with <Code>&quot;duplicate&quot;: true</Code>
+          and nothing is created (200, otherwise 201).
+        </p>
+        <Pre>{`curl -X POST ${BASE}/api/v1/folders \\
+  -H "Authorization: Bearer dfk_..." -H "Content-Type: application/json" \\
+  -d '{"name": "Skello", "website": "https://www.skello.io"}'`}</Pre>
+        <Pre>{`{
+  "folder": { "id": "8f2c...", "name": "Skello", "website": "https://www.skello.io",
+              "shared": false, "shareUrl": null, "createdAt": "2026-10-02T08:00:00.000Z" },
+  "duplicate": false
+}`}</Pre>
 
         <H4>Folder</H4>
         <Pre>{`# find the folder id

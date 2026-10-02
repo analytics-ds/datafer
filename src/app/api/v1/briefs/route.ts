@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { brief } from "@/db/schema";
+import { brief, client, user as userTable } from "@/db/schema";
 import { resolveUser } from "@/lib/api-auth";
 import { createPendingBrief } from "@/lib/briefs-service";
 import type { CorpusEnv } from "@/lib/corpus-env";
@@ -18,8 +18,13 @@ export const dynamic = "force-dynamic";
  * Query params (tous optionnels) :
  *   - keyword  : filtre exact insensible à la casse
  *   - folderId : filtre par dossier
+ *   - scope    : "folder" (avec folderId) = TOUS les briefs du dossier, quel que
+ *                soit leur auteur, comme la page dossier de l'UI. Sans ce
+ *                paramètre, seulement ceux du propriétaire de la clé (inchangé).
+ *                Refusé sur le dossier personnel d'un autre utilisateur.
  *   - status   : pending | ready | failed
  *   - limit    : nombre max de résultats (défaut 20, max 100)
+ *   - offset   : pagination, à reprendre de `nextOffset` (null = dernière page)
  */
 export async function GET(req: Request) {
   const user = await resolveUser(req);
@@ -30,12 +35,33 @@ export async function GET(req: Request) {
   const folderId = url.searchParams.get("folderId")?.trim();
   const status = url.searchParams.get("status")?.trim();
   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 20));
+  const offset = Math.max(0, Math.floor(Number(url.searchParams.get("offset")) || 0));
+  const scope = url.searchParams.get("scope")?.trim();
 
   if (status && !["pending", "ready", "failed"].includes(status)) {
     return NextResponse.json({ error: "status must be pending, ready or failed" }, { status: 400 });
   }
+  if (scope && scope !== "folder") {
+    return NextResponse.json({ error: "scope must be folder" }, { status: 400 });
+  }
+  if (scope === "folder" && !folderId) {
+    return NextResponse.json({ error: "scope=folder requires folderId" }, { status: 400 });
+  }
 
-  const conditions = [eq(brief.ownerId, user.id)];
+  // scope=folder : le dossier doit être visible de l'appelant, exactement comme
+  // dans l'UI (dossier d'agence, ou dossier personnel dont il est le propriétaire).
+  if (scope === "folder") {
+    const [folder] = await getDb()
+      .select({ id: client.id, scope: client.scope, ownerId: client.ownerId })
+      .from(client)
+      .where(eq(client.id, folderId!))
+      .limit(1);
+    if (!folder || (folder.scope === "personal" && folder.ownerId !== user.id)) {
+      return NextResponse.json({ error: "folder not found" }, { status: 404 });
+    }
+  }
+
+  const conditions = scope === "folder" ? [] : [eq(brief.ownerId, user.id)];
   if (keyword) conditions.push(sql`lower(${brief.keyword}) = ${keyword.toLowerCase()}`);
   if (folderId) conditions.push(eq(brief.clientId, folderId));
   if (status) conditions.push(eq(brief.status, status as "pending" | "ready" | "failed"));
@@ -49,20 +75,26 @@ export async function GET(req: Request) {
       workflowStatus: brief.workflowStatus,
       score: brief.score,
       folderId: brief.clientId,
+      ownerEmail: userTable.email,
       createdAt: brief.createdAt,
       updatedAt: brief.updatedAt,
     })
     .from(brief)
+    .leftJoin(userTable, eq(userTable.id, brief.ownerId))
     .where(and(...conditions))
-    .orderBy(desc(brief.createdAt))
-    .limit(limit);
+    .orderBy(desc(brief.createdAt), desc(brief.id))
+    // Une ligne de plus que demandé : c'est elle qui dit s'il reste une page.
+    .limit(limit + 1)
+    .offset(offset);
 
+  const page = rows.slice(0, limit);
   return NextResponse.json({
-    briefs: rows.map((r) => ({
+    briefs: page.map((r) => ({
       ...r,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     })),
+    nextOffset: rows.length > limit ? offset + limit : null,
   });
 }
 
