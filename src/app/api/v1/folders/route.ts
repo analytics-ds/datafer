@@ -31,6 +31,7 @@ export async function GET(req: Request) {
       id: client.id,
       name: client.name,
       website: client.website,
+      scope: client.scope,
       shareToken: client.shareToken,
       createdAt: client.createdAt,
     })
@@ -48,6 +49,7 @@ type FolderRow = {
   id: string;
   name: string;
   website: string | null;
+  scope: "personal" | "agency";
   shareToken: string | null;
   createdAt: Date;
 };
@@ -57,6 +59,9 @@ function folderJson(req: Request, r: FolderRow) {
     id: r.id,
     name: r.name,
     website: r.website,
+    // "agency" = dossier de l'agence, "personal" = dossier personnel de son
+    // propriétaire : un outil tiers ne le présente pas comme un client.
+    scope: r.scope,
     shared: !!r.shareToken,
     shareUrl: r.shareToken ? folderShareUrl(req, r.shareToken) : null,
     createdAt: r.createdAt.toISOString(),
@@ -99,6 +104,7 @@ export async function POST(req: Request) {
       id: client.id,
       name: client.name,
       website: client.website,
+      scope: client.scope,
       shareToken: client.shareToken,
       createdAt: client.createdAt,
     })
@@ -124,6 +130,7 @@ export async function POST(req: Request) {
       id: client.id,
       name: client.name,
       website: client.website,
+      scope: client.scope,
       shareToken: client.shareToken,
       createdAt: client.createdAt,
     })

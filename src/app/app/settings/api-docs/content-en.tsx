@@ -378,7 +378,7 @@ export function ApiDocsEn() {
   -d '{"name": "Skello", "website": "https://www.skello.io"}'`}</Pre>
         <Pre>{`{
   "folder": { "id": "8f2c...", "name": "Skello", "website": "https://www.skello.io",
-              "shared": false, "shareUrl": null, "createdAt": "2026-10-02T08:00:00.000Z" },
+              "scope": "agency", "shared": false, "shareUrl": null, "createdAt": "2026-10-02T08:00:00.000Z" },
   "duplicate": false
 }`}</Pre>
 
